@@ -322,10 +322,11 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 	// An archive node holds a state at every state-diff tree boundary. Serve those directly: addressing the
 	// tree by slot also reaches boundaries whose slot had no block, which no root can identify.
 	if st, ok := p.stateFromDiffTree(ctx, target); ok {
-		stateBySlotMilliseconds.WithLabelValues("diff_tree").Observe(time.Since(start).Seconds() * 1000)
+		stateBySlotMilliseconds.WithLabelValues(pathDiffTree).Observe(time.Since(start).Seconds() * 1000)
 		return st, nil
 	}
 
+	start = time.Now()
 	st, err := p.ReplayerBuilder.ReplayerForSlot(target).ReplayBlocks(ctx)
 	if err != nil {
 		if errors.Is(err, stategen.ErrNoDataForSlot) {
@@ -334,7 +335,7 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		msg := fmt.Sprintf("error while replaying history to slot=%d", target)
 		return nil, errors.Wrap(err, msg)
 	}
-	stateBySlotMilliseconds.WithLabelValues("replay").Observe(time.Since(start).Seconds() * 1000)
+	stateBySlotMilliseconds.WithLabelValues(pathReplay).Observe(time.Since(start).Seconds() * 1000)
 	return st, nil
 }
 
@@ -342,29 +343,33 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 // written. A miss is not an error: the caller falls back to replaying.
 func (p *BeaconDbStater) stateFromDiffTree(ctx context.Context, target primitives.Slot) (state.BeaconState, bool) {
 	if p.BeaconDB == nil || !features.Get().EnableStateDiff {
-		stateFromDiffTreeMiss.WithLabelValues("disabled").Inc()
+		stateFromDiffTreeMiss.WithLabelValues(missDisabled).Inc()
 		return nil, false
 	}
 	_, lvl, err := p.BeaconDB.SlotInDiffTree(target)
 	if err != nil {
-		stateFromDiffTreeMiss.WithLabelValues("slot_before_offset").Inc()
+		if errors.Is(err, db.ErrSlotBeforeOffset) {
+			stateFromDiffTreeMiss.WithLabelValues(missSlotBeforeOffset).Inc()
+		} else {
+			stateFromDiffTreeMiss.WithLabelValues(missError).Inc()
+		}
 		return nil, false
 	}
 	if lvl < 0 {
-		stateFromDiffTreeMiss.WithLabelValues("not_boundary").Inc()
+		stateFromDiffTreeMiss.WithLabelValues(missNotBoundary).Inc()
 		return nil, false
 	}
 	st, err := p.BeaconDB.StateBySlotFromDiffTree(ctx, target)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			stateFromDiffTreeMiss.WithLabelValues("not_found").Inc()
+			stateFromDiffTreeMiss.WithLabelValues(missNotFound).Inc()
 		} else {
-			stateFromDiffTreeMiss.WithLabelValues("error").Inc()
+			stateFromDiffTreeMiss.WithLabelValues(missError).Inc()
 		}
 		return nil, false
 	}
 	if st == nil || st.IsNil() {
-		stateFromDiffTreeMiss.WithLabelValues("nil_state").Inc()
+		stateFromDiffTreeMiss.WithLabelValues(missNilState).Inc()
 		return nil, false
 	}
 	return st, true

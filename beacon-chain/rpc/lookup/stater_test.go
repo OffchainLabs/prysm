@@ -548,6 +548,14 @@ type diffTreeLookupDB struct {
 	readErr   error
 }
 
+type nilDiffTreeState struct {
+	state.BeaconState
+}
+
+func (*nilDiffTreeState) IsNil() bool {
+	return true
+}
+
 func (d *diffTreeLookupDB) EarliestSlot(context.Context) (primitives.Slot, error) {
 	return 0, db.ErrNotFound
 }
@@ -592,14 +600,20 @@ func TestStateBySlot_DiffTreeMetrics(t *testing.T) {
 		missReason string
 		path       string
 		wantState  state.BeaconState
+		replayErr  error
 	}{
-		{name: "tree hit", enabled: true, db: &diffTreeLookupDB{level: 0, readState: treeState}, path: "diff_tree", wantState: treeState},
-		{name: "non-boundary", enabled: true, db: &diffTreeLookupDB{level: -1}, missReason: "not_boundary", path: "replay", wantState: replayedState},
-		{name: "feature disabled", db: &diffTreeLookupDB{level: 0, readState: treeState}, missReason: "disabled", path: "replay", wantState: replayedState},
-		{name: "slot before offset", enabled: true, db: &diffTreeLookupDB{slotErr: errors.New("before offset")}, missReason: "slot_before_offset", path: "replay", wantState: replayedState},
-		{name: "wrapped not found", enabled: true, db: &diffTreeLookupDB{readErr: errors.Wrap(db.ErrNotFoundState, "missing tree state")}, missReason: "not_found", path: "replay", wantState: replayedState},
-		{name: "read error", enabled: true, db: &diffTreeLookupDB{readErr: errors.New("disk error")}, missReason: "error", path: "replay", wantState: replayedState},
-		{name: "nil state", enabled: true, db: &diffTreeLookupDB{}, missReason: "nil_state", path: "replay", wantState: replayedState},
+		{name: "tree hit", enabled: true, db: &diffTreeLookupDB{level: 0, readState: treeState}, path: pathDiffTree, wantState: treeState},
+		{name: "non-boundary", enabled: true, db: &diffTreeLookupDB{level: -1}, missReason: missNotBoundary, path: pathReplay, wantState: replayedState},
+		{name: "feature disabled", db: &diffTreeLookupDB{level: 0, readState: treeState}, missReason: missDisabled, path: pathReplay, wantState: replayedState},
+		{name: "no database", enabled: true, missReason: missDisabled, path: pathReplay, wantState: replayedState},
+		{name: "slot before offset", enabled: true, db: &diffTreeLookupDB{slotErr: errors.Wrap(db.ErrSlotBeforeOffset, "before offset")}, missReason: missSlotBeforeOffset, path: pathReplay, wantState: replayedState},
+		{name: "slot lookup error", enabled: true, db: &diffTreeLookupDB{slotErr: errors.New("slot lookup failed")}, missReason: missError, path: pathReplay, wantState: replayedState},
+		// kv wraps ErrNotFoundState for missing diffs and missing snapshots.
+		{name: "wrapped not found", enabled: true, db: &diffTreeLookupDB{readErr: errors.Wrap(db.ErrNotFoundState, "missing tree state")}, missReason: missNotFound, path: pathReplay, wantState: replayedState},
+		{name: "read error", enabled: true, db: &diffTreeLookupDB{readErr: errors.New("disk error")}, missReason: missError, path: pathReplay, wantState: replayedState},
+		{name: "nil state", enabled: true, db: &diffTreeLookupDB{}, missReason: missNilState, path: pathReplay, wantState: replayedState},
+		{name: "IsNil state", enabled: true, db: &diffTreeLookupDB{readState: &nilDiffTreeState{}}, missReason: missNilState, path: pathReplay, wantState: replayedState},
+		{name: "failed replay", enabled: true, db: &diffTreeLookupDB{level: -1}, missReason: missNotBoundary, replayErr: errors.New("replay failed")},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -609,23 +623,49 @@ func TestStateBySlot_DiffTreeMetrics(t *testing.T) {
 			currentSlot := target
 			replayer := mockstategen.NewReplayerBuilder()
 			replayer.SetMockStateForSlot(replayedState, target)
+			if tc.replayErr != nil {
+				replayer.SetMockSlotError(target, tc.replayErr)
+			}
+			var beaconDB db.ReadOnlyDatabase
+			if tc.db != nil {
+				beaconDB = tc.db
+			}
 			p := BeaconDbStater{
-				BeaconDB:           tc.db,
+				BeaconDB:           beaconDB,
 				GenesisTimeFetcher: &chainMock.ChainService{Slot: &currentSlot},
 				ReplayerBuilder:    replayer,
 			}
-			beforePath := histogramSampleCount(t, tc.path)
-			var beforeMiss float64
-			if tc.missReason != "" {
-				beforeMiss = diffTreeMissCount(t, tc.missReason)
+			paths := []string{pathDiffTree, pathReplay}
+			reasons := []string{missDisabled, missNotBoundary, missSlotBeforeOffset, missNotFound, missError, missNilState}
+			beforePaths := make(map[string]uint64, len(paths))
+			beforeMisses := make(map[string]float64, len(reasons))
+			for _, path := range paths {
+				beforePaths[path] = histogramSampleCount(t, path)
+			}
+			for _, reason := range reasons {
+				beforeMisses[reason] = diffTreeMissCount(t, reason)
 			}
 
 			got, err := p.StateBySlot(t.Context(), target)
-			require.NoError(t, err)
-			require.Equal(t, tc.wantState, got)
-			require.Equal(t, beforePath+1, histogramSampleCount(t, tc.path))
-			if tc.missReason != "" {
-				require.Equal(t, beforeMiss+1, diffTreeMissCount(t, tc.missReason))
+			if tc.replayErr != nil {
+				require.ErrorContains(t, tc.replayErr.Error(), err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantState, got)
+			}
+			for _, path := range paths {
+				want := beforePaths[path]
+				if path == tc.path {
+					want++
+				}
+				require.Equal(t, want, histogramSampleCount(t, path))
+			}
+			for _, reason := range reasons {
+				want := beforeMisses[reason]
+				if reason == tc.missReason {
+					want++
+				}
+				require.Equal(t, want, diffTreeMissCount(t, reason))
 			}
 		})
 	}
