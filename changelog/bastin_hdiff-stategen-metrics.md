@@ -1,7 +1,7 @@
 ### Added
 
 - `migrate_to_cold_*`, `stategen_archive_pending`, and `stategen_load_state_milliseconds` metrics.
-- Migration latency is recorded for successful calls; failed calls increment `migrate_to_cold_failures_total`.
+- Migration latency is recorded for successful, non-no-op calls; failed calls increment `migrate_to_cold_failures_total`.
 
 ### Changed
 

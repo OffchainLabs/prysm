@@ -21,7 +21,7 @@ import (
 // live region needs lie in the not yet regenerated past.
 func TestMigrateToCold_SuppressedWhileArchivePending(t *testing.T) {
 	beforeSkipped := readStateGenMetric(t, migrateToColdSkipped).Counter.GetValue()
-	beforeCalls := readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues("hdiff")).Histogram.GetSampleCount()
+	beforeCalls := readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues(migrationModeHdiff)).Histogram.GetSampleCount()
 	ctx := t.Context()
 	setStateDiffExponents()
 	beaconDB := testDB.SetupDB(t)
@@ -38,14 +38,14 @@ func TestMigrateToCold_SuppressedWhileArchivePending(t *testing.T) {
 	// nil proves it never got that far.
 	require.NoError(t, service.MigrateToCold(ctx, [32]byte{1}))
 	require.Equal(t, beforeSkipped+1, readStateGenMetric(t, migrateToColdSkipped).Counter.GetValue())
-	require.Equal(t, beforeCalls, readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues("hdiff")).Histogram.GetSampleCount())
+	require.Equal(t, beforeCalls, readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues(migrationModeHdiff)).Histogram.GetSampleCount())
 
 	service.SetArchivePending(false)
 	require.Equal(t, float64(0), readStateGenMetric(t, stategenArchivePending).Gauge.GetValue())
-	beforeFailure := readStateGenMetric(t, migrateToColdFailures.WithLabelValues("hdiff")).Counter.GetValue()
+	beforeFailure := readStateGenMetric(t, migrateToColdFailures.WithLabelValues(migrationModeHdiff)).Counter.GetValue()
 	require.NotNil(t, service.MigrateToCold(ctx, [32]byte{1}))
-	require.Equal(t, beforeFailure+1, readStateGenMetric(t, migrateToColdFailures.WithLabelValues("hdiff")).Counter.GetValue())
-	require.Equal(t, beforeCalls, readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues("hdiff")).Histogram.GetSampleCount())
+	require.Equal(t, beforeFailure+1, readStateGenMetric(t, migrateToColdFailures.WithLabelValues(migrationModeHdiff)).Counter.GetValue())
+	require.Equal(t, beforeCalls, readStateGenMetric(t, migrateToColdMilliseconds.WithLabelValues(migrationModeHdiff)).Histogram.GetSampleCount())
 }
 
 // ForceCheckpoint runs on every graceful shutdown. Against a re-based offset the tree write would either fail

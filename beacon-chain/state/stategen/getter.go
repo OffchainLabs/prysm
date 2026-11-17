@@ -178,11 +178,11 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not load blocks")
 	}
-	replayBlockCount.Observe(float64(len(blks)))
 	startState, err = s.replayBlocks(ctx, startState, blks, summary.Slot)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not replay blocks")
 	}
+	replayBlockCount.Observe(float64(len(blks)))
 	return startState, nil
 }
 
@@ -277,7 +277,7 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 	if s.beaconDB.HasState(ctx, blockRoot) {
 		st, err := s.beaconDB.State(ctx, blockRoot)
 		if err == nil {
-			stategenLoadStateMilliseconds.WithLabelValues("db").Observe(float64(time.Since(start).Milliseconds()))
+			stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceDB).Observe(float64(time.Since(start).Milliseconds()))
 			return st, nil
 		}
 		if !stderrors.Is(err, db.ErrNotFoundState) {
@@ -302,7 +302,7 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 	}
 
 	if startState.Slot() == targetSlot {
-		stategenLoadStateMilliseconds.WithLabelValues("ancestor").Observe(float64(time.Since(start).Milliseconds()))
+		stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceAncestor).Observe(float64(time.Since(start).Milliseconds()))
 		return startState, nil
 	}
 
@@ -311,10 +311,10 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 		return nil, errors.Wrap(err, "could not load blocks for hot state using root")
 	}
 
-	replayBlockCount.Observe(float64(len(blks)))
 	st, err := s.replayBlocks(ctx, startState, blks, targetSlot)
 	if err == nil {
-		stategenLoadStateMilliseconds.WithLabelValues("replay").Observe(float64(time.Since(start).Milliseconds()))
+		replayBlockCount.Observe(float64(len(blks)))
+		stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceReplay).Observe(float64(time.Since(start).Milliseconds()))
 	}
 	return st, err
 }

@@ -35,13 +35,14 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) (err error) {
 		return nil
 	}
 
-	mode := "legacy"
+	mode := migrationModeLegacy
 	if features.Get().EnableStateDiff {
-		mode = "hdiff"
+		mode = migrationModeHdiff
 	}
 	start := time.Now()
-	defer func() { observeMigrateToCold(mode, start, err) }()
-	if mode == "hdiff" {
+	noop := false
+	defer func() { observeMigrateToCold(mode, start, err, noop) }()
+	if mode == migrationModeHdiff {
 		return s.migrateToColdHdiff(ctx, fRoot, start)
 	}
 
@@ -55,6 +56,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) (err error) {
 	fSlot := fBlock.Block().Slot()
 	migrateToColdLagSlots.Set(float64(fSlot) - float64(oldFSlot))
 	if oldFSlot > fSlot {
+		noop = true
 		return nil
 	}
 
@@ -119,7 +121,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) (err error) {
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
 			return err
 		}
-		migrateToColdStatesSaved.WithLabelValues("legacy").Inc()
+		migrateToColdStatesSaved.WithLabelValues(migrationModeLegacy).Inc()
 		statesSaved++
 
 		duration := time.Since(saveStart)
@@ -146,7 +148,7 @@ func (s *State) MigrateToCold(ctx context.Context, fRoot [32]byte) (err error) {
 	s.migratedSlot = fSlot
 	migrateToColdMigratedSlot.Set(float64(fSlot))
 	log.WithFields(logrus.Fields{
-		"mode": "legacy", "fromSlot": oldFSlot, "toSlot": fSlot,
+		"mode": migrationModeLegacy, "fromSlot": oldFSlot, "toSlot": fSlot,
 		"statesSaved": statesSaved, "durationMs": time.Since(start).Milliseconds(),
 	}).Debug("Migrated finalized states to cold")
 
@@ -190,19 +192,19 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte, start ti
 		// Its slot index is also first-write-wins, so a reorged sibling processed ahead of the canonical
 		// block at the same slot keeps the slot key. Either way the cached root can be non-canonical, and
 		// the diff tree is keyed by slot, so it has to be checked before the state is committed to a boundary.
-		source := "state_by_root_cache_miss"
+		source := migrationSourceStateByRootCacheMiss
 		if exists && !s.beaconDB.IsFinalizedBlock(ctx, cached.root) {
 			log.WithFields(logrus.Fields{
 				"slot": slot,
 				"root": fmt.Sprintf("%#x", cached.root),
 			}).Debug("Ignoring non-canonical epoch boundary state while migrating to cold")
 			exists = false
-			source = "state_by_root_non_canonical"
+			source = migrationSourceStateByRootNonCanonical
 		}
 		var aRoot [32]byte
 		var aState state.BeaconState
 		if exists {
-			source = "epoch_boundary_cache"
+			source = migrationSourceEpochBoundaryCache
 			aRoot = cached.root
 			aState = cached.state
 		} else {
@@ -221,17 +223,17 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte, start ti
 
 		// advance slots to the target slot
 		if aState.Slot() < slot {
-			migrateToColdProcessSlots.Inc()
 			aState, err = transition.ProcessSlots(ctx, aState, slot)
 			if err != nil {
 				return errors.Wrapf(err, "could not process slots to slot %d", slot)
 			}
+			migrateToColdProcessSlots.Inc()
 		}
 		saveStart := time.Now()
 		if err := s.beaconDB.SaveState(ctx, aState, aRoot); err != nil {
 			return err
 		}
-		migrateToColdStatesSaved.WithLabelValues("hdiff").Inc()
+		migrateToColdStatesSaved.WithLabelValues(migrationModeHdiff).Inc()
 		migrateToColdStateSource.WithLabelValues(source).Inc()
 		statesSaved++
 		duration := time.Since(saveStart)
@@ -257,7 +259,7 @@ func (s *State) migrateToColdHdiff(ctx context.Context, fRoot [32]byte, start ti
 	s.migratedSlot = fSlot
 	migrateToColdMigratedSlot.Set(float64(fSlot))
 	log.WithFields(logrus.Fields{
-		"mode": "hdiff", "fromSlot": oldFSlot, "toSlot": fSlot,
+		"mode": migrationModeHdiff, "fromSlot": oldFSlot, "toSlot": fSlot,
 		"statesSaved": statesSaved, "durationMs": time.Since(start).Milliseconds(),
 	}).Debug("Migrated finalized states to cold")
 	return nil

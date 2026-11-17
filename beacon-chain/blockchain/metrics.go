@@ -17,9 +17,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+var blockProcessingMillisecondsBuckets = []float64{5, 10, 25, 50, 100, 250, 500, 1000, 2000, 4000, 8000, 16000}
+
 var (
-	blockProcessingMillisecondsBuckets = []float64{5, 10, 25, 50, 100, 250, 500, 1000, 2000, 4000, 8000, 16000}
-	beaconSlot                         = promauto.NewGauge(prometheus.GaugeOpts{
+	beaconSlot = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "beacon_slot",
 		Help: "Latest slot of the beacon chain state",
 	})
