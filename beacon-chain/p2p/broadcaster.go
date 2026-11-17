@@ -312,8 +312,12 @@ func (s *Service) BroadcastLightClientOptimisticUpdate(ctx context.Context, upda
 		tracing.AnnotateError(span, err)
 		return err
 	}
+	syncMessageDueBPS := params.BeaconConfig().SyncMessageDueBPS
+	if slots.ToEpoch(update.SignatureSlot()) >= params.BeaconConfig().GloasForkEpoch {
+		syncMessageDueBPS = params.BeaconConfig().SyncMessageDueBPSGloas
+	}
 	timeSinceSlotStart := time.Since(slotStart)
-	expectedDelay := params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().SyncMessageDueBPS)
+	expectedDelay := params.BeaconConfig().SlotComponentDuration(syncMessageDueBPS)
 	if timeSinceSlotStart < expectedDelay {
 		waitDuration := expectedDelay - timeSinceSlotStart
 		<-time.After(waitDuration)
