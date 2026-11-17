@@ -231,6 +231,25 @@ func TestSubscribe_ReceivesAttesterSlashing(t *testing.T) {
 	assert.Equal(t, 1, len(as), "Expected attester slashing")
 }
 
+func TestAttesterSlashingSubscriber_AlreadyPooledMarksSeen(t *testing.T) {
+	ctx := t.Context()
+	beaconState, privKeys := util.DeterministicGenesisState(t, 64)
+	r := Service{
+		cfg: &config{
+			slashingPool: slashings.NewPool(),
+			chain:        &mockChain.ChainService{State: beaconState},
+		},
+		seenAttesterSlashingCache: make(map[uint64]bool),
+	}
+	slashing, err := util.GenerateAttesterSlashingForValidator(beaconState, privKeys[1], 1)
+	require.NoError(t, err)
+	// The pool already holds a slashing for this validator, as when it arrived through the API first.
+	require.NoError(t, r.cfg.slashingPool.InsertAttesterSlashing(ctx, beaconState, slashing))
+
+	require.ErrorContains(t, "could not insert attester slashing into pool", r.attesterSlashingSubscriber(ctx, slashing))
+	require.Equal(t, true, r.hasSeenAttesterSlashingIndices([]uint64{1}))
+}
+
 func TestSubscribe_ReceivesProposerSlashing(t *testing.T) {
 	p2pService := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
