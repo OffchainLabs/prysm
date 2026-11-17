@@ -542,6 +542,7 @@ func (s *Store) getBaseAndDiffChain(offset uint64, slot primitives.Slot) (state.
 			cachedAnchor := s.stateDiffCache.getAnchor(item.level, withExactSlot(primitives.Slot(item.slot)))
 			if cachedAnchor != nil {
 				baseSnapshot = cachedAnchor
+				stateDiffReadBase.WithLabelValues("anchor_cache").Inc()
 				diffChainItems = diffChainItems[i+1:]
 				break
 			}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -61,6 +62,7 @@ func (c *stateDiffCache) memoGet(level int) state.BeaconState {
 func (c *stateDiffCache) memoPut(level int, st state.BeaconState) {
 	copy(c.memo[1:], c.memo[:len(c.memo)-1])
 	c.memo[0] = anchorMemoEntry{level: level, state: st}
+	c.reportMemoEntries()
 }
 
 // memoDrop invalidates the memoized anchor for the level. Callers must hold the write lock.
@@ -70,6 +72,18 @@ func (c *stateDiffCache) memoDrop(level int) {
 			c.memo[i] = anchorMemoEntry{}
 		}
 	}
+	c.reportMemoEntries()
+}
+
+// reportMemoEntries reports the number of live memo entries while holding the cache lock.
+func (c *stateDiffCache) reportMemoEntries() {
+	entries := 0
+	for _, entry := range c.memo {
+		if entry.state != nil {
+			entries++
+		}
+	}
+	stateDiffAnchorMemoEntries.Set(float64(entries))
 }
 
 func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, error) {
@@ -138,6 +152,8 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 		}
 	}
 	cache.levelsWithData[0] = true
+	setOffsetGauge(offset)
+	stateDiffLastSavedSlot.WithLabelValues(levelLabel(0)).Set(float64(latestLevelZeroSlot(s, offset)))
 
 	return cache, nil
 }
@@ -174,6 +190,7 @@ func validateStateDiffCache(ctx context.Context, s *Store, cache *stateDiffCache
 		if _, err := s.stateByDiff(ctx, primitives.Slot(maxSlot)); err != nil {
 			return pkgerrors.Wrapf(ErrStateDiffCorrupted, "state diff validation failed for level %d slot %d: %v", level, maxSlot, err)
 		}
+		stateDiffLastSavedSlot.WithLabelValues(levelLabel(level)).Set(float64(maxSlot))
 	}
 	return nil
 }
@@ -244,11 +261,13 @@ func newStateDiffCache(s *Store) (*stateDiffCache, error) {
 		return nil, err
 	}
 
-	return &stateDiffCache{
+	cache := &stateDiffCache{
 		anchors:        make([]anchor, len(flags.Get().StateDiffExponents)-1), // -1 because last level doesn't need to be cached
 		levelsWithData: make([]bool, len(flags.Get().StateDiffExponents)),
 		offset:         offset,
-	}, nil
+	}
+	setOffsetGauge(offset)
+	return cache, nil
 }
 
 type getAnchorOpts struct {
@@ -285,6 +304,7 @@ func (c *stateDiffCache) getAnchor(level int, opts ...optFunc) state.BeaconState
 	}
 	if st := c.memoGet(level); st != nil {
 		c.Unlock()
+		stateDiffAnchorMemo.WithLabelValues("hit").Inc()
 		return st.Copy()
 	}
 	generation := c.anchorGeneration
@@ -294,6 +314,8 @@ func (c *stateDiffCache) getAnchor(level int, opts ...optFunc) state.BeaconState
 		return nil
 	}
 
+	stateDiffAnchorMemo.WithLabelValues("miss").Inc()
+	start := time.Now()
 	uncompressed, err := snappy.Decode(nil, cachedAnchor.data)
 	if err != nil {
 		return nil
@@ -303,6 +325,7 @@ func (c *stateDiffCache) getAnchor(level int, opts ...optFunc) state.BeaconState
 	if err != nil {
 		return nil
 	}
+	stateDiffAnchorDecodeTime.Observe(msSince(start))
 
 	c.Lock()
 	// The anchors may have been replaced while we deserialized; memoizing then would cache a stale state.
@@ -351,6 +374,7 @@ func (c *stateDiffCache) reanchor(offset uint64, levelsWithData []bool) {
 	defer c.Unlock()
 
 	c.offset = offset
+	setOffsetGauge(offset)
 	c.levelsWithData = levelsWithData
 
 	c.clearAnchorsLocked()
@@ -385,6 +409,7 @@ func (c *stateDiffCache) setOffset(offset uint64) {
 	c.Lock()
 	defer c.Unlock()
 	c.offset = offset
+	setOffsetGauge(offset)
 }
 
 func (c *stateDiffCache) clearAnchors() {
@@ -398,6 +423,7 @@ func (c *stateDiffCache) clearAnchorsLocked() {
 	c.anchorGeneration++
 	c.anchors = make([]anchor, len(flags.Get().StateDiffExponents)-1) // -1 because last level doesn't need to be cached
 	c.memo = [anchorMemoSize]anchorMemoEntry{}
+	c.reportMemoEntries()
 	for level := range len(c.anchors) {
 		stateDiffAnchorCacheBytes.WithLabelValues(strconv.Itoa(level)).Set(0)
 	}

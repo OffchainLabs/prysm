@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -12,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
+	logrus "github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -39,9 +41,10 @@ func (s *Store) SlotInDiffTree(slot primitives.Slot) (uint64, int, error) {
 }
 
 // saveStateByDiff takes a state and decides between saving a full state snapshot or a diff.
-func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconState) error {
+func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconState) (err error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.saveStateByDiff")
 	defer span.End()
+	defer func() { recordStateDiffError("save", err) }()
 
 	if st == nil {
 		return errors.New("state is nil")
@@ -61,18 +64,25 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 		return errors.Wrapf(ErrAboveArchiveFrontier, "slot %d is above the archive frontier %d", slot, frontier)
 	}
 
+	start := time.Now()
+	label := levelLabel(lvl)
 	// Save full state if level is 0.
 	if lvl == 0 {
-		return s.saveFullSnapshot(st)
+		err = s.saveFullSnapshot(st)
+	} else {
+		// Get anchor state to compute the diff from.
+		anchorStart := time.Now()
+		var anchorState state.ReadOnlyBeaconState
+		anchorState, err = s.getAnchorState(ctx, offset, lvl, slot)
+		if err == nil {
+			stateDiffSavePhaseTime.WithLabelValues(label, "anchor").Observe(msSince(anchorStart))
+			err = s.saveHdiff(lvl, anchorState, st)
+		}
 	}
-
-	// Get anchor state to compute the diff from.
-	anchorState, err := s.getAnchorState(ctx, offset, lvl, slot)
-	if err != nil {
-		return err
+	if err == nil {
+		stateDiffSaveTime.WithLabelValues(label).Observe(msSince(start))
 	}
-
-	return s.saveHdiff(lvl, anchorState, st)
+	return err
 }
 
 // StateBySlotFromDiffTree returns the state at the given slot from the tree; slot must be a saving point.
@@ -81,7 +91,9 @@ func (s *Store) StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slo
 }
 
 // stateByDiff retrieves the full state for a given slot.
-func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
+func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (_ state.BeaconState, err error) {
+	start := time.Now()
+	defer func() { recordStateDiffError("read", err) }()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -101,16 +113,26 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.Be
 			return nil, err
 		}
 
+		applyStart := time.Now()
 		snapshot, err = hdiff.ApplyDiff(ctx, snapshot, diff)
 		if err != nil {
 			return nil, err
 		}
+		stateDiffApplyTime.Observe(msSince(applyStart))
 	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
+	level := computeLevel(offset, slot)
+	label := levelLabel(level)
+	duration := msSince(start)
+	stateDiffReadTime.WithLabelValues(label).Observe(duration)
+	stateDiffReadDiffsApplied.WithLabelValues(label).Add(float64(len(diffChain)))
+	log.WithFields(logrus.Fields{
+		"slot": slot, "treeLevel": level, "diffsApplied": len(diffChain), "durationMs": duration,
+	}).Debug("Read state from state-diff tree")
 	return snapshot, nil
 }
 
@@ -119,36 +141,40 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (state.Be
 func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKeyForStateDiffTree(lvl, slot)
+	label := levelLabel(lvl)
 
+	computeStart := time.Now()
 	diff, err := hdiff.Diff(anchor, st)
 	if err != nil {
 		return err
 	}
+	computeMs := msSince(computeStart)
+	stateDiffSavePhaseTime.WithLabelValues(label, "diff").Observe(computeMs)
 
+	var overwrite, same bool
+	writeStart := time.Now()
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
-		buf := append(key, stateSuffix...)
-		if err := bucket.Put(buf, diff.StateDiff); err != nil {
-			return err
-		}
-		buf = append(key, validatorSuffix...)
-		if err := bucket.Put(buf, diff.ValidatorDiffs); err != nil {
-			return err
-		}
-		buf = append(key, balancesSuffix...)
-		if err := bucket.Put(buf, diff.BalancesDiff); err != nil {
-			return err
-		}
-		return nil
+		overwrite, same, err = putTreeEntry(bucket,
+			treeEntry{key: append(append([]byte{}, key...), stateSuffix...), value: diff.StateDiff},
+			treeEntry{key: append(append([]byte{}, key...), validatorSuffix...), value: diff.ValidatorDiffs},
+			treeEntry{key: append(append([]byte{}, key...), balancesSuffix...), value: diff.BalancesDiff})
+		return err
 	})
 	if err != nil {
 		return err
 	}
+	writeMs := msSince(writeStart)
+	stateDiffSavePhaseTime.WithLabelValues(label, "write").Observe(writeMs)
+	total := recordTreeWrite(lvl, slot, map[string]int{
+		"state": len(diff.StateDiff), "validators": len(diff.ValidatorDiffs), "balances": len(diff.BalancesDiff),
+	}, overwrite, same)
 
 	// Save the full state to the cache (if not the last level).
+	cacheStart := time.Now()
 	if lvl != len(flags.Get().StateDiffExponents)-1 {
 		err = s.stateDiffCache.setAnchor(lvl, st)
 		if err != nil {
@@ -158,6 +184,14 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	if err := s.stateDiffCache.setLevelHasData(lvl); err != nil {
 		return err
 	}
+	cacheMs := msSince(cacheStart)
+	stateDiffSavePhaseTime.WithLabelValues(label, "cache").Observe(cacheMs)
+	log.WithFields(logrus.Fields{
+		"slot": slot, "treeLevel": lvl, "kind": "diff", "totalBytes": total,
+		"stateBytes": len(diff.StateDiff), "validatorBytes": len(diff.ValidatorDiffs),
+		"balancesBytes": len(diff.BalancesDiff), "computeMs": computeMs,
+		"writeMs": writeMs, "cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
+	}).Debug("Saved state-diff tree entry")
 
 	return nil
 }
@@ -166,27 +200,34 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKeyForStateDiffTree(0, slot)
+	label := levelLabel(0)
+	encodeStart := time.Now()
 	compressed, err := encodeStateWithKey(st)
 	if err != nil {
 		return fmt.Errorf("encode state with key: %w", err)
 	}
+	encodeMs := msSince(encodeStart)
+	stateDiffSavePhaseTime.WithLabelValues(label, "encode").Observe(encodeMs)
 
+	var overwrite, same bool
+	writeStart := time.Now()
 	err = s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
 			return bolt.ErrBucketNotFound
 		}
 
-		if err := bucket.Put(key, compressed); err != nil {
-			return err
-		}
-
-		return nil
+		overwrite, same, err = putTreeEntry(bucket, treeEntry{key: key, value: compressed})
+		return err
 	})
 	if err != nil {
 		return err
 	}
+	writeMs := msSince(writeStart)
+	stateDiffSavePhaseTime.WithLabelValues(label, "write").Observe(writeMs)
+	total := recordTreeWrite(0, slot, map[string]int{"snapshot": len(compressed)}, overwrite, same)
 	// Save the full state to the cache, and invalidate other levels.
+	cacheStart := time.Now()
 	s.stateDiffCache.clearAnchors()
 	if len(flags.Get().StateDiffExponents) > 1 {
 		if err = s.stateDiffCache.setAnchor(0, st); err != nil {
@@ -196,6 +237,13 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	if err := s.stateDiffCache.setLevelHasData(0); err != nil {
 		return err
 	}
+	cacheMs := msSince(cacheStart)
+	stateDiffSavePhaseTime.WithLabelValues(label, "cache").Observe(cacheMs)
+	log.WithFields(logrus.Fields{
+		"slot": slot, "treeLevel": 0, "kind": "snapshot", "totalBytes": total,
+		"snapshotBytes": len(compressed), "computeMs": encodeMs, "writeMs": writeMs,
+		"cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
+	}).Debug("Saved state-diff tree entry")
 
 	return nil
 }
@@ -256,10 +304,12 @@ func (s *Store) getDiff(lvl int, slot uint64) (hdiff.HdiffBytes, error) {
 func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 	if s.stateDiffCache != nil {
 		if anchor := s.stateDiffCache.getAnchor(0, withExactSlot(primitives.Slot(slot))); anchor != nil {
+			stateDiffReadBase.WithLabelValues("snapshot_cache").Inc()
 			return anchor, nil
 		}
 	}
 
+	start := time.Now()
 	key := makeKeyForStateDiffTree(0, slot)
 	var compressed []byte
 
@@ -284,5 +334,11 @@ func (s *Store) getFullSnapshot(slot uint64) (state.BeaconState, error) {
 		return nil, err
 	}
 
-	return decodeStateSnapshot(enc)
+	snapshot, err := decodeStateSnapshot(enc)
+	if err != nil {
+		return nil, err
+	}
+	stateDiffSnapshotLoadTime.Observe(msSince(start))
+	stateDiffReadBase.WithLabelValues("snapshot_db").Inc()
+	return snapshot, nil
 }

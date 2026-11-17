@@ -236,8 +236,10 @@ func TestSaveStateByDiff_RejectsWritesAboveArchiveFrontier(t *testing.T) {
 
 	// A boundary above the frontier is an error rather than a silent skip.
 	above, _ := createState(t, 512, version.Phase0)
+	beforeFrontier := counterValue(t, stateDiffErrors.WithLabelValues("save", "above_archive_frontier"))
 	err = db.saveStateByDiff(ctx, above)
 	require.ErrorIs(t, err, ErrAboveArchiveFrontier)
+	require.Equal(t, beforeFrontier+1, counterValue(t, stateDiffErrors.WithLabelValues("save", "above_archive_frontier")))
 	has, err = hasStateDiffAtSlot(db, 512)
 	require.NoError(t, err)
 	require.Equal(t, false, has)

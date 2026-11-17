@@ -62,13 +62,15 @@ var (
 		Name: "validator_entry_cache_delete_total",
 		Help: "The total number of cache deletes on the validator entry cache.",
 	})
-	stateReadingTime = promauto.NewSummary(prometheus.SummaryOpts{
-		Name: "db_beacon_state_reading_milliseconds",
-		Help: "Milliseconds it takes to read a beacon state from the DB",
+	stateReadingTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "db_beacon_state_reading_milliseconds",
+		Help:    "Milliseconds it takes to read a beacon state from the DB",
+		Buckets: stateDiffMillisecondsBuckets,
 	})
-	stateSavingTime = promauto.NewSummary(prometheus.SummaryOpts{
-		Name: "db_beacon_state_saving_milliseconds",
-		Help: "Milliseconds it takes to save a beacon state to the DB",
+	stateSavingTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "db_beacon_state_saving_milliseconds",
+		Help:    "Milliseconds it takes to save a beacon state to the DB",
+		Buckets: stateDiffMillisecondsBuckets,
 	})
 	stateDiffGetAnchorStateCacheHit = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "state_diff_get_anchor_state_cache_hit_total",
@@ -79,16 +81,19 @@ var (
 		Help: "The total number of state diff getAnchorState cache misses.",
 	})
 	stateDiffGetAnchorStateCacheHitReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name: "state_diff_get_anchor_state_cache_hit_read_milliseconds",
-		Help: "Milliseconds it takes to read the anchor state from cache in getAnchorState in case of cache hit.",
+		Name:    "state_diff_get_anchor_state_cache_hit_read_milliseconds",
+		Help:    "Milliseconds it takes to read the anchor state from cache in getAnchorState in case of cache hit.",
+		Buckets: stateDiffMillisecondsBuckets,
 	})
 	stateDiffGetAnchorStateCacheMissTime = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name: "state_diff_get_anchor_state_cache_miss_milliseconds",
-		Help: "Milliseconds it takes for state diff anchor's cache to return in case of cache miss.",
+		Name:    "state_diff_get_anchor_state_cache_miss_milliseconds",
+		Help:    "Milliseconds it takes for state diff anchor's cache to return in case of cache miss.",
+		Buckets: stateDiffMillisecondsBuckets,
 	})
 	stateDiffGetAnchorStateDBReadTime = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name: "state_diff_get_anchor_state_db_read_milliseconds",
-		Help: "Milliseconds it takes to read the anchor state from the database in getAnchorState.",
+		Name:    "state_diff_get_anchor_state_db_read_milliseconds",
+		Help:    "Milliseconds it takes to read the anchor state from the database in getAnchorState.",
+		Buckets: stateDiffMillisecondsBuckets,
 	})
 	stateDiffAnchorCacheBytes = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "state_diff_anchor_cache_bytes",
@@ -295,17 +300,25 @@ func (kv *Store) startStateDiff(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		populateStart := time.Now()
 		cache, err := populateStateDiffCacheFromDB(kv, offset)
 		if err != nil {
 			return err
 		}
+		populateMs := msSince(populateStart)
+		stateDiffStartupTime.WithLabelValues("populate_cache").Set(populateMs)
 		kv.stateDiffCache = cache
+		validateStart := time.Now()
 		if err := validateStateDiffCache(ctx, kv, cache); err != nil {
 			return err
 		}
+		validateMs := msSince(validateStart)
+		stateDiffStartupTime.WithLabelValues("validate_cache").Set(validateMs)
 		log.WithFields(logrus.Fields{
-			"offset":    offset,
-			"exponents": storedExponents,
+			"offset":     offset,
+			"exponents":  storedExponents,
+			"populateMs": populateMs,
+			"validateMs": validateMs,
 		}).Info("State-diff cache initialized from existing database")
 		return nil
 	}

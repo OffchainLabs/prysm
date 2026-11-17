@@ -1112,10 +1112,12 @@ func (s *Store) getStateUsingStateDiff(ctx context.Context, blockRoot [32]byte) 
 		log.WithField("blockRoot", fmt.Sprintf("%#x", blockRoot)).Warn("Block not found for state-diff root verification; returning unverified state")
 		return st, nil
 	}
+	verifyStart := time.Now()
 	stateRoot, err := st.HashTreeRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
+	stateDiffHTRVerifyTime.Observe(msSince(verifyStart))
 	if stateRoot != blk.Block().StateRoot() {
 		return nil, errors.Wrap(ErrNotFoundState, "state root mismatch for block")
 	}

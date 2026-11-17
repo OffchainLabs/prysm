@@ -1493,10 +1493,12 @@ func TestStore_CanSaveRetrieveStateUsingStateDiff(t *testing.T) {
 		r, err := signedBlk.Block().HashTreeRoot()
 		require.NoError(t, err)
 
+		beforeVerify := histogramCount(t, stateDiffHTRVerifyTime)
 		got, err := db.getStateUsingStateDiff(t.Context(), r)
 		require.ErrorContains(t, "state root mismatch for block", err)
 		require.ErrorIs(t, err, ErrNotFoundState)
 		require.IsNil(t, got)
+		require.Equal(t, beforeVerify+1, histogramCount(t, stateDiffHTRVerifyTime))
 	})
 
 	t.Run("Full state snapshot", func(t *testing.T) {
