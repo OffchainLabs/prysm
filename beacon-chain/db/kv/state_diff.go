@@ -64,7 +64,6 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 		return errors.Wrapf(ErrAboveArchiveFrontier, "slot %d is above the archive frontier %d", slot, frontier)
 	}
 
-	start := time.Now()
 	label := levelLabel(lvl)
 	// Save full state if level is 0.
 	if lvl == 0 {
@@ -79,8 +78,12 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 			err = s.saveHdiff(lvl, anchorState, st)
 		}
 	}
-	if err == nil {
-		stateDiffSaveTime.WithLabelValues(label).Observe(msSince(start))
+	return err
+}
+
+func wrapMissingStateDiffSnapshot(err error) error {
+	if errors.Is(err, errSnapshotNotFound) {
+		return fmt.Errorf("%w: %w", ErrNotFoundState, err)
 	}
 	return err
 }
@@ -88,10 +91,10 @@ func (s *Store) saveStateByDiff(ctx context.Context, st state.ReadOnlyBeaconStat
 // StateBySlotFromDiffTree returns the state at the given slot from the tree; slot must be a saving point.
 func (s *Store) StateBySlotFromDiffTree(ctx context.Context, slot primitives.Slot) (state.BeaconState, error) {
 	st, err := s.stateByDiff(ctx, slot)
-	if errors.Is(err, errSnapshotNotFound) {
-		return nil, fmt.Errorf("%w: %w", ErrNotFoundState, err)
+	if err != nil {
+		return nil, wrapMissingStateDiffSnapshot(err)
 	}
-	return st, err
+	return st, nil
 }
 
 // stateByDiff retrieves the full state for a given slot.
@@ -111,6 +114,8 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (_ state.
 	if err != nil {
 		return nil, err
 	}
+	level := computeLevel(offset, slot)
+	label := levelLabel(level)
 
 	for _, diff := range diffChain {
 		if err := ctx.Err(); err != nil {
@@ -123,26 +128,27 @@ func (s *Store) stateByDiff(ctx context.Context, slot primitives.Slot) (_ state.
 			return nil, err
 		}
 		stateDiffApplyTime.Observe(msSince(applyStart))
+		stateDiffReadDiffsApplied.WithLabelValues(label).Inc()
 	}
 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	level := computeLevel(offset, slot)
-	label := levelLabel(level)
 	duration := msSince(start)
 	stateDiffReadTime.WithLabelValues(label).Observe(duration)
-	stateDiffReadDiffsApplied.WithLabelValues(label).Add(float64(len(diffChain)))
-	log.WithFields(logrus.Fields{
-		"slot": slot, "treeLevel": level, "diffsApplied": len(diffChain), "durationMs": duration,
-	}).Debug("Read state from state-diff tree")
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		log.WithFields(logrus.Fields{
+			"slot": slot, "treeLevel": level, "diffsApplied": len(diffChain), "durationMs": duration,
+		}).Debug("Read state from state-diff tree")
+	}
 	return snapshot, nil
 }
 
 // saveHdiff computes the diff between the anchor state and the current state and saves it to the database.
 // This function needs to be called only with the latest finalized state, and in a strictly increasing slot order.
 func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
+	start := time.Now()
 	slot := uint64(st.Slot())
 	key := makeKeyForStateDiffTree(lvl, slot)
 	label := levelLabel(lvl)
@@ -190,18 +196,22 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	}
 	cacheMs := msSince(cacheStart)
 	stateDiffSavePhaseTime.WithLabelValues(label, "cache").Observe(cacheMs)
-	log.WithFields(logrus.Fields{
-		"slot": slot, "treeLevel": lvl, "kind": "diff", "totalBytes": total,
-		"stateBytes": len(diff.StateDiff), "validatorBytes": len(diff.ValidatorDiffs),
-		"balancesBytes": len(diff.BalancesDiff), "computeMs": computeMs,
-		"writeMs": writeMs, "cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
-	}).Debug("Saved state-diff tree entry")
+	stateDiffSaveTime.WithLabelValues(label).Observe(msSince(start))
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		log.WithFields(logrus.Fields{
+			"slot": slot, "treeLevel": lvl, "kind": "diff", "totalBytes": total,
+			"stateBytes": len(diff.StateDiff), "validatorBytes": len(diff.ValidatorDiffs),
+			"balancesBytes": len(diff.BalancesDiff), "computeMs": computeMs,
+			"writeMs": writeMs, "cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
+		}).Debug("Saved state-diff tree entry")
+	}
 
 	return nil
 }
 
 // SaveFullSnapshot saves the full level 0 state snapshot to the database.
 func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
+	start := time.Now()
 	slot := uint64(st.Slot())
 	key := makeKeyForStateDiffTree(0, slot)
 	label := levelLabel(0)
@@ -243,11 +253,14 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	}
 	cacheMs := msSince(cacheStart)
 	stateDiffSavePhaseTime.WithLabelValues(label, "cache").Observe(cacheMs)
-	log.WithFields(logrus.Fields{
-		"slot": slot, "treeLevel": 0, "kind": "snapshot", "totalBytes": total,
-		"snapshotBytes": len(compressed), "computeMs": encodeMs, "writeMs": writeMs,
-		"cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
-	}).Debug("Saved state-diff tree entry")
+	stateDiffSaveTime.WithLabelValues(label).Observe(msSince(start))
+	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
+		log.WithFields(logrus.Fields{
+			"slot": slot, "treeLevel": 0, "kind": "snapshot", "totalBytes": total,
+			"snapshotBytes": len(compressed), "computeMs": encodeMs, "writeMs": writeMs,
+			"cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
+		}).Debug("Saved state-diff tree entry")
+	}
 
 	return nil
 }

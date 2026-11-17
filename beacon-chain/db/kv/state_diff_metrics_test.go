@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	bolt "go.etcd.io/bbolt"
@@ -54,6 +55,7 @@ func TestStateDiffMetricErrorReasons(t *testing.T) {
 		{"frontier", ErrAboveArchiveFrontier, "above_archive_frontier"},
 		{"offset", ErrSlotBeforeOffset, "slot_before_offset"},
 		{"corruption", ErrStateDiffCorrupted, "corrupted"},
+		{"snappy corruption", fmt.Errorf("decode: %w", snappy.ErrCorrupt), "corrupted"},
 		{"state missing", ErrNotFoundState, "not_found"},
 		{"snapshot missing", errSnapshotNotFound, "not_found"},
 		{"cancel", context.Canceled, "canceled"},
@@ -232,6 +234,48 @@ func TestStateDiffMetricPublicReadMissingHistory(t *testing.T) {
 	})
 }
 
+func TestStateDiffMetricCorruptReads(t *testing.T) {
+	metricTestExponents(t)
+	t.Run("snapshot", func(t *testing.T) {
+		db := setupDB(t)
+		require.NoError(t, setOffsetInDB(db, 0))
+		st, _ := createState(t, 0, version.Phase0)
+		require.NoError(t, db.saveFullSnapshot(st))
+		db.stateDiffCache.clearAnchors()
+		require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+			return tx.Bucket(stateDiffBucket).Put(makeKeyForStateDiffTree(0, 0), []byte{0xff})
+		}))
+
+		before := counterValue(t, stateDiffErrors.WithLabelValues("read", "corrupted"))
+		_, err := db.stateByDiff(t.Context(), 0)
+		require.ErrorIs(t, err, snappy.ErrCorrupt)
+		require.Equal(t, before+1, counterValue(t, stateDiffErrors.WithLabelValues("read", "corrupted")))
+	})
+
+	t.Run("second diff after successful first diff", func(t *testing.T) {
+		db := setupDB(t)
+		require.NoError(t, setOffsetInDB(db, 0))
+		for _, slot := range []primitives.Slot{0, 64, 96} {
+			st, _ := createState(t, slot, version.Phase0)
+			require.NoError(t, db.saveStateByDiff(t.Context(), st))
+		}
+		db.stateDiffCache.clearAnchors()
+		require.NoError(t, db.db.Update(func(tx *bolt.Tx) error {
+			key := append(makeKeyForStateDiffTree(2, 96), stateSuffix...)
+			return tx.Bucket(stateDiffBucket).Put(key, []byte{0xff})
+		}))
+
+		beforeApplied := counterValue(t, stateDiffReadDiffsApplied.WithLabelValues("2"))
+		beforeApplyTime := histogramCount(t, stateDiffApplyTime)
+		beforeErrors := counterValue(t, stateDiffErrors.WithLabelValues("read", "corrupted"))
+		_, err := db.stateByDiff(t.Context(), 96)
+		require.ErrorIs(t, err, snappy.ErrCorrupt)
+		require.Equal(t, beforeApplied+1, counterValue(t, stateDiffReadDiffsApplied.WithLabelValues("2")))
+		require.Equal(t, beforeApplyTime+1, histogramCount(t, stateDiffApplyTime))
+		require.Equal(t, beforeErrors+1, counterValue(t, stateDiffErrors.WithLabelValues("read", "corrupted")))
+	})
+}
+
 func TestStateDiffMetricAnchorMemo(t *testing.T) {
 	metricTestExponents(t)
 	db := setupDB(t)
@@ -267,12 +311,17 @@ func TestStateDiffMetricStartup(t *testing.T) {
 	db, err := NewKVStore(t.Context(), dir)
 	require.NoError(t, err)
 	st, _ := createState(t, 0, version.Phase0)
+	beforeInitialSave := histogramCount(t, stateDiffSaveTime.WithLabelValues("0"))
 	require.NoError(t, db.initializeStateDiff(0, st))
+	require.Equal(t, beforeInitialSave+1, histogramCount(t, stateDiffSaveTime.WithLabelValues("0")))
 	for _, slot := range []primitives.Slot{64, 128} {
 		st, _ := createState(t, slot, version.Phase0)
 		require.NoError(t, db.saveStateByDiff(t.Context(), st))
 	}
 	require.NoError(t, db.Close())
+	stateDiffLastSavedSlot.Reset()
+	stateDiffStartupTime.Reset()
+	stateDiffTreeOffset.Set(-1)
 	reopened, err := NewKVStore(t.Context(), dir)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, reopened.Close()) }()
@@ -295,6 +344,21 @@ func TestStateDiffMetricPruning(t *testing.T) {
 	require.Equal(t, float64(256), gaugeValue(t, stateDiffTreeOffset))
 }
 
+func TestStateDiffMetricReanchorWithoutCache(t *testing.T) {
+	previous := *flags.Get()
+	t.Cleanup(func() { flags.Init(&previous) })
+	db := setupPrunableStateDiffTree(t, 128)
+	db.stateDiffCache = nil
+	beforeReanchors := counterValue(t, stateDiffReanchors)
+	beforeKeys := counterValue(t, stateDiffPrunedKeys)
+	deleted, err := db.reanchorStateDiff(makeKeyForStateDiffTree(0, 0), 128)
+	require.NoError(t, err)
+	require.Equal(t, 1, deleted)
+	require.Equal(t, beforeReanchors+1, counterValue(t, stateDiffReanchors))
+	require.Equal(t, beforeKeys+1, counterValue(t, stateDiffPrunedKeys))
+	require.Equal(t, float64(128), gaugeValue(t, stateDiffTreeOffset))
+}
+
 func TestStateDiffMetricHotSnapshots(t *testing.T) {
 	db := setupDB(t)
 	st, _ := createState(t, 0, version.Phase0)
@@ -303,8 +367,10 @@ func TestStateDiffMetricHotSnapshots(t *testing.T) {
 	beforeClear := histogramCount(t, stateDiffHotSnapshotTime.WithLabelValues("clear"))
 	require.NoError(t, db.SaveHotStateSnapshot(t.Context(), st, [32]byte{'A'}))
 	require.NoError(t, db.SaveArchiveResumeSnapshot(t.Context(), st, [32]byte{'B'}))
+	require.NoError(t, db.SaveHotStateSnapshot(t.Context(), st, [32]byte{'C'}))
+	require.NoError(t, db.SaveArchiveResumeSnapshot(t.Context(), st, [32]byte{'C'}))
 	require.NoError(t, db.ClearHotStateSnapshots(t.Context()))
-	require.Equal(t, beforeHot+1, histogramCount(t, stateDiffHotSnapshotTime.WithLabelValues("save_hot")))
+	require.Equal(t, beforeHot+2, histogramCount(t, stateDiffHotSnapshotTime.WithLabelValues("save_hot")))
 	require.Equal(t, beforeResume+1, histogramCount(t, stateDiffHotSnapshotTime.WithLabelValues("save_archive_resume")))
 	require.Equal(t, beforeClear+1, histogramCount(t, stateDiffHotSnapshotTime.WithLabelValues("clear")))
 }

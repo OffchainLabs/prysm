@@ -137,12 +137,12 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 		}
 		return nil, pkgerrors.Wrapf(ErrStateDiffCorrupted, "failed to load offset snapshot at slot %d: %v", offset, err)
 	}
+	anchorSlot := latestLevelZeroSlot(s, offset)
 	// Only cache anchor if there are higher levels that need it.
 	// With a single exponent, len(anchors)==0 and no caching is needed.
 	if len(cache.anchors) > 0 {
 		// Cache the newest level-0 snapshot, not the one at the offset: once the tree spans more than
 		// 2^exponents[0] slots the offset snapshot is no longer the anchor any live write resolves to.
-		anchorSlot := latestLevelZeroSlot(s, offset)
 		anchor0, err := s.getFullSnapshot(anchorSlot)
 		if err != nil {
 			return nil, pkgerrors.Wrapf(ErrStateDiffCorrupted, "failed to load level 0 snapshot at slot %d: %v", anchorSlot, err)
@@ -153,7 +153,7 @@ func populateStateDiffCacheFromDB(s *Store, offset uint64) (*stateDiffCache, err
 	}
 	cache.levelsWithData[0] = true
 	setOffsetGauge(offset)
-	stateDiffLastSavedSlot.WithLabelValues(levelLabel(0)).Set(float64(latestLevelZeroSlot(s, offset)))
+	stateDiffLastSavedSlot.WithLabelValues(levelLabel(0)).Set(float64(anchorSlot))
 
 	return cache, nil
 }

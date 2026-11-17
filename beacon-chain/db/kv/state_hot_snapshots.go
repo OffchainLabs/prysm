@@ -149,8 +149,9 @@ func (s *Store) SaveArchiveResumeSnapshot(ctx context.Context, st state.ReadOnly
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveArchiveResumeSnapshot")
 	defer span.End()
 	start := time.Now()
+	wrote := false
 	defer func() {
-		if err == nil {
+		if err == nil && wrote {
 			stateDiffHotSnapshotTime.WithLabelValues("save_archive_resume").Observe(msSince(start))
 		}
 	}()
@@ -172,7 +173,11 @@ func (s *Store) SaveArchiveResumeSnapshot(ctx context.Context, st state.ReadOnly
 		if err := hot.Put(blockRoot[:], compressedEnc); err != nil {
 			return err
 		}
-		return tracked.Put(blockRoot[:], []byte{1})
+		if err := tracked.Put(blockRoot[:], []byte{1}); err != nil {
+			return err
+		}
+		wrote = true
+		return nil
 	})
 }
 

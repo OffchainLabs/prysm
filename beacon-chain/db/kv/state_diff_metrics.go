@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	bolt "go.etcd.io/bbolt"
@@ -49,20 +50,20 @@ var (
 	})
 	stateDiffReadTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "state_diff_read_milliseconds",
-		Help:    "Milliseconds to reconstruct a state from the state-diff tree (successful reads).",
+		Help:    "Milliseconds to reconstruct a state from the state-diff tree on successful reads, including anchor loads during saves and startup validation.",
 		Buckets: stateDiffMillisecondsBuckets,
 	}, []string{"level"})
 	stateDiffReadDiffsApplied = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "state_diff_read_diffs_applied_total",
-		Help: "Diffs applied while reading states from the state-diff tree.",
+		Help: "Diffs successfully applied while reading states from the state-diff tree.",
 	}, []string{"level"})
 	stateDiffReadBase = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "state_diff_read_base_total",
-		Help: "Where the base state of a state-diff tree read came from.",
+		Help: "Base source for state-diff reads, including internal anchor and startup reads; counted when obtained before diffs are applied.",
 	}, []string{"source"})
 	stateDiffSnapshotLoadTime = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "state_diff_snapshot_load_milliseconds",
-		Help:    "Milliseconds to read and decode a level-0 snapshot from the DB.",
+		Help:    "Milliseconds to read and decode a level-0 snapshot from the DB, including startup cache population.",
 		Buckets: stateDiffMillisecondsBuckets,
 	})
 	stateDiffApplyTime = promauto.NewHistogram(prometheus.HistogramOpts{
@@ -138,7 +139,7 @@ func stateDiffErrorReason(err error) string {
 		return "above_archive_frontier"
 	case errors.Is(err, ErrSlotBeforeOffset):
 		return "slot_before_offset"
-	case errors.Is(err, ErrStateDiffCorrupted):
+	case errors.Is(err, ErrStateDiffCorrupted), errors.Is(err, snappy.ErrCorrupt):
 		return "corrupted"
 	case errors.Is(err, ErrNotFoundState), errors.Is(err, errSnapshotNotFound):
 		return "not_found"

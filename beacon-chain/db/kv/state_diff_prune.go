@@ -266,13 +266,13 @@ func (s *Store) reanchorStateDiff(previousAnchorKey []byte, offset uint64) (int,
 		return 0, err
 	}
 	stateDiffPrunedKeys.Add(float64(deleted))
+	stateDiffReanchors.Inc()
+	setOffsetGauge(offset)
 
 	if err := s.reanchorStateDiffCache(offset); err != nil {
 		return deleted, fmt.Errorf("reanchor state diff cache: %w", err)
 	}
 
-	setOffsetGauge(offset)
-	stateDiffReanchors.Inc()
 	log.WithField("offset", offset).Debug("Re-anchored the pruned state-diff tree")
 
 	return deleted, nil
