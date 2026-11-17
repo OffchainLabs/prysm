@@ -19,8 +19,24 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"google.golang.org/protobuf/proto"
 )
+
+func backfillMetric(t *testing.T, metric prometheus.Metric) *dto.Metric {
+	t.Helper()
+	m := new(dto.Metric)
+	require.NoError(t, metric.Write(m))
+	return m
+}
+
+func TestSwapStatusMetrics(t *testing.T) {
+	s := &Store{}
+	s.swapStatus(&dbval.BackfillStatus{LowSlot: 23, OriginSlot: 1123})
+	require.Equal(t, float64(23), backfillMetric(t, backfillLowSlot).GetGauge().GetValue())
+	require.Equal(t, float64(1123), backfillMetric(t, backfillOriginSlot).GetGauge().GetValue())
+}
 
 var errEmptyMockDBMethod = errors.New("uninitialized mock db method called")
 

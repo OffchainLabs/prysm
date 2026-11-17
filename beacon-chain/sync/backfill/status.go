@@ -186,6 +186,10 @@ func (s *Store) swapStatus(bs *dbval.BackfillStatus) {
 	s.Lock()
 	defer s.Unlock()
 	s.bs = bs
+	if bs != nil {
+		backfillLowSlot.Set(float64(bs.LowSlot))
+		backfillOriginSlot.Set(float64(bs.OriginSlot))
+	}
 }
 
 func (s *Store) isGenesisSync() bool {

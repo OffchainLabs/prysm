@@ -188,6 +188,7 @@ func (s *Service) importBatches(ctx context.Context) {
 			break
 		}
 		// Calling update with state=batchImportComplete will advance the batch list.
+		backfillBlocksImported.Add(float64(len(ib.blocks)))
 		s.batchSeq.update(ib.withState(batchImportComplete))
 		imported += 1
 		log.WithFields(ib.logFields()).WithField("batchesRemaining", s.batchSeq.numTodo()).Debug("Imported batch")
@@ -204,6 +205,7 @@ func (s *Service) importBatches(ctx context.Context) {
 func (s *Service) logProgress() {
 	status := s.store.status()
 	target := s.syncNeeds.Currently().Block.Begin
+	backfillTargetSlot.Set(float64(target))
 	lowest := primitives.Slot(status.LowSlot)
 	origin := primitives.Slot(status.OriginSlot)
 
@@ -408,6 +410,7 @@ func newDataColumnVerifierFromInitializer(ini *verification.Initializer) verific
 
 func (s *Service) markComplete() {
 	close(s.complete)
+	backfillComplete.Set(1)
 	log.Info("Marked as complete")
 }
 

@@ -15,9 +15,64 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
+	"github.com/OffchainLabs/prysm/v7/runtime/logging"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/pkg/errors"
 )
+
+func TestServiceProgressMetrics(t *testing.T) {
+	t.Run("complete", func(t *testing.T) {
+		s := &Service{complete: make(chan struct{})}
+		s.markComplete()
+		require.Equal(t, float64(1), backfillMetric(t, backfillComplete).GetGauge().GetValue())
+	})
+
+	t.Run("target", func(t *testing.T) {
+		target := primitives.Slot(32)
+		sn, err := das.NewSyncNeeds(func() primitives.Slot { return 100 }, nil, &target, 0)
+		require.NoError(t, err)
+		s := &Service{
+			store:          &Store{bs: &dbval.BackfillStatus{LowSlot: 64, OriginSlot: 96}},
+			syncNeeds:      sn,
+			batchSeq:       &batchSequencer{},
+			progressLogger: logging.NewIntervalLogger(log, progressLogInterval),
+		}
+		s.logProgress()
+		require.Equal(t, float64(target), backfillMetric(t, backfillTargetSlot).GetGauge().GetValue())
+	})
+
+	t.Run("imported blocks", func(t *testing.T) {
+		sn, err := das.NewSyncNeeds(func() primitives.Slot { return 110 }, nil, nil, 0)
+		require.NoError(t, err)
+		clock := startup.NewClock(time.Now(), [32]byte{}, startup.WithSlotAsNow(110))
+		signed, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
+		require.NoError(t, err)
+		b1, err := blocks.NewROBlock(signed)
+		require.NoError(t, err)
+		b := batch{begin: 96, end: 100, state: batchImportable, blocks: verifiedROBlocks{b1, b1, b1}}
+		seq := newBatchSequencer(1, 100, 4, sn.Currently)
+		seq.seq[0] = b
+		s := &Service{
+			clock: clock, store: &Store{bs: &dbval.BackfillStatus{LowSlot: 100}},
+			batchSeq: seq,
+			batchImporter: func(context.Context, primitives.Slot, batch, *Store) (*dbval.BackfillStatus, error) {
+				return &dbval.BackfillStatus{}, nil
+			},
+		}
+		before := backfillMetric(t, backfillBlocksImported).GetCounter().GetValue()
+		s.importBatches(t.Context())
+		require.Equal(t, float64(len(b.blocks)), backfillMetric(t, backfillBlocksImported).GetCounter().GetValue()-before)
+
+		seq.seq[0] = b
+		s.batchImporter = func(context.Context, primitives.Slot, batch, *Store) (*dbval.BackfillStatus, error) {
+			return nil, errors.New("import failed")
+		}
+		before = backfillMetric(t, backfillBlocksImported).GetCounter().GetValue()
+		s.importBatches(t.Context())
+		require.Equal(t, float64(0), backfillMetric(t, backfillBlocksImported).GetCounter().GetValue()-before)
+	})
+}
 
 type mockMinimumSlotter struct {
 	min primitives.Slot

@@ -98,17 +98,21 @@ func (s *Service) Start() {
 		return
 	}
 	s.setStatus(as)
+	archiveOriginSlot.Set(float64(as.OriginSlot))
+	regeneratedThroughSlot.Set(float64(as.RegeneratedThroughSlot))
 
 	if _, err := s.cw.WaitForClock(ctx); err != nil {
 		log.WithError(err).Error("Service failed to start while waiting for genesis data")
 		return
 	}
 	// The walk needs every block above the origin, so it cannot start until backfill is done.
+	setPhase("waiting_for_backfill")
 	log.WithField("originSlot", as.OriginSlot).Info("Waiting for backfill to complete before regenerating states")
 	if err := s.waitForBackfill(ctx); err != nil {
 		log.WithError(err).Error("Error waiting for backfill to complete")
 		return
 	}
+	setPhase("walking")
 	log.WithFields(logrus.Fields{
 		"originSlot":             as.OriginSlot,
 		"regeneratedThroughSlot": as.RegeneratedThroughSlot,
@@ -120,6 +124,7 @@ func (s *Service) Start() {
 		}
 		done, err := s.round(ctx)
 		if err != nil {
+			roundFailures.Inc()
 			log.WithError(err).Error("Archive state regeneration round failed; retrying")
 		}
 		if done {
@@ -171,6 +176,7 @@ func (s *Service) round(ctx context.Context) (bool, error) {
 	}
 
 	s.setStatus(&complete)
+	setPhase("complete")
 	log.WithField("regeneratedThroughSlot", complete.RegeneratedThroughSlot).
 		Info("Archive state regeneration finished; all historical states are available")
 	return true, nil

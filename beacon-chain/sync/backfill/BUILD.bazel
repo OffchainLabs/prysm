@@ -109,6 +109,7 @@ go_test(
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/interop:go_default_library",
+        "//runtime/logging:go_default_library",
         "//testing/require:go_default_library",
         "//testing/util:go_default_library",
         "//time/slots:go_default_library",
@@ -121,6 +122,8 @@ go_test(
         "@com_github_holiman_uint256//:go_default_library",
         "@com_github_libp2p_go_libp2p//core/peer:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_prometheus_client_model//go:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )

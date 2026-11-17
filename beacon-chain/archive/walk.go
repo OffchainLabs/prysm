@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/filters"
@@ -40,6 +41,7 @@ func (s *Service) walk(ctx context.Context, target primitives.Slot) error {
 		if b > target {
 			return nil
 		}
+		replayStart := time.Now()
 		// The origin is the floor: backfill downloads every block at or above it, so a descent below it
 		// means the chain the tree needs is not in the database rather than that the slot was empty.
 		highSlot, root, err := stategen.CanonicalBlockAtOrBelow(ctx, s.db, b, as.OriginSlot)
@@ -70,6 +72,8 @@ func (s *Service) walk(ctx context.Context, target primitives.Slot) error {
 			}
 		}
 
+		boundaryMilliseconds.WithLabelValues("replay").Observe(float64(time.Since(replayStart)) / float64(time.Millisecond))
+		saveStart := time.Now()
 		if err := s.db.SaveState(ctx, st, root); err != nil {
 			return errors.Wrapf(err, "could not save boundary state at slot %d", b)
 		}
@@ -79,6 +83,7 @@ func (s *Service) walk(ctx context.Context, target primitives.Slot) error {
 		if err := s.db.SaveArchiveStatus(ctx, as); err != nil {
 			return errors.Wrap(err, "could not persist archive progress")
 		}
+		boundaryMilliseconds.WithLabelValues("save").Observe(float64(time.Since(saveStart)) / float64(time.Millisecond))
 		s.setStatus(as)
 		regeneratedThroughSlot.Set(float64(b))
 		s.logProgress(as, target)
@@ -109,11 +114,13 @@ func replayBlock(
 			return nil, 0, errors.Wrap(err, "could not compute the replayed state root")
 		}
 		if root != blk.Block().StateRoot() {
+			stateRootChecks.WithLabelValues("mismatch").Inc()
 			return nil, 0, fmt.Errorf(
 				"replayed state root %#x does not match the state root committed by the block at slot %d (%#x); "+
 					"the archive origin state or the regenerated tree is not the chain this node is on",
 				root, slot, blk.Block().StateRoot())
 		}
+		stateRootChecks.WithLabelValues("match").Inc()
 		sinceVerify = 0
 	}
 	return st, sinceVerify, nil
