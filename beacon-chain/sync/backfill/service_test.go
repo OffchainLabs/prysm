@@ -24,6 +24,7 @@ import (
 func TestServiceProgressMetrics(t *testing.T) {
 	t.Run("complete", func(t *testing.T) {
 		s := &Service{complete: make(chan struct{})}
+		backfillComplete.Set(0)
 		s.markComplete()
 		require.Equal(t, float64(1), backfillMetric(t, backfillComplete).GetGauge().GetValue())
 	})
@@ -192,6 +193,7 @@ func TestServiceCompletesOnRestartAtPinnedFloor(t *testing.T) {
 			srv.workerCfg = &workerCfg{}
 			go srv.Start()
 			require.NoError(t, srv.WaitForCompletion())
+			require.Equal(t, float64(floor), backfillMetric(t, backfillTargetSlot).GetGauge().GetValue())
 		})
 	}
 }

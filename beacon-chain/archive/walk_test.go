@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -114,6 +115,32 @@ func TestReplayBlock_VerificationInterval(t *testing.T) {
 			require.Equal(t, tc.checks, archiveMetric(t, stateRootChecks.WithLabelValues("match")).GetCounter().GetValue()-before)
 		})
 	}
+}
+
+type failingArchiveStatusDatabase struct{ Database }
+
+func (*failingArchiveStatusDatabase) SaveArchiveStatus(context.Context, *kv.ArchiveStatus) error {
+	return errors.New("status write failed")
+}
+
+func TestWalk_FailedStatusWriteDoesNotObserveBoundary(t *testing.T) {
+	setStateDiffExponents([]int{11, 9, 5})
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})
+	defer resetCfg()
+
+	ctx := t.Context()
+	store := testDB.SetupDB(t).(*kv.Store)
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, store.InitializeArchiveOrigin(ctx, genesisState))
+	buildChain(t, ctx, store, genesisState, keys, 32, nil)
+
+	svc := newTestService(t, store)
+	svc.db = &failingArchiveStatusDatabase{Database: store}
+	replayBefore := archiveMetric(t, boundaryMilliseconds.WithLabelValues("replay").(prometheus.Metric)).GetHistogram().GetSampleCount()
+	saveBefore := archiveMetric(t, boundaryMilliseconds.WithLabelValues("save").(prometheus.Metric)).GetHistogram().GetSampleCount()
+	require.ErrorContains(t, "status write failed", svc.walk(ctx, 32))
+	require.Equal(t, replayBefore, archiveMetric(t, boundaryMilliseconds.WithLabelValues("replay").(prometheus.Metric)).GetHistogram().GetSampleCount())
+	require.Equal(t, saveBefore, archiveMetric(t, boundaryMilliseconds.WithLabelValues("save").(prometheus.Metric)).GetHistogram().GetSampleCount())
 }
 
 // A resumed walk must pick up from the recorded frontier and produce the same tree as an uninterrupted run.

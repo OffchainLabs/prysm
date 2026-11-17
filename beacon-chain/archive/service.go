@@ -90,6 +90,12 @@ func (s *Service) Start() {
 		log.Debug("Archive state regeneration is not pending; service is idle")
 		return
 	}
+	completed := false
+	defer func() {
+		if !completed {
+			setPhase("")
+		}
+	}()
 	ctx := helpers.WithIsolatedCaches(s.ctx)
 
 	as, err := s.db.ArchiveStatus(ctx)
@@ -98,8 +104,7 @@ func (s *Service) Start() {
 		return
 	}
 	s.setStatus(as)
-	archiveOriginSlot.Set(float64(as.OriginSlot))
-	regeneratedThroughSlot.Set(float64(as.RegeneratedThroughSlot))
+	ReportStatus(as)
 
 	if _, err := s.cw.WaitForClock(ctx); err != nil {
 		log.WithError(err).Error("Service failed to start while waiting for genesis data")
@@ -124,10 +129,13 @@ func (s *Service) Start() {
 		}
 		done, err := s.round(ctx)
 		if err != nil {
-			roundFailures.Inc()
+			if ctx.Err() == nil {
+				roundFailures.Inc()
+			}
 			log.WithError(err).Error("Archive state regeneration round failed; retrying")
 		}
 		if done {
+			completed = true
 			return
 		}
 		select {

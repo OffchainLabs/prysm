@@ -13,7 +13,31 @@ import (
 	"github.com/OffchainLabs/prysm/v7/proto/dbval"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+func archiveGauge(t *testing.T, name, phase string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			if phase == "" {
+				return metric.GetGauge().GetValue()
+			}
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "phase" && label.GetValue() == phase {
+					return metric.GetGauge().GetValue()
+				}
+			}
+		}
+	}
+	t.Fatalf("metric %s with phase %s not found", name, phase)
+	return 0
+}
 
 func TestValidateArchiveOrigin(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
@@ -94,4 +118,14 @@ func TestFinalizeArchiveOrigin_RejectedOriginLeavesDBReAnchorable(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, goodSlot, as.OriginSlot)
 	require.Equal(t, true, b.archiveRegenPending)
+	require.Equal(t, float64(goodSlot), archiveGauge(t, "archive_origin_slot", ""))
+
+	as.RegeneratedThroughSlot = goodSlot + 32
+	as.Complete = true
+	require.NoError(t, store.SaveArchiveStatus(ctx, as))
+	restarted := &BeaconNode{ctx: ctx, db: beaconDB, ArchiveOriginSlot: &goodSlot}
+	require.NoError(t, restarted.finalizeArchiveOrigin(ctx, good))
+	require.Equal(t, false, restarted.archiveRegenPending)
+	require.Equal(t, float64(as.RegeneratedThroughSlot), archiveGauge(t, "archive_regenerated_through_slot", ""))
+	require.Equal(t, float64(1), archiveGauge(t, "archive_regeneration_phase", "complete"))
 }

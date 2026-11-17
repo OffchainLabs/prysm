@@ -72,7 +72,7 @@ func (s *Service) walk(ctx context.Context, target primitives.Slot) error {
 			}
 		}
 
-		boundaryMilliseconds.WithLabelValues("replay").Observe(float64(time.Since(replayStart)) / float64(time.Millisecond))
+		replayDuration := float64(time.Since(replayStart)) / float64(time.Millisecond)
 		saveStart := time.Now()
 		if err := s.db.SaveState(ctx, st, root); err != nil {
 			return errors.Wrapf(err, "could not save boundary state at slot %d", b)
@@ -83,6 +83,7 @@ func (s *Service) walk(ctx context.Context, target primitives.Slot) error {
 		if err := s.db.SaveArchiveStatus(ctx, as); err != nil {
 			return errors.Wrap(err, "could not persist archive progress")
 		}
+		boundaryMilliseconds.WithLabelValues("replay").Observe(replayDuration)
 		boundaryMilliseconds.WithLabelValues("save").Observe(float64(time.Since(saveStart)) / float64(time.Millisecond))
 		s.setStatus(as)
 		regeneratedThroughSlot.Set(float64(b))

@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/kv"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -46,6 +47,15 @@ var (
 )
 
 var archiveBoundaryMillisecondsBuckets = []float64{5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000}
+
+// ReportStatus exports persisted archive progress, including completed archives after restart.
+func ReportStatus(status *kv.ArchiveStatus) {
+	archiveOriginSlot.Set(float64(status.OriginSlot))
+	regeneratedThroughSlot.Set(float64(status.RegeneratedThroughSlot))
+	if status.Complete {
+		setPhase("complete")
+	}
+}
 
 func setPhase(phase string) {
 	for _, p := range []string{"waiting_for_backfill", "walking", "complete"} {

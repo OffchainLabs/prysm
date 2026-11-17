@@ -121,7 +121,13 @@ func WithVerifierWaiter(viw InitializerWaiter) ServiceOption {
 func WithSyncNeedsWaiter(f func() (das.SyncNeeds, error)) ServiceOption {
 	return func(s *Service) error {
 		if f != nil {
-			s.syncNeedsWaiter = f
+			s.syncNeedsWaiter = func() (das.SyncNeeds, error) {
+				needs, err := f()
+				if err == nil {
+					backfillTargetSlot.Set(float64(needs.Currently().Block.Begin))
+				}
+				return needs, err
+			}
 		}
 		return nil
 	}
@@ -409,8 +415,8 @@ func newDataColumnVerifierFromInitializer(ini *verification.Initializer) verific
 }
 
 func (s *Service) markComplete() {
-	close(s.complete)
 	backfillComplete.Set(1)
+	close(s.complete)
 	log.Info("Marked as complete")
 }
 
