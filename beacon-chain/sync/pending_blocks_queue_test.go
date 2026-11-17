@@ -69,7 +69,7 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -149,7 +149,7 @@ func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -230,7 +230,7 @@ func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) 
 			stateGen: stategen.New(db, fcs),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -309,7 +309,7 @@ func TestRegularSync_InsertDuplicateBlocks(t *testing.T) {
 			},
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -364,7 +364,7 @@ func TestRegularSyncBeaconBlockSubscriber_DoNotReprocessBlock(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -433,7 +433,7 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks_2Chains(t *testin
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -540,7 +540,7 @@ func TestRegularSyncBeaconBlockSubscriber_PruneOldPendingBlocks(t *testing.T) {
 			},
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -602,7 +602,7 @@ func TestRegularSyncBeaconBlockSubscriber_PruneOldPendingBlocks(t *testing.T) {
 func TestService_sortedPendingSlots(t *testing.T) {
 	r := &Service{
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 
 	var lastSlot primitives.Slot = math.MaxUint64
@@ -648,7 +648,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -727,7 +727,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 func TestService_AddPendingBlockToQueueOverMax(t *testing.T) {
 	r := &Service{
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 
 	b := util.NewBeaconBlock()
@@ -773,7 +773,7 @@ func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
 			stateGen: stategen.New(db, fcs),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -849,7 +849,7 @@ func TestService_ProcessBadPendingBlocks(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -912,7 +912,7 @@ func TestAlreadySyncingBlock(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -971,8 +971,8 @@ func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b2Root))
 
-	require.Equal(t, true, r.seenPendingBlocks[b1Root])
-	require.Equal(t, true, r.seenPendingBlocks[b2Root])
+	require.Equal(t, true, r.hasPendingBlock(b1Root))
+	require.Equal(t, true, r.hasPendingBlock(b2Root))
 	require.Equal(t, 2, len(r.pendingBlocksInCache(1)))
 
 	// Wait for expiration cache to cleanup and remove old block.
@@ -981,8 +981,8 @@ func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
 	// Run pending queue with expired blocks.
 	require.NoError(t, r.processPendingBlocks(ctx))
 
-	assert.Equal(t, false, r.seenPendingBlocks[b1Root])
-	assert.Equal(t, false, r.seenPendingBlocks[b2Root])
+	assert.Equal(t, false, r.hasPendingBlock(b1Root))
+	assert.Equal(t, false, r.hasPendingBlock(b2Root))
 	assert.Equal(t, 0, len(r.pendingBlocksInCache(1)))
 }
 
@@ -1218,7 +1218,7 @@ func TestService_ProcessPendingBlocks_BroadcastsOnBlockForkDigest(t *testing.T) 
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -1280,7 +1280,7 @@ func TestRequestBlocksAccountable(t *testing.T) {
 					clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 				},
 				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-				seenPendingBlocks:   make(map[[32]byte]bool),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
 				ctx:                 t.Context(),
 			}
 

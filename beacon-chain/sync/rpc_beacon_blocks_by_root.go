@@ -100,14 +100,14 @@ func (s *Service) sendBeaconBlocksRequest(
 
 		received[blkRoot] = true
 
-		alreadyQueued := s.seenPendingBlocks[blkRoot]
+		alreadyQueued := s.hasPendingBlock(blkRoot)
 		if err := s.insertBlockToPendingQueue(slot, blk, blkRoot); err != nil {
 			return errors.Wrapf(err, "insert block to pending queue for block with root %x", blkRoot)
 		}
 
 		// Walk back only from newly queued blocks after the finalized slot.
 		// Keep the lowest child slot.
-		newlyQueued := !alreadyQueued && s.seenPendingBlocks[blkRoot]
+		newlyQueued := !alreadyQueued && s.hasPendingBlock(blkRoot)
 		parentRoot := blk.Block().ParentRoot()
 		if !newlyQueued || slot <= finalizedSlot {
 			return nil

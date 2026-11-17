@@ -77,7 +77,7 @@ func (s *Service) processPendingAttsForBlock(ctx context.Context, bRoot [32]byte
 
 	s.pendingQueueLock.RLock()
 	for root, senders := range s.pendingAttSenders {
-		if s.seenPendingBlocks[root] || s.cfg.chain.InForkchoice(root) || s.cfg.chain.BlockBeingSynced(root) {
+		if s.hasPendingBlock(root) || s.cfg.chain.InForkchoice(root) || s.cfg.chain.BlockBeingSynced(root) {
 			continue
 		}
 

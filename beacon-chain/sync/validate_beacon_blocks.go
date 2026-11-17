@@ -144,7 +144,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	}
 
 	s.pendingQueueLock.RLock()
-	if s.seenPendingBlocks[blockRoot] {
+	if s.hasPendingBlock(blockRoot) {
 		s.pendingQueueLock.RUnlock()
 		return pubsub.ValidationIgnore, nil
 	}
@@ -182,14 +182,14 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return res, err
 		}
 		s.pendingQueueLock.Lock()
-		alreadyQueued := s.seenPendingBlocks[blockRoot]
+		alreadyQueued := s.hasPendingBlock(blockRoot)
 		if err := s.insertBlockToPendingQueue(blk.Block().Slot(), blk, blockRoot); err != nil {
 			s.pendingQueueLock.Unlock()
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not insert block to pending queue")
 			return pubsub.ValidationIgnore, err
 		}
-		newlyQueued := !alreadyQueued && s.seenPendingBlocks[blockRoot]
-		parentPending := s.seenPendingBlocks[parentRoot]
+		newlyQueued := !alreadyQueued && s.hasPendingBlock(blockRoot)
+		gap := firstMissingAncestor(s.seenPendingBlocks, parentLink{root: parentRoot, childSlot: blk.Block().Slot()})
 		s.pendingQueueLock.Unlock()
 
 		// Request the parent only for a newly queued block.
@@ -206,15 +206,9 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 				}()
 			} else {
 				go func() {
-					gap := parentLink{root: parentRoot, childSlot: blk.Block().Slot()}
-					if parentPending {
-						missingParents, err := s.pendingMissingParents(s.ctx)
-						if err != nil {
-							log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not get the missing parents of pending blocks")
-							return
-						}
-
-						gap = firstMissingAncestor(missingParents, gap)
+					// We may already have the parent of the oldest pending ancestor. The pending queue then processes it.
+					if s.cfg.chain.HasBlock(s.ctx, gap.root) {
+						return
 					}
 
 					s.requestBlocksAccountable(s.ctx, pid, [][32]byte{gap.root}, map[[32]byte]primitives.Slot{gap.root: gap.childSlot})

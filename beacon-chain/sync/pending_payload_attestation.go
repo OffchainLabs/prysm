@@ -53,7 +53,7 @@ func (s *Service) queuePendingPayloadAttestation(ctx context.Context, pid peer.I
 	}
 
 	s.pendingQueueLock.RLock()
-	inPendingQueue := s.seenPendingBlocks[root]
+	inPendingQueue := s.hasPendingBlock(root)
 	s.pendingQueueLock.RUnlock()
 	if !rootExists && !inPendingQueue && !s.cfg.chain.BlockBeingSynced(root) {
 		go s.requestBlocksAccountable(s.ctx, pid, [][32]byte{root}, nil)

@@ -102,7 +102,7 @@ func pendingAttService(t *testing.T, p *p2ptest.TestP2P) (*Service, [32]byte) {
 		ctx:                  ctx,
 		cfg:                  &config{p2p: p, beaconDB: db, chain: chain, clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot)},
 		blkRootToPendingAtts: make(map[[32]byte][]any),
-		seenPendingBlocks:    make(map[[32]byte]bool),
+		seenPendingBlocks:    make(map[[32]byte]parentLink),
 		chainStarted:         &atomic.Bool{},
 	}
 	r.initCaches()
@@ -401,7 +401,7 @@ func TestProcessPendingAtts_DownscoresSenderNotServingBlock(t *testing.T) {
 		for _, topic := range []string{p2p.RPCBlocksByRootTopicV1, p2p.RPCBlocksByRootTopicV2} {
 			sender.BHost.SetStreamHandler(protocol.ID(topic+sender.Encoding().ProtocolSuffix()), func(stream network.Stream) {
 				r.pendingQueueLock.Lock()
-				r.seenPendingBlocks[rootB] = true
+				r.seenPendingBlocks[rootB] = parentLink{}
 				r.pendingQueueLock.Unlock()
 				_ = stream.Close()
 			})

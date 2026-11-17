@@ -360,7 +360,7 @@ func TestValidateBeaconBlockPubSub_CanRecoverStateSummary(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -441,7 +441,7 @@ func TestValidateBeaconBlockPubSub_IsInCache(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -522,7 +522,7 @@ func TestValidateBeaconBlockPubSub_ValidProposerSignature(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -605,7 +605,7 @@ func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		subHandler:          newSubTopicHandler(),
 	}
 	opChannel := make(chan *feed.Event, 1)
@@ -689,7 +689,7 @@ func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -805,7 +805,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromFuture(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -950,7 +950,7 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1119,7 +1119,7 @@ func TestValidateBeaconBlockPubSub_ParentNotFinalizedDescendant(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1196,7 +1196,7 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1300,7 +1300,7 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1323,7 +1323,7 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 	assert.Equal(t, res, pubsub.ValidationIgnore, "block with unknown parent should be ignored")
 	bRoot, err = msg.Block.HashTreeRoot()
 	assert.NoError(t, err)
-	assert.Equal(t, true, r.seenPendingBlocks[bRoot])
+	assert.Equal(t, true, r.hasPendingBlock(bRoot))
 
 	select {
 	case event := <-opChannel:
@@ -1397,7 +1397,7 @@ func TestValidateBeaconBlockPubSub_RequestsUnknownParentBlock(t *testing.T) {
 					stateGen:      stategen.New(db, doublylinkedtree.New()),
 				},
 				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-				seenPendingBlocks:   make(map[[32]byte]bool),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
 			}
 			r.initCaches()
 
@@ -1513,7 +1513,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1605,7 +1605,7 @@ func TestValidateBeaconBlockPubSub_RejectBlockSlotNotAfterParent(t *testing.T) {
 				seenBlockCache:      lruwrpr.New(10),
 				badBlockCache:       lruwrpr.New(10),
 				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-				seenPendingBlocks:   make(map[[32]byte]bool),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
 			}
 
 			buf := new(bytes.Buffer)
@@ -2524,7 +2524,7 @@ func TestValidateBeaconBlockPubSub_GloasDeposits(t *testing.T) {
 				seenBlockCache:      lruwrpr.New(10),
 				badBlockCache:       lruwrpr.New(10),
 				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-				seenPendingBlocks:   make(map[[32]byte]bool),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
 			}
 
 			msg := util.NewBeaconBlockGloas()

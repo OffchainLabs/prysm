@@ -281,7 +281,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	inner[builderIdx] = signedEnvelope
 
 	s.pendingQueueLock.RLock()
-	inPendingQueue := s.seenPendingBlocks[root]
+	inPendingQueue := s.hasPendingBlock(root)
 	s.pendingQueueLock.RUnlock()
 	if !rootExists && !inPendingQueue && !s.cfg.chain.InForkchoice(root) && !s.cfg.chain.BlockBeingSynced(root) {
 		go s.requestBlocksAccountable(s.ctx, pid, [][32]byte{root}, nil)

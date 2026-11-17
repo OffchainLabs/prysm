@@ -73,7 +73,7 @@ func FuzzValidateBeaconBlockPubSub_Phase0(f *testing.F) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
@@ -156,7 +156,7 @@ func FuzzValidateBeaconBlockPubSub_Altair(f *testing.F) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)
@@ -239,7 +239,7 @@ func FuzzValidateBeaconBlockPubSub_Bellatrix(f *testing.F) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, msg)

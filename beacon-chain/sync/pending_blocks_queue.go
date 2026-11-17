@@ -215,37 +215,11 @@ func (s *Service) processPendingBlocks(ctx context.Context) error {
 	return s.sendBatchRootRequest(ctx, parentRoots, parentSlotBounds, rand.NewGenerator())
 }
 
-// pendingMissingParents returns the parent of each pending block whose parent is missing, keyed by the block root.
-func (s *Service) pendingMissingParents(ctx context.Context) (map[[32]byte]parentLink, error) {
-	s.pendingQueueLock.RLock()
-	defer s.pendingQueueLock.RUnlock()
-
-	missingParents := make(map[[32]byte]parentLink)
-	for k := range s.slotToPendingBlocks.Items() {
-		slot := cacheKeyToSlot(k)
-		for _, b := range s.pendingBlocksInCache(slot) {
-			parentRoot := b.Block().ParentRoot()
-			if s.cfg.beaconDB.HasBlock(ctx, parentRoot) {
-				continue
-			}
-
-			root, err := b.Block().HashTreeRoot()
-			if err != nil {
-				return nil, fmt.Errorf("hash tree root: %w", err)
-			}
-
-			missingParents[root] = parentLink{root: parentRoot, childSlot: slot}
-		}
-	}
-
-	return missingParents, nil
-}
-
-// firstMissingAncestor follows link back through the pending blocks whose parent is missing,
-// and returns the link to the first missing ancestor.
-func firstMissingAncestor(missingParents map[[32]byte]parentLink, link parentLink) parentLink {
+// firstMissingAncestor follows link back through the pending blocks in parents (block root -> parent link),
+// and returns the link to the first ancestor not in parents.
+func firstMissingAncestor(parents map[[32]byte]parentLink, link parentLink) parentLink {
 	for {
-		next, ok := missingParents[link.root]
+		next, ok := parents[link.root]
 		if !ok {
 			return link
 		}
@@ -284,7 +258,7 @@ func (s *Service) isBlockInQueue(parentRoot [32]byte) bool {
 	s.pendingQueueLock.RLock()
 	defer s.pendingQueueLock.RUnlock()
 
-	return s.seenPendingBlocks[parentRoot]
+	return s.hasPendingBlock(parentRoot)
 }
 
 var errNoPeersForPending = errors.New("no suitable peers to process pending block queue, delaying")
@@ -562,7 +536,7 @@ func (s *Service) sendBatchRootRequest(ctx context.Context, roots [][32]byte, sl
 			defer s.pendingQueueLock.RUnlock()
 
 			for _, rt := range roots {
-				if !s.seenPendingBlocks[rt] {
+				if !s.hasPendingBlock(rt) {
 					newRoots = append(newRoots, rt)
 				}
 			}
@@ -684,7 +658,7 @@ func (s *Service) filterOutPendingAndSynced(roots [][fieldparams.RootLength]byte
 
 	for i := len(roots) - 1; i >= 0; i-- {
 		r := roots[i]
-		if s.seenPendingBlocks[r] || s.cfg.chain.BlockBeingSynced(r) {
+		if s.hasPendingBlock(r) || s.cfg.chain.BlockBeingSynced(r) {
 			roots = append(roots[:i], roots[i+1:]...)
 			continue
 		}
@@ -758,7 +732,7 @@ func (s *Service) clearPendingSlots() {
 	s.pendingQueueLock.Lock()
 	defer s.pendingQueueLock.Unlock()
 	s.slotToPendingBlocks.Flush()
-	s.seenPendingBlocks = make(map[[32]byte]bool)
+	s.seenPendingBlocks = make(map[[32]byte]parentLink)
 }
 
 // Delete block from the list from the pending queue using the slot as key.
@@ -820,7 +794,7 @@ func (s *Service) deleteExpiredBlocksFromCache() {
 func (s *Service) insertBlockToPendingQueue(_ primitives.Slot, b interfaces.ReadOnlySignedBeaconBlock, r [32]byte) error {
 	mutexasserts.AssertRWMutexLocked(&s.pendingQueueLock)
 
-	if s.seenPendingBlocks[r] {
+	if s.hasPendingBlock(r) {
 		return nil
 	}
 
@@ -833,8 +807,14 @@ func (s *Service) insertBlockToPendingQueue(_ primitives.Slot, b interfaces.Read
 		return nil
 	}
 
-	s.seenPendingBlocks[r] = true
+	s.seenPendingBlocks[r] = parentLink{root: b.Block().ParentRoot(), childSlot: b.Block().Slot()}
 	return nil
+}
+
+// hasPendingBlock returns true if the block with root r is in the pending queue.
+func (s *Service) hasPendingBlock(r [32]byte) bool {
+	_, ok := s.seenPendingBlocks[r]
+	return ok
 }
 
 // This returns signed beacon blocks given input key from slotToPendingBlocks.

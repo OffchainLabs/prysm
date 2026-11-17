@@ -20,7 +20,7 @@ func NewRegularSyncFuzz(opts ...Option) *Service {
 		ctx:                  ctx,
 		cancel:               cancel,
 		slotToPendingBlocks:  gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:    make(map[[32]byte]bool),
+		seenPendingBlocks:    make(map[[32]byte]parentLink),
 		blkRootToPendingAtts: make(map[[32]byte][]any),
 		pendingGloasColumns:  make(map[[32]byte]*pendingGloasEntry),
 	}

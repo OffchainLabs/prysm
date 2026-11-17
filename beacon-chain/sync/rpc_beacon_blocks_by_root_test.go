@@ -228,7 +228,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}
@@ -303,7 +303,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}
@@ -371,7 +371,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}

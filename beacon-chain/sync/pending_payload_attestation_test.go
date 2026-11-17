@@ -45,7 +45,7 @@ func queueTestService(t *testing.T) *Service {
 	require.NoError(t, err)
 	return &Service{
 		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
-		seenPendingBlocks:          make(map[[32]byte]bool),
+		seenPendingBlocks:          make(map[[32]byte]parentLink),
 		cfg:                        &config{chain: &mock.ChainService{State: st, NotFinalized: true, FinalizedCheckPoint: &ethpb.Checkpoint{}}, p2p: p2ptest.NewTestP2P(t)},
 	}
 }
@@ -123,7 +123,7 @@ func TestQueuePendingPayloadAttestation_IgnoresNonCommittee(t *testing.T) {
 func TestQueuePendingPayloadAttestation_DropsWhenNoState(t *testing.T) {
 	s := &Service{
 		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
-		seenPendingBlocks:          make(map[[32]byte]bool),
+		seenPendingBlocks:          make(map[[32]byte]parentLink),
 		cfg:                        &config{chain: &mock.ChainService{HeadStateErr: errors.New("no state")}},
 	}
 
@@ -144,7 +144,7 @@ func TestQueuePendingPayloadAttestation_DrainsWhenBlockInForkchoice(t *testing.T
 	s := &Service{
 		payloadAttestationCache:    &cache.PayloadAttestationCache{},
 		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
-		seenPendingBlocks:          make(map[[32]byte]bool),
+		seenPendingBlocks:          make(map[[32]byte]parentLink),
 		cfg: &config{
 			chain:                  &mock.ChainService{State: st}, // InForkchoice true: block already arrived.
 			p2p:                    p2ptest.NewTestP2P(t),
