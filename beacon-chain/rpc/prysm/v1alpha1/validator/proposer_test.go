@@ -5,6 +5,7 @@ package validator
 import (
 	"context"
 	"math/big"
+	"slices"
 	"testing"
 	"time"
 
@@ -3974,4 +3975,67 @@ func TestHandlePostBlockStateError_DropsPayloadAttestations(t *testing.T) {
 	atts, err := wsb.Block().Body().PayloadAttestations()
 	require.NoError(t, err)
 	require.Equal(t, 0, len(atts))
+}
+
+func TestServer_setPreGloasConsensusFields_DoesNotMutateHead(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.ShardCommitteePeriod = 0 // allow voluntary exits at genesis
+	params.OverrideBeaconConfig(cfg)
+
+	ctx := t.Context()
+	db := dbutil.SetupDB(t)
+	head, privKeys := util.DeterministicGenesisStateGloas(t, 64)
+	slashedIdx, exitingIdx := primitives.ValidatorIndex(0), primitives.ValidatorIndex(1)
+	payment := &ethpb.BuilderPendingPayment{
+		Withdrawal:    &ethpb.BuilderPendingWithdrawal{FeeRecipient: make([]byte, 20), Amount: 5},
+		ProposerIndex: slashedIdx,
+	}
+	require.NoError(t, head.SetBuilderPendingPayment(1, payment))
+	balancesBefore := head.Balances()
+	slashingsBefore := head.Slashings()
+
+	server := getProposerServer(ctx, db, head, make([]byte, 32))
+	slashing, err := util.GenerateProposerSlashingForValidator(head, privKeys[slashedIdx], slashedIdx)
+	require.NoError(t, err)
+	require.NoError(t, server.SlashingsPool.InsertProposerSlashing(ctx, head, slashing))
+	// EIP-7044: exits are signed with the Capella fork version.
+	exitDomain, err := signing.ComputeDomain(params.BeaconConfig().DomainVoluntaryExit, params.BeaconConfig().CapellaForkVersion, head.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	for _, idx := range []primitives.ValidatorIndex{slashedIdx, exitingIdx} {
+		exit := &ethpb.VoluntaryExit{ValidatorIndex: idx}
+		root, err := signing.ComputeSigningRoot(exit, exitDomain)
+		require.NoError(t, err)
+		server.ExitPool.InsertVoluntaryExit(&ethpb.SignedVoluntaryExit{Exit: exit, Signature: privKeys[idx].Sign(root[:]).Marshal()})
+	}
+
+	sBlk, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlockGloas())
+	require.NoError(t, err)
+	server.setPreGloasConsensusFields(ctx, sBlk, head)
+
+	t.Run("slashing packed", func(t *testing.T) {
+		require.Equal(t, 1, len(sBlk.Block().Body().ProposerSlashings()))
+	})
+	t.Run("exit selection sees packed slashing", func(t *testing.T) {
+		exits := sBlk.Block().Body().VoluntaryExits()
+		require.Equal(t, 1, len(exits))
+		require.Equal(t, exitingIdx, exits[0].Exit.ValidatorIndex)
+	})
+	t.Run("head validator not slashed", func(t *testing.T) {
+		v, err := head.ValidatorAtIndexReadOnly(slashedIdx)
+		require.NoError(t, err)
+		require.Equal(t, false, v.Slashed())
+		require.Equal(t, params.BeaconConfig().FarFutureEpoch, v.ExitEpoch())
+	})
+	t.Run("head balances kept", func(t *testing.T) {
+		require.Equal(t, true, slices.Equal(balancesBefore, head.Balances()))
+	})
+	t.Run("head slashings kept", func(t *testing.T) {
+		require.Equal(t, true, slices.Equal(slashingsBefore, head.Slashings()))
+	})
+	t.Run("head builder payment kept", func(t *testing.T) {
+		got, err := head.BuilderPendingPayment(1)
+		require.NoError(t, err)
+		require.Equal(t, primitives.Gwei(5), got.Withdrawal.Amount)
+	})
 }

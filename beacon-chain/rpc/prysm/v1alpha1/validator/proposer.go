@@ -212,6 +212,8 @@ func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.Signed
 
 // setPreGloasConsensusFields fills the consensus body fields introduced before Gloas, shared by both build paths.
 func (vs *Server) setPreGloasConsensusFields(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) {
+	// Copy the head state as slashing selection modifies this state.
+	head = head.Copy()
 	eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
 	if err != nil {
 		eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
