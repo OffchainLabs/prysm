@@ -17,6 +17,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
 	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	blockchainTest "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
@@ -594,6 +595,11 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 	})
 
 	t.Run("start period before altair", func(t *testing.T) {
+		previousAltairEpoch := config.AltairForkEpoch
+		t.Cleanup(func() {
+			config.AltairForkEpoch = previousAltairEpoch
+			params.OverrideBeaconConfig(config)
+		})
 		config.AltairForkEpoch = 1
 		params.OverrideBeaconConfig(config)
 
@@ -613,9 +619,125 @@ func TestLightClientHandler_GetLightClientByRange(t *testing.T) {
 		s.GetLightClientUpdatesByRange(writer, request)
 
 		require.Equal(t, http.StatusBadRequest, writer.Code)
+	})
 
-		config.AltairForkEpoch = 0
+	for _, tc := range []struct {
+		name, url, message string
+	}{
+		{"missing count", "http://foo.com/?start_period=0", "count"},
+		{"zero count", "http://foo.com/?count=0&start_period=0", "count must be greater than 0"},
+		{"missing start period", "http://foo.com/?count=1", "start_period"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest("GET", tc.url, nil)
+			writer := httptest.NewRecorder()
+			s := &Server{}
+
+			s.GetLightClientUpdatesByRange(writer, request)
+
+			require.Equal(t, http.StatusBadRequest, writer.Code)
+			require.StringContains(t, tc.message, writer.Body.String())
+		})
+	}
+
+	t.Run("start period epoch overflows", func(t *testing.T) {
+		previousPeriodLength, previousAltairEpoch := config.EpochsPerSyncCommitteePeriod, config.AltairForkEpoch
+		t.Cleanup(func() {
+			config.EpochsPerSyncCommitteePeriod = previousPeriodLength
+			config.AltairForkEpoch = previousAltairEpoch
+			params.OverrideBeaconConfig(config)
+		})
+		config.EpochsPerSyncCommitteePeriod = 256
+		config.AltairForkEpoch = 1
 		params.OverrideBeaconConfig(config)
+
+		request := httptest.NewRequest("GET", "http://foo.com/?count=1&start_period=72057594037927936", nil)
+		writer := httptest.NewRecorder()
+		s := &Server{}
+
+		s.GetLightClientUpdatesByRange(writer, request)
+
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		require.StringContains(t, "Invalid 'start_period': too large", writer.Body.String())
+	})
+
+	t.Run("end period overflows", func(t *testing.T) {
+		previousPeriodLength, previousAltairEpoch, previousMaxUpdates := config.EpochsPerSyncCommitteePeriod, config.AltairForkEpoch, config.MaxRequestLightClientUpdates
+		t.Cleanup(func() {
+			config.EpochsPerSyncCommitteePeriod = previousPeriodLength
+			config.AltairForkEpoch = previousAltairEpoch
+			config.MaxRequestLightClientUpdates = previousMaxUpdates
+			params.OverrideBeaconConfig(config)
+		})
+		config.EpochsPerSyncCommitteePeriod = 1
+		config.AltairForkEpoch = 0
+		config.MaxRequestLightClientUpdates = 2
+		params.OverrideBeaconConfig(config)
+
+		db := dbtesting.SetupDB(t)
+		blk := util.NewBeaconBlock()
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{
+			LCStore: lightclient.NewLightClientStore(&p2ptesting.FakeP2P{}, new(event.Feed), db),
+			HeadFetcher: &blockchainTest.ChainService{
+				Block: signedBlk,
+			},
+		}
+
+		request := httptest.NewRequest("GET", "http://foo.com/?count=2&start_period=18446744073709551615", nil)
+		writer := httptest.NewRecorder()
+
+		s.GetLightClientUpdatesByRange(writer, request)
+
+		require.Equal(t, http.StatusBadRequest, writer.Code)
+		require.StringContains(t, "Invalid 'start_period' and 'count': requested range is too large", writer.Body.String())
+	})
+
+	t.Run("maximum start period without overflow", func(t *testing.T) {
+		previousPeriodLength, previousAltairEpoch, previousMaxUpdates := config.EpochsPerSyncCommitteePeriod, config.AltairForkEpoch, config.MaxRequestLightClientUpdates
+		t.Cleanup(func() {
+			config.EpochsPerSyncCommitteePeriod = previousPeriodLength
+			config.AltairForkEpoch = previousAltairEpoch
+			config.MaxRequestLightClientUpdates = previousMaxUpdates
+			params.OverrideBeaconConfig(config)
+		})
+		config.EpochsPerSyncCommitteePeriod = 1
+		config.AltairForkEpoch = 0
+		config.MaxRequestLightClientUpdates = 2
+		params.OverrideBeaconConfig(config)
+
+		db := dbtesting.SetupDB(t)
+		blk := util.NewBeaconBlock()
+		signedBlk, err := blocks.NewSignedBeaconBlock(blk)
+		require.NoError(t, err)
+		s := &Server{
+			LCStore: lightclient.NewLightClientStore(&p2ptesting.FakeP2P{}, new(event.Feed), db),
+			HeadFetcher: &blockchainTest.ChainService{
+				Block: signedBlk,
+			},
+		}
+
+		request := httptest.NewRequest("GET", "http://foo.com/?count=1&start_period=18446744073709551615", nil)
+		writer := httptest.NewRecorder()
+
+		s.GetLightClientUpdatesByRange(writer, request)
+
+		require.Equal(t, http.StatusOK, writer.Code)
+		var updates structs.LightClientUpdatesByRangeResponse
+		require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &updates.Updates))
+		require.Equal(t, 0, len(updates.Updates))
+	})
+
+	t.Run("head block unavailable", func(t *testing.T) {
+		request := httptest.NewRequest("GET", "http://foo.com/?count=1&start_period=0", nil)
+		writer := httptest.NewRecorder()
+		s := &Server{HeadFetcher: &headBlockErrorFetcher{}}
+
+		s.GetLightClientUpdatesByRange(writer, request)
+
+		require.Equal(t, http.StatusInternalServerError, writer.Code)
+		require.StringContains(t, "Could not get head block: head unavailable", writer.Body.String())
 	})
 
 	t.Run("missing updates", func(t *testing.T) {
@@ -1125,4 +1247,12 @@ func saveHead(t *testing.T, ctx context.Context, d db.Database) {
 	require.NoError(t, err)
 	require.NoError(t, d.SaveState(ctx, st, blkRoot))
 	require.NoError(t, d.SaveHeadBlockRoot(ctx, blkRoot))
+}
+
+type headBlockErrorFetcher struct {
+	blockchain.HeadFetcher
+}
+
+func (*headBlockErrorFetcher) HeadBlock(context.Context) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	return nil, fmt.Errorf("head unavailable")
 }
