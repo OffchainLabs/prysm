@@ -300,6 +300,30 @@ func (b *BeaconBlockBody) Version() int {
 	panic("implement me")
 }
 
+func (SignedBeaconBlock) XMSSSignature() []byte {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) VRFProof() []byte {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) AttestationProof() []byte {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) ProposerSlashingsPQ() []*eth.ProposerSlashingPQ {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) ParentExecutionRequestsPQ() *enginev1.ExecutionRequestsPQ {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) XMSSBidSignature() []byte {
+	panic("implement me")
+}
+
 var _ interfaces.ReadOnlySignedBeaconBlock = &SignedBeaconBlock{}
 var _ interfaces.ReadOnlyBeaconBlock = &BeaconBlock{}
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}

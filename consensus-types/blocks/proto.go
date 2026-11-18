@@ -185,6 +185,19 @@ func (b *SignedBeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			Block:     block,
 			Signature: b.signature[:],
 		}, nil
+	case version.PQ:
+		var block *eth.BeaconBlockPQ
+		if blockMessage != nil {
+			var ok bool
+			block, ok = blockMessage.(*eth.BeaconBlockPQ)
+			if !ok {
+				return nil, errIncorrectBlockVersion
+			}
+		}
+		return &eth.SignedBeaconBlockPQ{
+			Block:     block,
+			Signature: b.xmssSignature,
+		}, nil
 	case version.Gloas:
 		var block *eth.BeaconBlockGloas
 		if blockMessage != nil {
@@ -419,6 +432,22 @@ func (b *BeaconBlock) Proto() (proto.Message, error) { // nolint:gocognit
 			}
 		}
 		return &eth.BeaconBlockElectra{
+			Slot:          b.slot,
+			ProposerIndex: b.proposerIndex,
+			ParentRoot:    b.parentRoot[:],
+			StateRoot:     b.stateRoot[:],
+			Body:          body,
+		}, nil
+	case version.PQ:
+		var body *eth.BeaconBlockBodyPQ
+		if bodyMessage != nil {
+			var ok bool
+			body, ok = bodyMessage.(*eth.BeaconBlockBodyPQ)
+			if !ok {
+				return nil, errIncorrectBodyVersion
+			}
+		}
+		return &eth.BeaconBlockPQ{
 			Slot:          b.slot,
 			ProposerIndex: b.proposerIndex,
 			ParentRoot:    b.parentRoot[:],
@@ -725,6 +754,19 @@ func (b *BeaconBlockBody) Proto() (proto.Message, error) {
 			BlsToExecutionChanges: b.blsToExecutionChanges,
 			BlobKzgCommitments:    b.blobKzgCommitments,
 			ExecutionRequests:     b.executionRequests,
+		}, nil
+	case version.PQ:
+		return &eth.BeaconBlockBodyPQ{
+			RandaoReveal:              b.vrfProof,
+			Eth1Data:                  b.eth1Data,
+			Graffiti:                  b.graffiti[:],
+			ProposerSlashings:         b.proposerSlashingsPQ,
+			AttesterSlashings:         b.attesterSlashingsPQ,
+			Attestations:              b.attestationsPQ,
+			Deposits:                  b.deposits,
+			SignedExecutionPayloadBid: b.signedExecutionPayloadBidPQ,
+			ParentExecutionRequests:   b.parentExecutionRequestsPQ,
+			Proof:                     b.attestationProof,
 		}, nil
 	case version.Gloas:
 		return &eth.BeaconBlockBodyGloas{

@@ -49,6 +49,11 @@ func (s stubBlockBody) BlobKzgCommitments() ([][]byte, error) { return nil, nil 
 func (s stubBlockBody) ExecutionRequests() (*enginev1.ExecutionRequests, error) {
 	return nil, nil
 }
+func (s stubBlockBody) VRFProof() []byte                                         { return nil }
+func (s stubBlockBody) AttestationProof() []byte                                 { return nil }
+func (s stubBlockBody) ProposerSlashingsPQ() []*ethpb.ProposerSlashingPQ         { return nil }
+func (s stubBlockBody) ParentExecutionRequestsPQ() *enginev1.ExecutionRequestsPQ { return nil }
+func (s stubBlockBody) XMSSBidSignature() []byte                                 { return nil }
 func (s stubBlockBody) PayloadAttestations() ([]*ethpb.PayloadAttestation, error) {
 	return nil, nil
 }

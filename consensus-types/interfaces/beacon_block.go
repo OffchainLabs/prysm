@@ -18,6 +18,7 @@ var ErrIncompatibleFork = errors.New("Can't convert to fork-specific interface")
 type ReadOnlySignedBeaconBlock interface {
 	Block() ReadOnlyBeaconBlock
 	Signature() [field_params.BLSSignatureLength]byte
+	XMSSSignature() []byte
 	IsNil() bool
 	Copy() (SignedBeaconBlock, error)
 	Proto() (proto.Message, error)
@@ -73,6 +74,11 @@ type ReadOnlyBeaconBlockBody interface {
 	SignedExecutionPayloadBid() (ROSignedExecutionPayloadBid, error)
 	ExecutionPayloadBid() (ROExecutionPayloadBid, error)
 	ParentExecutionRequests() (*enginev1.ExecutionRequestsGloas, error)
+	VRFProof() []byte
+	AttestationProof() []byte
+	ProposerSlashingsPQ() []*ethpb.ProposerSlashingPQ
+	ParentExecutionRequestsPQ() *enginev1.ExecutionRequestsPQ
+	XMSSBidSignature() []byte
 }
 
 type SignedBeaconBlock interface {

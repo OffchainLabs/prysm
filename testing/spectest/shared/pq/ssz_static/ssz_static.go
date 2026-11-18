@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/methodical-ssz/ssz"
 	state_native "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -20,7 +21,30 @@ func RunSSZStaticTests(t *testing.T, config string) {
 }
 
 func customHtr(t *testing.T, htrs []common.HTR, object any) []common.HTR {
-	if _, ok := object.(*ethpb.BeaconStatePQ); !ok {
+	switch object.(type) {
+	case *ethpb.BeaconStatePQ:
+	case *ethpb.BeaconBlockPQ:
+		return append(htrs, func(s any) ([32]byte, error) {
+			blk, err := blocks.NewBeaconBlock(s.(*ethpb.BeaconBlockPQ))
+			require.NoError(t, err)
+			return blk.HashTreeRoot()
+		})
+	case *ethpb.SignedBeaconBlockPQ:
+		return append(htrs, func(s any) ([32]byte, error) {
+			signed, err := blocks.NewSignedBeaconBlock(s.(*ethpb.SignedBeaconBlockPQ))
+			require.NoError(t, err)
+			cp, err := signed.Copy()
+			require.NoError(t, err)
+			want, err := s.(*ethpb.SignedBeaconBlockPQ).MarshalSSZ()
+			require.NoError(t, err)
+			got, err := cp.MarshalSSZ()
+			require.NoError(t, err)
+			require.DeepEqual(t, want, got)
+			pb, err := cp.Proto()
+			require.NoError(t, err)
+			return pb.(*ethpb.SignedBeaconBlockPQ).HashTreeRoot()
+		})
+	default:
 		return htrs
 	}
 	return append(htrs, func(s any) ([32]byte, error) {

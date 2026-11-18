@@ -7,3 +7,7 @@ import "github.com/OffchainLabs/go-bitfield"
 func NewAttestationCommitteeBits() bitfield.Bitvector4 {
 	return bitfield.NewBitvector4()
 }
+
+func NewAttestationCommitteeBitsPQ() bitfield.Bitvector4 {
+	return bitfield.NewBitvector4()
+}
