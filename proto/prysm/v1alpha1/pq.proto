@@ -1,0 +1,205 @@
+syntax = "proto3";
+
+package ethereum.eth.v1alpha1;
+
+import "proto/engine/v1/execution_engine.proto";
+import "proto/engine/v1/pq.proto";
+import "proto/eth/ext/options.proto";
+import "proto/prysm/v1alpha1/attestation.proto";
+import "proto/prysm/v1alpha1/beacon_core_types.proto";
+import "proto/prysm/v1alpha1/gloas.proto";
+
+option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
+
+// Spec: https://github.com/ethereum/consensus-specs/blob/a4d16c5be5e8bf8c5a3fb323ee1cb0293efecb1c/specs/_features/pq/beacon-chain.md
+
+message ValidatorPQ {
+  bytes public_key = 1 [
+    (ethereum.eth.ext.ssz_size) = "32",
+    (ethereum.eth.ext.spec_name) = "pubkey"
+  ];
+  bytes vrf_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes withdrawal_credentials = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 effective_balance = 4;
+  bool slashed = 5;
+  uint64 activation_eligibility_epoch = 6 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+  uint64 activation_epoch = 7 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+  uint64 exit_epoch = 8 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+  uint64 withdrawable_epoch = 9 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+}
+
+message BuilderPQ {
+  bytes pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes version = 2 [ (ethereum.eth.ext.ssz_size) = "1" ];
+  bytes execution_address = 3 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 balance = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  uint64 deposit_epoch = 5 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+  uint64 withdrawable_epoch = 6 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Epoch"
+  ];
+}
+
+message ValidatorPreregistration {
+  bytes pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes vrf_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 expiry_slot = 4 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+message BuilderPreregistration {
+  bytes pubkey = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes withdrawal_credentials = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 expiry_slot = 3 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+}
+
+message AttestationPQ {
+  bytes aggregation_bits = 1 [
+    (ethereum.eth.ext.ssz_max) = "max_attesting_indices_pq.size",
+    (ethereum.eth.ext.cast_type) = "github.com/OffchainLabs/go-bitfield.Bitlist"
+  ];
+  AttestationData data = 2;
+  bytes committee_bits = 3 [
+    (ethereum.eth.ext.ssz_size) = "committee_bits_pq.size",
+    (ethereum.eth.ext.cast_type) = "committee_bits_pq.type"
+  ];
+}
+
+message SingleAttestationPQ {
+  uint64 committee_id = 1 [ (ethereum.eth.ext.cast_type) =
+                                "github.com/OffchainLabs/prysm/v7/"
+                                "consensus-types/primitives.CommitteeIndex" ];
+  uint64 attester_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  AttestationData data = 3;
+  bytes signature = 4 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
+
+message IndexedAttestationPQ {
+  repeated uint64 attesting_indices = 1
+      [ (ethereum.eth.ext.ssz_max) = "max_attesting_indices_pq.size" ];
+  AttestationData data = 2;
+  bytes proof = 3 [ (ethereum.eth.ext.ssz_max) = "1048576" ];
+}
+
+message AttesterSlashingPQ {
+  IndexedAttestationPQ attestation_1 = 1;
+  IndexedAttestationPQ attestation_2 = 2;
+}
+
+message AggregateAttestationAndProofPQ {
+  uint64 aggregator_index = 1
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
+  AttestationPQ aggregate = 2;
+  bytes proof = 3 [ (ethereum.eth.ext.ssz_max) = "1048576" ];
+}
+
+message SignedAggregateAttestationAndProofPQ {
+  AggregateAttestationAndProofPQ message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
+
+message PayloadAttestationMessagePQ {
+  uint64 validator_index = 1
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
+  PayloadAttestationData data = 2;
+  bytes signature = 3 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
+
+message SignedBeaconBlockHeaderPQ {
+  BeaconBlockHeader header = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
+
+message ProposerSlashingPQ {
+  SignedBeaconBlockHeaderPQ header_1 = 1;
+  SignedBeaconBlockHeaderPQ header_2 = 2;
+}
+
+message SignedExecutionPayloadBidPQ {
+  ExecutionPayloadBid message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
+
+message ExecutionPayloadEnvelopePQ {
+  ethereum.engine.v1.ExecutionPayloadGloas payload = 1;
+  ethereum.engine.v1.ExecutionRequestsPQ execution_requests = 2;
+  uint64 builder_index = 3 [ (ethereum.eth.ext.cast_type) =
+                                 "github.com/OffchainLabs/prysm/v7/"
+                                 "consensus-types/primitives.BuilderIndex" ];
+  bytes beacon_block_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes parent_beacon_block_root = 5 [ (ethereum.eth.ext.ssz_size) = "32" ];
+}
+
+message SignedExecutionPayloadEnvelopePQ {
+  ExecutionPayloadEnvelopePQ message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
+
+message SignedProposerPreferencesPQ {
+  ProposerPreferences message = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
+
+message BeaconBlockBodyPQ {
+  bytes randao_reveal = 1 [ (ethereum.eth.ext.ssz_size) = "1024" ];
+  Eth1Data eth1_data = 2;
+  bytes graffiti = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  repeated ProposerSlashingPQ proposer_slashings = 4
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated AttesterSlashingPQ attester_slashings = 5
+      [ (ethereum.eth.ext.ssz_max) = "1" ];
+  repeated AttestationPQ attestations = 6
+      [ (ethereum.eth.ext.ssz_max) = "16" ];
+  repeated Deposit deposits = 7 [ (ethereum.eth.ext.ssz_max) = "16" ];
+  SignedExecutionPayloadBidPQ signed_execution_payload_bid = 8;
+  ethereum.engine.v1.ExecutionRequestsPQ parent_execution_requests = 9;
+  bytes proof = 10 [ (ethereum.eth.ext.ssz_max) = "1048576" ];
+}
+
+message BeaconBlockPQ {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 proposer_index = 2 [ (ethereum.eth.ext.cast_type) =
+                                  "github.com/OffchainLabs/prysm/v7/"
+                                  "consensus-types/primitives.ValidatorIndex" ];
+  bytes parent_root = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes state_root = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  BeaconBlockBodyPQ body = 5;
+}
+
+message SignedBeaconBlockPQ {
+  BeaconBlockPQ block = 1;
+  bytes signature = 2 [ (ethereum.eth.ext.ssz_size) = "2404" ];
+}
