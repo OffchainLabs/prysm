@@ -170,7 +170,7 @@ func TestLightClientGloas_RPC(t *testing.T) {
 				request any
 				want    proto.Message
 			}{
-				{p2p.RPCLightClientBootstrapTopicV1, s.lightClientBootstrapRPCHandler, &root, bootstrap.Proto()},
+				{p2p.RPCLightClientBootstrapTopicV1, s.lightClientBootstrapRPCHandler, (*types.LightClientBootstrapReq)(&root), bootstrap.Proto()},
 				{p2p.RPCLightClientOptimisticUpdateTopicV1, s.lightClientOptimisticUpdateRPCHandler, nil, optimistic.Proto()},
 				{p2p.RPCLightClientFinalityUpdateTopicV1, s.lightClientFinalityUpdateRPCHandler, nil, finality.Proto()},
 			} {

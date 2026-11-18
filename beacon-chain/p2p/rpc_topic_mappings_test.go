@@ -21,21 +21,31 @@ import (
 func TestRPCTopicMappingsDeclareMaxRequestSize(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	for topic, base := range RPCTopicMappings {
+		// Only payload-free topics use new(any).
+		if reflect.TypeOf(base) == reflect.TypeOf(new(any)) {
+			continue
+		}
 		typ := reflect.TypeOf(base)
 		if typ.Kind() == reflect.Pointer {
 			typ = typ.Elem()
 		}
-		// Topics without a decodable request never reach DecodeWithMaxLength.
 		msg, ok := reflect.New(typ).Interface().(ssz.Unmarshaler)
-		if !ok {
-			continue
-		}
+		require.Equal(t, true, ok, "request type for topic %s must implement ssz.Unmarshaler", topic)
 		sizer, ok := msg.(encoder.MaxSizer)
 		require.Equal(t, true, ok, "request type %T for topic %s must implement MaxSizeSSZ", msg, topic)
 		maxSize := sizer.MaxSizeSSZ()
 		require.Equal(t, true, maxSize > 0, "MaxSizeSSZ of %T must be positive", msg)
 		require.Equal(t, true, uint64(maxSize) < encoder.MaxPayloadSize, "MaxSizeSSZ of %T must be below MaxPayloadSize", msg)
 	}
+}
+
+func TestRPCTopicMappingsBootstrapSSZ(t *testing.T) {
+	req, ok := RPCTopicMappings[RPCLightClientBootstrapTopicV1].(*types.LightClientBootstrapReq)
+	require.Equal(t, true, ok)
+	_, ok = any(req).(ssz.Marshaler)
+	require.Equal(t, true, ok)
+	_, ok = any(req).(ssz.Unmarshaler)
+	require.Equal(t, true, ok)
 }
 
 func TestVerifyRPCMappings(t *testing.T) {
