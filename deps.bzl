@@ -2419,6 +2419,12 @@ def prysm_deps():
         version = "v0.0.0-20140419014527-cca7078d478f",
     )
     go_repository(
+        name = "com_github_nalepae_go_leanxmss",
+        importpath = "github.com/nalepae/go-leanxmss",
+        sum = "h1:fr7kP+80G8BRk+mQXJ+ym/vgXJI9MqU9VO1OTt1JDjE=",
+        version = "v0.0.0-20261116143821-bafbae50fe8b",
+    )
+    go_repository(
         name = "com_github_naoina_go_stringutil",
         importpath = "github.com/naoina/go-stringutil",
         sum = "h1:rCUeRUHjBjGTSHl0VC00jUPLz8/F9dDzYI70Hzifhks=",

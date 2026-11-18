@@ -1,0 +1,33 @@
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "protection.go",
+        "store.go",
+    ],
+    importpath = "github.com/OffchainLabs/prysm/v7/validator/db/signingprotection",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//io/file:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+        "@in_gopkg_yaml_v3//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "protection_test.go",
+        "store_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//testing/require:go_default_library",
+        "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
+    ],
+)
