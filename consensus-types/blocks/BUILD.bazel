@@ -11,6 +11,7 @@ go_library(
         "kzg.go",
         "log.go",
         "partialdatacolumn.go",
+        "pq.go",
         "proofs.go",
         "proto.go",
         "roblob.go",

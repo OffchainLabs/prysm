@@ -63,6 +63,13 @@ type BeaconBlockBody struct {
 	signedExecutionPayloadBidHeze *eth.SignedExecutionPayloadBidHeze
 	payloadAttestations           []*eth.PayloadAttestation
 	parentExecutionRequests       *enginev1.ExecutionRequestsGloas
+	vrfProof                      []byte
+	proposerSlashingsPQ           []*eth.ProposerSlashingPQ
+	attesterSlashingsPQ           []*eth.AttesterSlashingPQ
+	attestationsPQ                []*eth.AttestationPQ
+	signedExecutionPayloadBidPQ   *eth.SignedExecutionPayloadBidPQ
+	parentExecutionRequestsPQ     *enginev1.ExecutionRequestsPQ
+	attestationProof              []byte
 }
 
 var _ interfaces.ReadOnlyBeaconBlockBody = &BeaconBlockBody{}
@@ -79,7 +86,8 @@ type BeaconBlock struct {
 
 // SignedBeaconBlock is the main signed beacon block structure. It can represent any block type.
 type SignedBeaconBlock struct {
-	version   int
-	block     *BeaconBlock
-	signature [field_params.BLSSignatureLength]byte
+	version       int
+	block         *BeaconBlock
+	signature     [field_params.BLSSignatureLength]byte
+	xmssSignature []byte
 }

@@ -84,6 +84,8 @@ func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 		return initBlindedSignedBlockFromProtoFulu(b.BlindedFulu)
 	case *eth.GenericSignedBeaconBlock_Gloas:
 		return initSignedBlockFromProtoGloas(b.Gloas)
+	case *eth.SignedBeaconBlockPQ:
+		return initSignedBlockFromProtoPQ(b)
 	case *eth.SignedBeaconBlockGloas:
 		return initSignedBlockFromProtoGloas(b)
 	case *eth.GenericSignedBeaconBlock_Heze:
@@ -148,6 +150,8 @@ func NewBeaconBlock(i any) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlindedBlockFromProtoFulu(b.BlindedFulu)
 	case *eth.GenericBeaconBlock_Gloas:
 		return initBlockFromProtoGloas(b.Gloas)
+	case *eth.BeaconBlockPQ:
+		return initBlockFromProtoPQ(b)
 	case *eth.BeaconBlockGloas:
 		return initBlockFromProtoGloas(b)
 	case *eth.GenericBeaconBlock_Heze:
@@ -184,6 +188,8 @@ func NewBeaconBlockBody(i any) (interfaces.ReadOnlyBeaconBlockBody, error) {
 		return initBlockBodyFromProtoElectra(b)
 	case *eth.BlindedBeaconBlockBodyElectra:
 		return initBlindedBlockBodyFromProtoElectra(b)
+	case *eth.BeaconBlockBodyPQ:
+		return initBlockBodyFromProtoPQ(b)
 	case *eth.BeaconBlockBodyGloas:
 		return initBlockBodyFromProtoGloas(b)
 	case *eth.BeaconBlockBodyHeze:
@@ -280,6 +286,12 @@ func BuildSignedBeaconBlock(blk interfaces.ReadOnlyBeaconBlock, signature []byte
 			return nil, errIncorrectBlockVersion
 		}
 		return NewSignedBeaconBlock(&eth.SignedBeaconBlockFulu{Block: pb, Signature: signature})
+	case version.PQ:
+		pb, ok := pb.(*eth.BeaconBlockPQ)
+		if !ok {
+			return nil, errIncorrectBlockVersion
+		}
+		return NewSignedBeaconBlock(&eth.SignedBeaconBlockPQ{Block: pb, Signature: signature})
 	case version.Gloas:
 		pb, ok := pb.(*eth.BeaconBlockGloas)
 		if !ok {
@@ -661,7 +673,7 @@ func BuildSignedBeaconBlockFromExecutionPayload(blk interfaces.ReadOnlySignedBea
 			},
 			Signature: sig[:],
 		}
-	case version.Gloas, version.Heze:
+	case version.Gloas, version.PQ, version.Heze:
 		return nil, errors.Wrap(errUnsupportedBeaconBlock, "post-gloas blocks are not supported in this function")
 	default:
 		return nil, errors.New("Block not of known type")
