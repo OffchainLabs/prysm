@@ -230,6 +230,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BeaconStateElectraFieldCount:   37,
 	BeaconStateFuluFieldCount:      38,
 	BeaconStateGloasFieldCount:     46,
+	BeaconStatePQFieldCount:        47,
 	BeaconStateHezeFieldCount:      46,
 
 	// Slasher related values.
@@ -257,6 +258,8 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	FuluForkEpoch:        mainnetFuluForkEpoch,
 	GloasForkVersion:     []byte{7, 0, 0, 0},
 	GloasForkEpoch:       mainnetGloasForkEpoch,
+	PQForkVersion:        []byte{0xe0, 0, 0, 0},
+	PQForkEpoch:          math.MaxUint64,
 	HezeForkVersion:      []byte{8, 0, 0, 0},
 	HezeForkEpoch:        mainnetHezeForkEpoch,
 
@@ -375,9 +378,25 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 
 	// Values related to gloas
-	BuilderPaymentThresholdNumerator:     6,
-	BuilderPaymentThresholdDenominator:   10,
-	MaxRequestPayloads:                   128,
+	BuilderPaymentThresholdNumerator:              6,
+	BuilderPaymentThresholdDenominator:            10,
+	MaxRequestPayloads:                            128,
+	MaxCommitteesPerSlotPQ:                        16,
+	MinAttestationInclusionDelayPQ:                2,
+	MaxStarkProofSize:                             1 << 20,
+	MaxAttestationsPQ:                             16,
+	MaxValidatorPreregistrationRequestsPerPayload: 64,
+	MaxBuilderPreregistrationRequestsPerPayload:   4,
+	MaxVoluntaryExitRequestsPerPayload:            16,
+	PreregistrationsLimit:                         1 << 19,
+	PreregistrationExpirySlots:                    1 << 18,
+	UnregisteredValidatorWithdrawabilityDelay:     1 << 14,
+	AttestationSubnetCountPQ:                      16,
+	AggregatorsPerCommittee:                       4,
+	MaxSignedAggregateAndProofSizePQ:              1055231,
+	MaxAttesterSlashingSizePQ:                     2621720,
+	MaxSignedExecutionPayloadBidSizePQ:            199240,
+
 	ChurnLimitQuotientGloas:              32_768,
 	ConsolidationChurnLimitQuotient:      65_536,
 	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
@@ -443,6 +462,7 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion = make([]byte, fieldparams.VersionLength)
 	c.FuluForkVersion = make([]byte, fieldparams.VersionLength)
 	c.GloasForkVersion = make([]byte, fieldparams.VersionLength)
+	c.PQForkVersion = make([]byte, fieldparams.VersionLength)
 	c.HezeForkVersion = make([]byte, fieldparams.VersionLength)
 
 	c.GenesisForkVersion[fieldparams.VersionLength-1] = b
@@ -453,6 +473,7 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion[fieldparams.VersionLength-1] = b
 	c.FuluForkVersion[fieldparams.VersionLength-1] = b
 	c.GloasForkVersion[fieldparams.VersionLength-1] = b
+	c.PQForkVersion[fieldparams.VersionLength-1] = b
 	c.HezeForkVersion[fieldparams.VersionLength-1] = b
 
 	c.GenesisForkVersion[0] = 0
@@ -463,5 +484,6 @@ func FillTestVersions(c *BeaconChainConfig, b byte) {
 	c.ElectraForkVersion[0] = 5
 	c.FuluForkVersion[0] = 6
 	c.GloasForkVersion[0] = 7
+	c.PQForkVersion[0] = 0xe0
 	c.HezeForkVersion[0] = 8
 }

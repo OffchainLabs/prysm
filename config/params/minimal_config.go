@@ -110,6 +110,13 @@ func MinimalSpecConfig() *BeaconChainConfig {
 	minimalConfig.FuluForkEpoch = math.MaxUint64
 	minimalConfig.GloasForkVersion = []byte{7, 0, 0, 1}
 	minimalConfig.GloasForkEpoch = minimalConfig.FarFutureEpoch
+	minimalConfig.PQForkVersion = []byte{0xe0, 0, 0, 1}
+	minimalConfig.PQForkEpoch = minimalConfig.FarFutureEpoch
+	minimalConfig.MaxCommitteesPerSlotPQ = 4
+	minimalConfig.PreregistrationsLimit = 64
+	minimalConfig.PreregistrationExpirySlots = 64
+	minimalConfig.MaxSignedAggregateAndProofSizePQ = 1052158
+	minimalConfig.MaxAttesterSlashingSizePQ = 2228504
 	minimalConfig.HezeForkVersion = []byte{8, 0, 0, 1}
 	minimalConfig.HezeForkEpoch = minimalConfig.FarFutureEpoch
 
