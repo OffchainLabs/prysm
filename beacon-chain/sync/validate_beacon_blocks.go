@@ -38,6 +38,9 @@ var (
 	errRejectCommitmentLen      = errors.New("[REJECT] The length of KZG commitments is less than or equal to the limitation defined in Consensus Layer")
 	ErrSlashingSignatureFailure = errors.New("proposer slashing signature verification failed")
 	errBlockSlotNotAfterParent  = errors.New("block slot is not higher than its parent slot")
+
+	errPendingBlockOutsideLookahead   = errors.New("block slot is outside the head state proposer lookahead")
+	errPendingBlockUnexpectedProposer = errors.New("block proposer is not the one expected by the head state proposer lookahead")
 )
 
 // validateBeaconBlockPubSub checks that the incoming block has a valid BLS signature.
@@ -177,6 +180,10 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 
 	// Handle block when the parent is unknown.
 	if !s.cfg.chain.HasBlock(ctx, parentRoot) {
+		if err := s.verifyProposerInHeadLookahead(ctx, blk); err != nil {
+			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block with unknown parent: could not verify proposer")
+			return pubsub.ValidationIgnore, err
+		}
 		if res, err := s.verifyPendingBlockSignature(ctx, pid, blk, blockRoot); err != nil {
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return res, err
@@ -198,6 +205,10 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, err
 	}
 	if res, err := s.validateExecutionPayloadBidParentSeen(ctx, blk.Block()); res == pubsub.ValidationIgnore {
+		if propErr := s.verifyProposerInHeadLookahead(ctx, blk); propErr != nil {
+			log.WithError(propErr).WithFields(getBlockFields(blk)).Debug("Ignored block with unknown parent payload: could not verify proposer")
+			return pubsub.ValidationIgnore, propErr
+		}
 		if sigRes, sigErr := s.verifyPendingBlockSignature(ctx, pid, blk, blockRoot); sigErr != nil {
 			log.WithError(sigErr).WithFields(getBlockFields(blk)).Debug("Could not verify block signature")
 			return sigRes, sigErr
@@ -476,6 +487,41 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, verifyingSta
 	if isParentOptimistic {
 		return ErrOptimisticParent
 	}
+	return nil
+}
+
+// verifyProposerInHeadLookahead checks that the block's proposer is the proposer the head state's proposer lookahead
+// expects at the block's slot.
+func (s *Service) verifyProposerInHeadLookahead(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) error {
+	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return fmt.Errorf("head state: %w", err)
+	}
+
+	if headState.Version() < version.Fulu {
+		return nil
+	}
+
+	lookahead, err := headState.ProposerLookahead()
+	if err != nil {
+		return fmt.Errorf("proposer lookahead: %w", err)
+	}
+
+	lookaheadStart, err := slots.EpochStart(slots.ToEpoch(headState.Slot()))
+	if err != nil {
+		return fmt.Errorf("epoch start: %w", err)
+	}
+
+	slot := blk.Block().Slot()
+	if slot < lookaheadStart || uint64(slot-lookaheadStart) >= uint64(len(lookahead)) {
+		return fmt.Errorf("%w: slot %d, head slot %d", errPendingBlockOutsideLookahead, slot, headState.Slot())
+	}
+
+	expected := lookahead[slot-lookaheadStart]
+	if proposer := blk.Block().ProposerIndex(); proposer != expected {
+		return fmt.Errorf("%w: slot %d, proposer %d, expected %d", errPendingBlockUnexpectedProposer, slot, proposer, expected)
+	}
+
 	return nil
 }
 
