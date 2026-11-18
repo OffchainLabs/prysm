@@ -63,7 +63,7 @@ func (s *Service) validatePayloadAttestation(ctx context.Context, pid peer.ID, m
 	// [IGNORE] The message's block data.beacon_block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue attestation for processing once the block is retrieved. Note a client might want to request payload after).
 	if err := v.VerifyBlockRootSeen(s.cfg.chain.InForkchoice); err != nil {
-		return s.queuePendingPayloadAttestation(ctx, v, att)
+		return s.queuePendingPayloadAttestation(ctx, pid, v, att)
 	}
 
 	if res, err := s.validatePayloadAttestationWithBlock(ctx, v, pa); res != pubsub.ValidationAccept {

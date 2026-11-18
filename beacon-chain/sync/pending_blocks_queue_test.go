@@ -69,7 +69,7 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks1(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -149,7 +149,7 @@ func TestRegularSyncBeaconBlockSubscriber_OptimisticStatus(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -230,7 +230,7 @@ func TestRegularSyncBeaconBlockSubscriber_ExecutionEngineTimesOut(t *testing.T) 
 			stateGen: stategen.New(db, fcs),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -309,7 +309,7 @@ func TestRegularSync_InsertDuplicateBlocks(t *testing.T) {
 			},
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -364,7 +364,7 @@ func TestRegularSyncBeaconBlockSubscriber_DoNotReprocessBlock(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -433,7 +433,7 @@ func TestRegularSyncBeaconBlockSubscriber_ProcessPendingBlocks_2Chains(t *testin
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -540,7 +540,7 @@ func TestRegularSyncBeaconBlockSubscriber_PruneOldPendingBlocks(t *testing.T) {
 			},
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -602,7 +602,7 @@ func TestRegularSyncBeaconBlockSubscriber_PruneOldPendingBlocks(t *testing.T) {
 func TestService_sortedPendingSlots(t *testing.T) {
 	r := &Service{
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 
 	var lastSlot primitives.Slot = math.MaxUint64
@@ -638,7 +638,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 			Root:  make([]byte, 32),
 		},
 		ValidatorsRoot: [32]byte{},
-		Genesis:        time.Now(),
+		Genesis:        time.Now().Add(-10 * params.BeaconConfig().SlotDuration()), // The requested blocks must not be from the future.
 	}
 	r := &Service{
 		cfg: &config{
@@ -648,7 +648,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 			clock:    startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -715,7 +715,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 		assert.NoError(t, stream.Close())
 	})
 
-	require.NoError(t, r.sendBatchRootRequest(t.Context(), sentRoots, rand.NewGenerator()))
+	require.NoError(t, r.sendBatchRootRequest(t.Context(), sentRoots, nil, rand.NewGenerator()))
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -727,7 +727,7 @@ func TestService_BatchRootRequest(t *testing.T) {
 func TestService_AddPendingBlockToQueueOverMax(t *testing.T) {
 	r := &Service{
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 
 	b := util.NewBeaconBlock()
@@ -773,7 +773,7 @@ func TestService_ProcessPendingBlockOnCorrectSlot(t *testing.T) {
 			stateGen: stategen.New(db, fcs),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -849,7 +849,7 @@ func TestService_ProcessBadPendingBlocks(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -912,7 +912,7 @@ func TestAlreadySyncingBlock(t *testing.T) {
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -971,8 +971,8 @@ func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, r.insertBlockToPendingQueue(1, wsb, b2Root))
 
-	require.Equal(t, true, r.seenPendingBlocks[b1Root])
-	require.Equal(t, true, r.seenPendingBlocks[b2Root])
+	require.Equal(t, true, r.hasPendingBlock(b1Root))
+	require.Equal(t, true, r.hasPendingBlock(b2Root))
 	require.Equal(t, 2, len(r.pendingBlocksInCache(1)))
 
 	// Wait for expiration cache to cleanup and remove old block.
@@ -981,8 +981,8 @@ func TestExpirationCache_PruneOldBlocksCorrectly(t *testing.T) {
 	// Run pending queue with expired blocks.
 	require.NoError(t, r.processPendingBlocks(ctx))
 
-	assert.Equal(t, false, r.seenPendingBlocks[b1Root])
-	assert.Equal(t, false, r.seenPendingBlocks[b2Root])
+	assert.Equal(t, false, r.hasPendingBlock(b1Root))
+	assert.Equal(t, false, r.hasPendingBlock(b2Root))
 	assert.Equal(t, 0, len(r.pendingBlocksInCache(1)))
 }
 
@@ -1059,7 +1059,7 @@ func TestValidateSidecar_ParentRequestServiceLifetime(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	result, err := s.validateBlob(ctx, "", &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
+	result, err := s.validateBlob(ctx, peer.ID("parent-peer"), &pubsub.Message{Message: &pb.Message{Data: buf.Bytes(), Topic: &topic}})
 	cancel()
 	require.Equal(t, pubsub.ValidationIgnore, result)
 	require.ErrorIs(t, err, missingParent)
@@ -1102,7 +1102,7 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 			return stream, nil
 		})
 		done := make(chan error, 1)
-		go func() { done <- s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()) }()
+		go func() { done <- s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, nil, rand.NewGenerator()) }()
 		for range 2 {
 			select {
 			case stream := <-streams:
@@ -1142,7 +1142,7 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 			return nil, errors.New("request failed")
 		})
 
-		require.NoError(t, s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, rand.NewGenerator()))
+		require.NoError(t, s.sendBatchRootRequest(s.ctx, [][32]byte{{1}}, nil, rand.NewGenerator()))
 		require.NoError(t, s.ctx.Err())
 		require.Equal(t, numOfTries, blockAttempts)
 		require.Equal(t, numOfTries, envelopeAttempts)
@@ -1164,7 +1164,7 @@ func TestService_BatchRootRequestCancellation(t *testing.T) {
 			if cancelAt == 0 {
 				cancel()
 			}
-			err := s.sendBatchRootRequest(ctx, [][32]byte{{1}}, rand.NewGenerator())
+			err := s.sendBatchRootRequest(ctx, [][32]byte{{1}}, nil, rand.NewGenerator())
 			if cancelAt <= numOfTries {
 				require.ErrorIs(t, err, context.Canceled)
 			} else {
@@ -1218,7 +1218,7 @@ func TestService_ProcessPendingBlocks_BroadcastsOnBlockForkDigest(t *testing.T) 
 			stateGen: stategen.New(db, doublylinkedtree.New()),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	r.initCaches()
 
@@ -1241,4 +1241,212 @@ func TestService_ProcessPendingBlocks_BroadcastsOnBlockForkDigest(t *testing.T) 
 	require.NoError(t, r.processPendingBlocks(ctx))
 	require.Equal(t, 0, len(r.slotToPendingBlocks.Items()), "pending block was not processed")
 	require.DeepEqual(t, []primitives.Epoch{0}, p.epochs, "block must be broadcast on its own fork digest, not the current one")
+}
+
+func TestRequestBlocksAccountable(t *testing.T) {
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, genesisState.SetSlot(10))
+
+	block := util.NewBeaconBlock()
+	block.Block.Slot = 5
+	var err error
+	block.Signature, err = signing.ComputeDomainAndSign(genesisState, 0, block.Block, params.BeaconConfig().DomainBeaconProposer, keys[0])
+	require.NoError(t, err)
+	root, err := block.Block.HashTreeRoot()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name          string
+		response      []*ethpb.SignedBeaconBlock
+		expectedCount int
+	}{
+		{name: "served", response: []*ethpb.SignedBeaconBlock{block}, expectedCount: 0},
+		{name: "not served", response: nil, expectedCount: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p1, p2 := p2ptest.NewTestP2P(t), p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
+
+			chain := &mock.ChainService{
+				State:               genesisState,
+				FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+				Genesis:             time.Now().Add(-10 * params.BeaconConfig().SlotDuration()),
+			}
+			r := &Service{
+				cfg: &config{
+					p2p:   p1,
+					chain: chain,
+					clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+				},
+				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
+				ctx:                 t.Context(),
+			}
+
+			pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
+			p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+				var out p2ptypes.BeaconBlockByRootsReq
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, &out))
+				for _, blk := range tc.response {
+					_, err := stream.Write([]byte{responseCodeSuccess})
+					assert.NoError(t, err)
+					_, err = p2.Encoding().EncodeWithMaxLength(stream, blk)
+					assert.NoError(t, err)
+				}
+				assert.NoError(t, stream.Close())
+			})
+
+			r.requestBlocksAccountable(t.Context(), p2.PeerID(), [][32]byte{root}, nil)
+
+			count, err := p1.Peers().Scorers().BadResponsesScorer().Count(p2.PeerID())
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedCount, count)
+		})
+	}
+
+	t.Run("request failed, no other peer asked", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		params.BeaconConfig().GloasForkEpoch = 1
+		params.BeaconConfig().InitializeForkSchedule()
+
+		attempts := 0
+		s := parentRequestService(t, func(context.Context, any) (network.Stream, error) {
+			attempts++
+			return nil, errors.New("request failed")
+		})
+
+		pid := peer.ID("parent-peer")
+		s.requestBlocksAccountable(s.ctx, pid, [][32]byte{{1}}, nil)
+		require.Equal(t, 1, attempts)
+
+		count, err := s.cfg.p2p.Peers().Scorers().BadResponsesScorer().Count(pid)
+		require.NoError(t, err)
+		require.Equal(t, 1, count)
+	})
+}
+
+func TestProcessPendingBlocks_RequestsFirstMissingAncestor(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	params.BeaconConfig().FuluForkEpoch = 0
+	params.BeaconConfig().GloasForkEpoch = 1
+	params.BeaconConfig().InitializeForkSchedule()
+
+	headState, _ := util.DeterministicGenesisStateFulu(t, 64)
+	missingRoot := [32]byte{'m'}
+
+	for _, tc := range []struct {
+		name string
+		// chain lists the pending blocks from the lowest slot, true for a block from the expected proposer.
+		// The first block has missingRoot as parent.
+		chain    []bool
+		expected [][32]byte
+	}{
+		{
+			name:     "block from the expected proposer requests its missing parent",
+			chain:    []bool{true},
+			expected: [][32]byte{missingRoot},
+		},
+		{
+			name:     "block from another proposer requests nothing",
+			chain:    []bool{false},
+			expected: nil,
+		},
+		{
+			name:     "block from the expected proposer requests the missing parent of its pending ancestors",
+			chain:    []bool{false, false, true},
+			expected: [][32]byte{missingRoot},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				mu        sync.Mutex
+				requested = make(map[[32]byte]bool)
+			)
+
+			s := parentRequestService(t, func(_ context.Context, msg any) (network.Stream, error) {
+				if req, ok := msg.(*p2ptypes.BeaconBlockByRootsReq); ok {
+					mu.Lock()
+					for _, root := range *req {
+						requested[root] = true
+					}
+					mu.Unlock()
+				}
+
+				return nil, errors.New("request failed")
+			})
+			s.cfg.chain = &mock.ChainService{State: headState, FinalizedCheckPoint: &ethpb.Checkpoint{}}
+			s.cfg.clock = startup.NewClock(time.Now().Add(-time.Duration(len(tc.chain)+1)*params.BeaconConfig().SlotDuration()), [32]byte{})
+
+			parentRoot := missingRoot
+			for i, expectedProposer := range tc.chain {
+				slot := primitives.Slot(i + 1)
+				proposer, err := helpers.BeaconProposerIndexAtSlot(t.Context(), headState, slot)
+				require.NoError(t, err)
+				if !expectedProposer {
+					proposer = (proposer + 1) % 64
+				}
+
+				blk := util.NewBeaconBlock()
+				blk.Block.Slot = slot
+				blk.Block.ParentRoot = parentRoot[:]
+				blk.Block.ProposerIndex = proposer
+				signed, err := blocks.NewSignedBeaconBlock(blk)
+				require.NoError(t, err)
+				parentRoot, err = blk.Block.HashTreeRoot()
+				require.NoError(t, err)
+
+				s.pendingQueueLock.Lock()
+				require.NoError(t, s.insertBlockToPendingQueue(slot, signed, parentRoot))
+				s.pendingQueueLock.Unlock()
+			}
+
+			require.NoError(t, s.processPendingBlocks(t.Context()))
+
+			mu.Lock()
+			defer mu.Unlock()
+			require.Equal(t, len(tc.expected), len(requested))
+			for _, root := range tc.expected {
+				require.Equal(t, true, requested[root])
+			}
+		})
+	}
+}
+
+func TestFirstMissingAncestor(t *testing.T) {
+	a, b, c, d := [32]byte{'a'}, [32]byte{'b'}, [32]byte{'c'}, [32]byte{'d'}
+
+	// d -> c -> b -> a, with c and b pending and missing their parent.
+	missingParents := map[[32]byte]parentLink{
+		c: {root: b, childSlot: 3},
+		b: {root: a, childSlot: 2},
+	}
+
+	testCases := []struct {
+		name     string
+		link     parentLink
+		expected parentLink
+	}{
+		{
+			name:     "parent not pending",
+			link:     parentLink{root: d, childSlot: 5},
+			expected: parentLink{root: d, childSlot: 5},
+		},
+		{
+			name:     "one hop",
+			link:     parentLink{root: b, childSlot: 3},
+			expected: parentLink{root: a, childSlot: 2},
+		},
+		{
+			name:     "several hops",
+			link:     parentLink{root: c, childSlot: 4},
+			expected: parentLink{root: a, childSlot: 2},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.expected, firstMissingAncestor(missingParents, tc.link))
+		})
+	}
 }

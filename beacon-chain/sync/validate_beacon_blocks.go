@@ -144,7 +144,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	}
 
 	s.pendingQueueLock.RLock()
-	if s.seenPendingBlocks[blockRoot] {
+	if s.hasPendingBlock(blockRoot) {
 		s.pendingQueueLock.RUnlock()
 		return pubsub.ValidationIgnore, nil
 	}
@@ -182,17 +182,39 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 			return res, err
 		}
 		s.pendingQueueLock.Lock()
+		alreadyQueued := s.hasPendingBlock(blockRoot)
 		if err := s.insertBlockToPendingQueue(blk.Block().Slot(), blk, blockRoot); err != nil {
 			s.pendingQueueLock.Unlock()
 			log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not insert block to pending queue")
 			return pubsub.ValidationIgnore, err
 		}
+		newlyQueued := !alreadyQueued && s.hasPendingBlock(blockRoot)
+		gap := firstMissingAncestor(s.seenPendingBlocks, parentLink{root: parentRoot, childSlot: blk.Block().Slot()})
 		s.pendingQueueLock.Unlock()
-		go func() {
-			if err := s.sendBatchRootRequest(s.ctx, [][32]byte{parentRoot}, rand.NewGenerator()); err != nil {
-				log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not request unknown parent block")
+
+		// Request the parent only for a newly queued block.
+		// Ask the best peers only if the head state expects this proposer.
+		// The pending queue then requests it again on every tick, in case this fails.
+		// Else, ask only the sender, which must have all the ancestors since it validated the block.
+		// If the parent is pending, ask for its first missing ancestor, so each new block of the branch retries it.
+		if newlyQueued {
+			if s.isExpectedProposer(ctx, blk) {
+				go func() {
+					if err := s.sendBatchRootRequest(s.ctx, [][32]byte{parentRoot}, map[[32]byte]primitives.Slot{parentRoot: blk.Block().Slot()}, rand.NewGenerator()); err != nil {
+						log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not request unknown parent block")
+					}
+				}()
+			} else {
+				go func() {
+					// We may already have the parent of the oldest pending ancestor. The pending queue then processes it.
+					if s.cfg.chain.HasBlock(s.ctx, gap.root) {
+						return
+					}
+
+					s.requestBlocksAccountable(s.ctx, pid, [][32]byte{gap.root}, map[[32]byte]primitives.Slot{gap.root: gap.childSlot})
+				}()
 			}
-		}()
+		}
 		err := errors.Errorf("unknown parent for block with slot %d and parent root %#x", blk.Block().Slot(), parentRoot)
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Could not identify parent for block")
 		return pubsub.ValidationIgnore, err
@@ -477,6 +499,24 @@ func (s *Service) validateBellatrixBeaconBlock(ctx context.Context, verifyingSta
 		return ErrOptimisticParent
 	}
 	return nil
+}
+
+// isExpectedProposer returns true if the head state's proposer lookahead expects the block's proposer at the block's slot.
+func (s *Service) isExpectedProposer(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) bool {
+	headState, err := s.cfg.chain.HeadStateReadOnly(ctx)
+	if err != nil || headState.Version() < version.Fulu {
+		return false
+	}
+
+	// The lookahead covers only the current and the next epochs of the head state.
+	slot := blk.Block().Slot()
+	epoch, headEpoch := slots.ToEpoch(slot), slots.ToEpoch(headState.Slot())
+	if epoch != headEpoch && epoch != headEpoch+1 {
+		return false
+	}
+
+	proposer, err := helpers.BeaconProposerIndexAtSlot(ctx, headState, slot)
+	return err == nil && proposer == blk.Block().ProposerIndex()
 }
 
 // Verifies the signature of the pending block with respect to the current head state.

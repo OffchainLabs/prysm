@@ -145,7 +145,7 @@ type Service struct {
 	ctx                                  context.Context
 	cancel                               context.CancelFunc
 	slotToPendingBlocks                  *gcache.Cache
-	seenPendingBlocks                    map[[32]byte]bool
+	seenPendingBlocks                    map[[32]byte]parentLink
 	blkRootToPendingAtts                 map[[32]byte][]any
 	pendingAttSenders                    map[[32]byte]map[peer.ID]bool
 	pendingAttRequestPeers               map[peer.ID]bool
@@ -231,7 +231,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		orphanedOriginStreak:       &atomic.Int64{},
 		cfg:                        &config{clock: startup.NewClock(time.Unix(0, 0), [32]byte{})},
 		slotToPendingBlocks:        gcache.New(pendingBlockExpTime /* exp time */, 0 /* disable janitor */),
-		seenPendingBlocks:          make(map[[32]byte]bool),
+		seenPendingBlocks:          make(map[[32]byte]parentLink),
 		blkRootToPendingAtts:       make(map[[32]byte][]any),
 		pendingGloasColumns:        make(map[[32]byte]*pendingGloasEntry),
 		dataColumnLogCh:            make(chan dataColumnLogEntry, 1000),

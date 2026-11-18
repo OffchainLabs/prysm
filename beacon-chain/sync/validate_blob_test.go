@@ -259,7 +259,7 @@ func TestValidateBlob_ErrorPathsWithMock(t *testing.T) {
 			s := &Service{
 				ctx:               ctx,
 				seenBlobCache:     lruwrpr.New(10),
-				seenPendingBlocks: make(map[[32]byte]bool),
+				seenPendingBlocks: make(map[[32]byte]parentLink),
 				cfg:               &config{chain: chainService, p2p: p, initialSync: &mockSync.Sync{}, clock: startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot)}}
 			s.newBlobVerifier = tt.verifier
 

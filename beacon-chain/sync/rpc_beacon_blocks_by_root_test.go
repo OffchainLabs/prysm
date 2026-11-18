@@ -218,7 +218,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 		State:               genesisState,
 		FinalizedCheckPoint: finalizedCheckpt,
 		Root:                blockARoot[:],
-		Genesis:             time.Now(),
+		Genesis:             time.Now().Add(-200 * params.BeaconConfig().SlotDuration()),
 		ValidatorsRoot:      [32]byte{},
 	}
 	r := &Service{
@@ -228,7 +228,7 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}
@@ -256,7 +256,8 @@ func TestRecentBeaconBlocks_RPCRequestSent(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.NoError(t, r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	_, err = r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID(), fromServingPeer, nil)
+	require.NoError(t, err)
 
 	if util.WaitTimeout(&wg, 1*time.Second) {
 		t.Fatal("Did not receive stream within 1 sec")
@@ -302,7 +303,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}
@@ -331,7 +332,8 @@ func TestRecentBeaconBlocks_RPCRequestSent_IncorrectRoot(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "received unexpected block with root", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	_, err = r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID(), fromServingPeer, nil)
+	require.ErrorContains(t, "received unexpected block with root", err)
 }
 
 func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
@@ -359,7 +361,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
 			Root:  make([]byte, 32),
 		},
 		Root:           blockARoot[:],
-		Genesis:        time.Now(),
+		Genesis:        time.Now().Add(-200 * params.BeaconConfig().SlotDuration()),
 		ValidatorsRoot: [32]byte{},
 	}
 	r := &Service{
@@ -369,7 +371,7 @@ func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
 			clock: startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
 		},
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		ctx:                 t.Context(),
 		rateLimiter:         newRateLimiter(p1),
 	}
@@ -392,7 +394,8 @@ func TestRecentBeaconBlocks_RPCRequestSent_InvalidSignature(t *testing.T) {
 	})
 
 	p1.Connect(p2)
-	require.ErrorContains(t, "verify block signature", r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID()))
+	_, err = r.sendBeaconBlocksRequest(t.Context(), &expectedRoots, p2.PeerID(), fromServingPeer, nil)
+	require.ErrorContains(t, "verify block signature", err)
 	assert.Equal(t, 0, len(r.seenPendingBlocks), "Block with invalid signature should not be queued")
 
 	if util.WaitTimeout(&wg, 1*time.Second) {

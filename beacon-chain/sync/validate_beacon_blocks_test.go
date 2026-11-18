@@ -360,7 +360,7 @@ func TestValidateBeaconBlockPubSub_CanRecoverStateSummary(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -441,7 +441,7 @@ func TestValidateBeaconBlockPubSub_IsInCache(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -522,7 +522,7 @@ func TestValidateBeaconBlockPubSub_ValidProposerSignature(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -605,7 +605,7 @@ func TestValidateBeaconBlockPubSub_WithLookahead(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 		subHandler:          newSubTopicHandler(),
 	}
 	opChannel := make(chan *feed.Event, 1)
@@ -689,7 +689,7 @@ func TestValidateBeaconBlockPubSub_AdvanceEpochsForState(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -805,7 +805,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromFuture(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -950,7 +950,7 @@ func TestValidateBeaconBlockPubSub_SeenProposerSlot(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1119,7 +1119,7 @@ func TestValidateBeaconBlockPubSub_ParentNotFinalizedDescendant(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1196,7 +1196,7 @@ func TestValidateBeaconBlockPubSub_InvalidParentBlock(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1300,7 +1300,7 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1323,7 +1323,7 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 	assert.Equal(t, res, pubsub.ValidationIgnore, "block with unknown parent should be ignored")
 	bRoot, err = msg.Block.HashTreeRoot()
 	assert.NoError(t, err)
-	assert.Equal(t, true, r.seenPendingBlocks[bRoot])
+	assert.Equal(t, true, r.hasPendingBlock(bRoot))
 
 	select {
 	case event := <-opChannel:
@@ -1334,92 +1334,123 @@ func TestValidateBeaconBlockPubSub_InsertValidPendingBlock(t *testing.T) {
 }
 
 func TestValidateBeaconBlockPubSub_RequestsUnknownParentBlock(t *testing.T) {
-	db := dbtest.SetupDB(t)
-	p1 := p2ptest.NewTestP2P(t)
-	p2 := p2ptest.NewTestP2P(t)
-	p1.Connect(p2)
-	assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
-	ctx := t.Context()
+	gap := [32]byte{'g'}
 
-	beaconState, privKeys := util.DeterministicGenesisState(t, 100)
-	parentBlock := util.NewBeaconBlock()
-	util.SaveBlock(t, ctx, db, parentBlock)
-	parentRoot, err := parentBlock.Block.HashTreeRoot()
-	require.NoError(t, err)
-	require.NoError(t, db.SaveState(ctx, beaconState, parentRoot))
-	require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: parentRoot[:]}))
-
-	copied := beaconState.Copy()
-	require.NoError(t, copied.SetSlot(1))
-	proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
-	require.NoError(t, err)
-	msg := util.NewBeaconBlock()
-	msg.Block.ProposerIndex = proposerIdx
-	msg.Block.Slot = 1
-	msg.Block.ParentRoot = parentRoot[:]
-	msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
-	require.NoError(t, err)
-
-	chainService := &mock.ChainService{
-		Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
-		State:               beaconState,
-		FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
-	}
-	r := &Service{
-		ctx: ctx,
-		cfg: &config{
-			beaconDB:      db,
-			p2p:           p1,
-			initialSync:   &mockSync.Sync{IsSyncing: false},
-			chain:         chainService,
-			blockNotifier: chainService.BlockNotifier(),
-			clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
-			stateGen:      stategen.New(db, doublylinkedtree.New()),
-		},
-		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
-	}
-	r.initCaches()
-
-	p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
-	p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
-
-	pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
-	var wg sync.WaitGroup
-	wg.Add(1)
-	var once sync.Once
-	p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
-		defer once.Do(wg.Done)
-		var out p2ptypes.BeaconBlockByRootsReq
-		assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, &out))
-		assert.DeepEqual(t, p2ptypes.BeaconBlockByRootsReq{parentRoot}, out, "Expected a by-root request for the unknown parent")
-		_, err := stream.Write([]byte{responseCodeSuccess})
-		assert.NoError(t, err)
-		_, err = p2.Encoding().EncodeWithMaxLength(stream, parentBlock)
-		assert.NoError(t, err)
-		assert.NoError(t, stream.Close())
-	})
-
-	buf := new(bytes.Buffer)
-	_, err = p1.Encoding().EncodeGossip(buf, msg)
-	require.NoError(t, err)
-	topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
-	digest := r.currentForkDigest()
-	topic = r.addDigestToTopic(topic, digest)
-	m := &pubsub.Message{
-		Message: &pubsubpb.Message{
-			Data:  buf.Bytes(),
-			Topic: &topic,
-		},
+	testCases := []struct {
+		name          string
+		pendingParent bool
+	}{
+		{name: "parent"},
+		{name: "first missing ancestor of a pending parent", pendingParent: true},
 	}
 
-	res, err := r.validateBeaconBlockPubSub(ctx, "", m)
-	require.ErrorContains(t, "unknown parent for block", err)
-	require.Equal(t, pubsub.ValidationIgnore, res)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := dbtest.SetupDB(t)
+			p1 := p2ptest.NewTestP2P(t)
+			p2 := p2ptest.NewTestP2P(t)
+			p1.Connect(p2)
+			assert.Equal(t, 1, len(p1.BHost.Network().Peers()), "Expected peers to be connected")
+			ctx := t.Context()
 
-	if util.WaitTimeout(&wg, 1*time.Second) {
-		t.Fatal("Did not receive by-root request for unknown parent within 1 sec")
+			beaconState, privKeys := util.DeterministicGenesisState(t, 100)
+			parentBlock := util.NewBeaconBlock()
+			if tc.pendingParent {
+				parentBlock.Block.ParentRoot = gap[:]
+			}
+			util.SaveBlock(t, ctx, db, parentBlock)
+			parentRoot, err := parentBlock.Block.HashTreeRoot()
+			require.NoError(t, err)
+
+			expected := parentRoot
+			if tc.pendingParent {
+				expected = gap
+			}
+			require.NoError(t, db.SaveState(ctx, beaconState, parentRoot))
+			require.NoError(t, db.SaveStateSummary(ctx, &ethpb.StateSummary{Root: parentRoot[:]}))
+
+			copied := beaconState.Copy()
+			require.NoError(t, copied.SetSlot(1))
+			proposerIdx, err := helpers.BeaconProposerIndex(ctx, copied)
+			require.NoError(t, err)
+			msg := util.NewBeaconBlock()
+			msg.Block.ProposerIndex = proposerIdx
+			msg.Block.Slot = 1
+			msg.Block.ParentRoot = parentRoot[:]
+			msg.Signature, err = signing.ComputeDomainAndSign(beaconState, 0, msg.Block, params.BeaconConfig().DomainBeaconProposer, privKeys[proposerIdx])
+			require.NoError(t, err)
+
+			chainService := &mock.ChainService{
+				Genesis:             time.Unix(time.Now().Unix()-int64(params.BeaconConfig().SecondsPerSlot), 0),
+				State:               beaconState,
+				FinalizedCheckPoint: &ethpb.Checkpoint{Epoch: 0, Root: make([]byte, 32)},
+			}
+			r := &Service{
+				ctx: ctx,
+				cfg: &config{
+					beaconDB:      db,
+					p2p:           p1,
+					initialSync:   &mockSync.Sync{IsSyncing: false},
+					chain:         chainService,
+					blockNotifier: chainService.BlockNotifier(),
+					clock:         startup.NewClock(chainService.Genesis, chainService.ValidatorsRoot),
+					stateGen:      stategen.New(db, doublylinkedtree.New()),
+				},
+				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
+			}
+			r.initCaches()
+
+			if tc.pendingParent {
+				signedParent, err := blocks.NewSignedBeaconBlock(parentBlock)
+				require.NoError(t, err)
+				r.pendingQueueLock.Lock()
+				require.NoError(t, r.insertBlockToPendingQueue(signedParent.Block().Slot(), signedParent, parentRoot))
+				r.pendingQueueLock.Unlock()
+			}
+
+			p1.Peers().Add(new(enr.Record), p2.PeerID(), nil, network.DirOutbound)
+			p1.Peers().SetConnectionState(p2.PeerID(), peers.Connected)
+			p1.Peers().SetChainState(p2.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 2})
+
+			pcl := protocol.ID("/eth2/beacon_chain/req/beacon_blocks_by_root/1/ssz_snappy")
+			var wg sync.WaitGroup
+			wg.Add(1)
+			var once sync.Once
+			p2.BHost.SetStreamHandler(pcl, func(stream network.Stream) {
+				defer once.Do(wg.Done)
+				var out p2ptypes.BeaconBlockByRootsReq
+				assert.NoError(t, p2.Encoding().DecodeWithMaxLength(stream, &out))
+				assert.DeepEqual(t, p2ptypes.BeaconBlockByRootsReq{expected}, out, "Expected a by-root request for the first missing ancestor")
+				_, err := stream.Write([]byte{responseCodeSuccess})
+				assert.NoError(t, err)
+				_, err = p2.Encoding().EncodeWithMaxLength(stream, parentBlock)
+				assert.NoError(t, err)
+				assert.NoError(t, stream.Close())
+			})
+
+			buf := new(bytes.Buffer)
+			_, err = p1.Encoding().EncodeGossip(buf, msg)
+			require.NoError(t, err)
+			topic := p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlock]()]
+			digest := r.currentForkDigest()
+			topic = r.addDigestToTopic(topic, digest)
+			m := &pubsub.Message{
+				Message: &pubsubpb.Message{
+					Data:  buf.Bytes(),
+					Topic: &topic,
+				},
+			}
+
+			// The head state does not expect this proposer, so the parent is requested only from the sender.
+			res, err := r.validateBeaconBlockPubSub(ctx, p2.PeerID(), m)
+			require.ErrorContains(t, "unknown parent for block", err)
+			require.Equal(t, pubsub.ValidationIgnore, res)
+
+			if util.WaitTimeout(&wg, 1*time.Second) {
+				t.Fatal("Did not receive by-root request for unknown parent within 1 sec")
+			}
+		})
 	}
 }
 
@@ -1482,7 +1513,7 @@ func TestValidateBeaconBlockPubSub_RejectBlocksFromBadParent(t *testing.T) {
 		seenBlockCache:      lruwrpr.New(10),
 		badBlockCache:       lruwrpr.New(10),
 		slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-		seenPendingBlocks:   make(map[[32]byte]bool),
+		seenPendingBlocks:   make(map[[32]byte]parentLink),
 	}
 	opChannel := make(chan *feed.Event, 1)
 	opSub := r.cfg.operationNotifier.OperationFeed().Subscribe(opChannel)
@@ -1574,7 +1605,7 @@ func TestValidateBeaconBlockPubSub_RejectBlockSlotNotAfterParent(t *testing.T) {
 				seenBlockCache:      lruwrpr.New(10),
 				badBlockCache:       lruwrpr.New(10),
 				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-				seenPendingBlocks:   make(map[[32]byte]bool),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
 			}
 
 			buf := new(bytes.Buffer)
@@ -2493,7 +2524,7 @@ func TestValidateBeaconBlockPubSub_GloasDeposits(t *testing.T) {
 				seenBlockCache:      lruwrpr.New(10),
 				badBlockCache:       lruwrpr.New(10),
 				slotToPendingBlocks: gcache.New(time.Second, 2*time.Second),
-				seenPendingBlocks:   make(map[[32]byte]bool),
+				seenPendingBlocks:   make(map[[32]byte]parentLink),
 			}
 
 			msg := util.NewBeaconBlockGloas()
@@ -2520,6 +2551,81 @@ func TestValidateBeaconBlockPubSub_GloasDeposits(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, pubsub.ValidationIgnore, res)
+		})
+	}
+}
+
+func TestIsExpectedProposer(t *testing.T) {
+	fuluState, _ := util.DeterministicGenesisStateFulu(t, 64)
+	electraState, _ := util.DeterministicGenesisStateElectra(t, 64)
+
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	expectedAt := func(t *testing.T, slot primitives.Slot) primitives.ValidatorIndex {
+		proposer, err := helpers.BeaconProposerIndexAtSlot(t.Context(), fuluState, slot)
+		require.NoError(t, err)
+		return proposer
+	}
+
+	for _, tc := range []struct {
+		expected bool
+		useFulu  bool
+		proposer func(t *testing.T, slot primitives.Slot) primitives.ValidatorIndex
+		slot     primitives.Slot
+		name     string
+	}{
+		{
+			name:     "expected proposer in the head epoch",
+			useFulu:  true,
+			slot:     1,
+			proposer: expectedAt,
+			expected: true,
+		},
+		{
+			name:     "expected proposer in the next epoch",
+			useFulu:  true,
+			slot:     slotsPerEpoch + 1,
+			proposer: expectedAt,
+			expected: true,
+		},
+		{
+			name:    "other proposer",
+			useFulu: true,
+			slot:    1,
+			proposer: func(t *testing.T, slot primitives.Slot) primitives.ValidatorIndex {
+				return (expectedAt(t, slot) + 1) % 64
+			},
+			expected: false,
+		},
+		{
+			name:     "beyond the lookahead",
+			useFulu:  true,
+			slot:     2*slotsPerEpoch + 1,
+			proposer: func(*testing.T, primitives.Slot) primitives.ValidatorIndex { return 0 },
+			expected: false,
+		},
+		{
+			name:     "pre-Fulu head state",
+			useFulu:  false,
+			slot:     1,
+			proposer: expectedAt,
+			expected: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			headState := electraState
+			if tc.useFulu {
+				headState = fuluState
+			}
+
+			s := &Service{cfg: &config{chain: &mock.ChainService{State: headState}}}
+
+			blk := util.NewBeaconBlock()
+			blk.Block.Slot = tc.slot
+			blk.Block.ProposerIndex = tc.proposer(t, tc.slot)
+			signed, err := blocks.NewSignedBeaconBlock(blk)
+			require.NoError(t, err)
+
+			require.Equal(t, tc.expected, s.isExpectedProposer(t.Context(), signed))
 		})
 	}
 }
