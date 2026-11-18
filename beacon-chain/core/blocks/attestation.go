@@ -112,7 +112,7 @@ func VerifyAttestationNoVerifySignature(
 	if err != nil {
 		return err
 	}
-	committeeCount := helpers.SlotCommitteeCount(activeValidatorCount)
+	committeeCount := helpers.SlotCommitteeCountAtEpoch(activeValidatorCount, att.GetData().Target.Epoch)
 
 	var indexedAtt ethpb.IndexedAtt
 

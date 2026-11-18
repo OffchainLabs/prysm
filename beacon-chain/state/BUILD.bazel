@@ -6,6 +6,7 @@ go_library(
         "error.go",
         "interfaces.go",
         "interfaces_gloas.go",
+        "interfaces_pq.go",
         "prometheus.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/state",
