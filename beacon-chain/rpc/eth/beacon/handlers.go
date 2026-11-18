@@ -1269,7 +1269,7 @@ func (s *Server) GetCommittees(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	committeesPerSlot := corehelpers.SlotCommitteeCount(activeCount)
+	committeesPerSlot := corehelpers.SlotCommitteeCountAtEpoch(activeCount, epoch)
 	committees := make([]*structs.Committee, 0)
 	for slot := startSlot; slot <= endSlot; slot++ {
 		if rawSlot != "" && slot != primitives.Slot(sl) {

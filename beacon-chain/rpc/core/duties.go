@@ -67,7 +67,7 @@ func (s *Service) AttesterDuties(ctx context.Context, st state.ReadOnlyBeaconSta
 	if err != nil {
 		return nil, &RpcError{Err: errors.Wrap(err, "could not get active validator count"), Reason: Internal}
 	}
-	committeesAtSlot := helpers.SlotCommitteeCount(activeValidatorCount)
+	committeesAtSlot := helpers.SlotCommitteeCountAtEpoch(activeValidatorCount, epoch)
 
 	duties := make([]*AttesterDutyResult, 0, len(indices))
 	for _, index := range indices {

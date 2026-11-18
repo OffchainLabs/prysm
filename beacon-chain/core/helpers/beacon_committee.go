@@ -54,10 +54,23 @@ type beaconCommitteeFunc = func(
 //	     uint64(len(get_active_validator_indices(state, epoch))) // SLOTS_PER_EPOCH // TARGET_COMMITTEE_SIZE,
 //	 ))
 func SlotCommitteeCount(activeValidatorCount uint64) uint64 {
+	return slotCommitteeCount(activeValidatorCount, params.BeaconConfig().MaxCommitteesPerSlot)
+}
+
+// Spec: get_committee_count_per_slot, modified in PQ to cap at MAX_COMMITTEES_PER_SLOT_PQ.
+func SlotCommitteeCountAtEpoch(activeValidatorCount uint64, epoch primitives.Epoch) uint64 {
+	cfg := params.BeaconConfig()
+	if epoch >= cfg.PQForkEpoch && epoch < cfg.HezeForkEpoch {
+		return slotCommitteeCount(activeValidatorCount, cfg.MaxCommitteesPerSlotPQ)
+	}
+	return slotCommitteeCount(activeValidatorCount, cfg.MaxCommitteesPerSlot)
+}
+
+func slotCommitteeCount(activeValidatorCount, maxCommitteesPerSlot uint64) uint64 {
 	var committeesPerSlot = activeValidatorCount / uint64(params.BeaconConfig().SlotsPerEpoch) / params.BeaconConfig().TargetCommitteeSize
 
-	if committeesPerSlot > params.BeaconConfig().MaxCommitteesPerSlot {
-		return params.BeaconConfig().MaxCommitteesPerSlot
+	if committeesPerSlot > maxCommitteesPerSlot {
+		return maxCommitteesPerSlot
 	}
 	if committeesPerSlot == 0 {
 		return 1
@@ -155,7 +168,7 @@ func BeaconCommittees(ctx context.Context, state state.ReadOnlyBeaconState, slot
 	if err != nil {
 		return nil, errors.Wrap(err, "could not compute active validator count")
 	}
-	committeesPerSlot := SlotCommitteeCount(activeCount)
+	committeesPerSlot := SlotCommitteeCountAtEpoch(activeCount, epoch)
 	seed, err := Seed(state, epoch, params.BeaconConfig().DomainBeaconAttester)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get seed")
@@ -288,7 +301,7 @@ func BeaconCommittee(
 		return committee, nil
 	}
 
-	committeesPerSlot := SlotCommitteeCount(uint64(len(validatorIndices)))
+	committeesPerSlot := SlotCommitteeCountAtEpoch(uint64(len(validatorIndices)), slots.ToEpoch(slot))
 
 	indexOffset, err := math.Add64(uint64(committeeIndex), uint64(slot.ModSlot(params.BeaconConfig().SlotsPerEpoch).Mul(committeesPerSlot)))
 	if err != nil {
@@ -485,7 +498,7 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 	if err != nil {
 		return err
 	}
-	count := SlotCommitteeCount(uint64(len(shuffledIndices)))
+	count := SlotCommitteeCountAtEpoch(uint64(len(shuffledIndices)), e)
 	committeeCount := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(count))
 
 	sorted := make([]primitives.ValidatorIndex, len(shuffledIndices))
@@ -618,7 +631,7 @@ func scanActiveValidatorIndices(cc *cache.CommitteeCache, s state.ReadOnlyBeacon
 			}
 		}
 
-		fillCommitteeCacheAsync(cc, seed, indices)
+		fillCommitteeCacheAsync(cc, seed, indices, epoch)
 		return indices, nil
 	})
 	if err != nil {
@@ -631,7 +644,7 @@ func scanActiveValidatorIndices(cc *cache.CommitteeCache, s state.ReadOnlyBeacon
 	return v.([]primitives.ValidatorIndex), nil
 }
 
-func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []primitives.ValidatorIndex) {
+func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []primitives.ValidatorIndex, epoch primitives.Epoch) {
 	if len(indices) == 0 {
 		return
 	}
@@ -644,7 +657,7 @@ func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []
 		return
 	}
 
-	count := SlotCommitteeCount(uint64(len(indices)))
+	count := SlotCommitteeCountAtEpoch(uint64(len(indices)), epoch)
 	committeeCount := uint64(params.BeaconConfig().SlotsPerEpoch.Mul(count))
 	// Read the config before spawning the goroutine.
 	rounds := shuffleRoundCount()

@@ -285,7 +285,7 @@ func (s *Service) validateCommitteeIndexAndCount(
 	if err != nil {
 		return 0, 0, pubsub.ValidationIgnore, err
 	}
-	count := helpers.SlotCommitteeCount(valCount)
+	count := helpers.SlotCommitteeCountAtEpoch(valCount, slots.ToEpoch(a.GetData().Slot))
 	var ci primitives.CommitteeIndex
 	if a.Version() >= version.Electra && !a.IsSingle() {
 		bitCount := a.CommitteeBitsVal().Count()

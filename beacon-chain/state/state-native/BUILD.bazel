@@ -30,6 +30,7 @@ go_library(
         "log.go",
         "metrics_gloas.go",
         "multi_value_slices.go",
+        "pq.go",
         "proofs.go",
         "readonly_validator.go",
         "setters_attestation.go",

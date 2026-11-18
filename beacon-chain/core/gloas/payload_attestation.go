@@ -140,7 +140,7 @@ func computePTC(ctx context.Context, st state.ReadOnlyBeaconState, slot primitiv
 		return nil, err
 	}
 
-	committeesPerSlot := helpers.SlotCommitteeCount(activeCount)
+	committeesPerSlot := helpers.SlotCommitteeCountAtEpoch(activeCount, epoch)
 
 	selected := make([]primitives.ValidatorIndex, 0, fieldparams.PTCSize)
 	var i uint64

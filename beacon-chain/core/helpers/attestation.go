@@ -102,7 +102,7 @@ func ComputeSubnetForAttestation(activeValCount uint64, att ethpb.Att) uint64 {
 //
 //	return uint64((committees_since_epoch_start + committee_index) % ATTESTATION_SUBNET_COUNT)
 func ComputeSubnetFromCommitteeAndSlot(activeValCount uint64, comIdx primitives.CommitteeIndex, attSlot primitives.Slot) uint64 {
-	return ComputeSubnetForCommitteesPerSlot(SlotCommitteeCount(activeValCount), comIdx, attSlot)
+	return ComputeSubnetForCommitteesPerSlot(SlotCommitteeCountAtEpoch(activeValCount, slots.ToEpoch(attSlot)), comIdx, attSlot)
 }
 
 // ComputeSubnetForCommitteesPerSlot is ComputeSubnetFromCommitteeAndSlot with the

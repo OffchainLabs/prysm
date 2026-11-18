@@ -76,6 +76,8 @@ func ToForkVersion(slot primitives.Slot) int {
 	switch {
 	case epoch >= params.BeaconConfig().HezeForkEpoch:
 		return version.Heze
+	case epoch >= params.BeaconConfig().PQForkEpoch:
+		return version.PQ
 	case epoch >= params.BeaconConfig().GloasForkEpoch:
 		return version.Gloas
 	case epoch >= params.BeaconConfig().FuluForkEpoch:
