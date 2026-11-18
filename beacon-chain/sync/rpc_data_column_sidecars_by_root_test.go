@@ -196,7 +196,7 @@ func TestDataColumnSidecarsByRootRPCHandler(t *testing.T) {
 			},
 			{
 				BlockRoot: root3[:],
-				Columns:   []uint64{4, 5, 6},
+				Columns:   []uint64{4, 5, 6, 4}, // The duplicate index must be served once.
 			},
 			{
 				BlockRoot: root5[:],
