@@ -102,6 +102,7 @@ ssz_proto_files(
         "execution_engine.proto",
         "fulu.proto",
 	"gloas.proto",
+        "pq.proto",
     ],
     config = select({
         "//conditions:default": "mainnet",

@@ -1,0 +1,54 @@
+package: "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+types:
+  - name: "AggregateAttestationAndProofPQ"
+  - name: "AttestationPQ"
+    progressive:
+      inactive_indices: [2]
+    fields:
+      AggregationBits: {type: "ProgressiveBitlist"}
+  - name: "AttesterSlashingPQ"
+  - name: "BeaconBlockBodyPQ"
+    progressive:
+      inactive_indices: [7, 8, 9, 11]
+    fields:
+      ProposerSlashings: {type: "ProgressiveList"}
+      AttesterSlashings: {type: "ProgressiveList"}
+      Attestations:      {type: "ProgressiveList"}
+      Deposits:          {type: "ProgressiveList"}
+  - name: "BeaconBlockPQ"
+  - name: "BeaconStatePQ"
+    progressive:
+      inactive_indices: [22, 23, 46, 47]
+    fields:
+      Validators:                 {type: "ProgressiveList"}
+      Balances:                   {type: "ProgressiveList"}
+      PreviousEpochParticipation: {type: "ProgressiveList"}
+      CurrentEpochParticipation:  {type: "ProgressiveList"}
+      InactivityScores:           {type: "ProgressiveList"}
+      PendingDeposits:            {type: "ProgressiveList"}
+      PendingPartialWithdrawals:  {type: "ProgressiveList"}
+      PendingConsolidations:      {type: "ProgressiveList"}
+      Builders:                   {type: "ProgressiveList"}
+      BuilderPendingWithdrawals:  {type: "ProgressiveList"}
+      PayloadExpectedWithdrawals: {type: "ProgressiveList"}
+      ValidatorPreregistrations:  {type: "ProgressiveList"}
+      BuilderPreregistrations:    {type: "ProgressiveList"}
+  - name: "BuilderPQ"
+  - name: "BuilderPreregistration"
+  - name: "ExecutionPayloadEnvelopePQ"
+    progressive: {}
+  - name: "IndexedAttestationPQ"
+    progressive: {}
+    fields:
+      AttestingIndices: {type: "ProgressiveList"}
+  - name: "PayloadAttestationMessagePQ"
+  - name: "ProposerSlashingPQ"
+  - name: "SignedAggregateAttestationAndProofPQ"
+  - name: "SignedBeaconBlockHeaderPQ"
+  - name: "SignedBeaconBlockPQ"
+  - name: "SignedExecutionPayloadBidPQ"
+  - name: "SignedExecutionPayloadEnvelopePQ"
+  - name: "SignedProposerPreferencesPQ"
+  - name: "SingleAttestationPQ"
+  - name: "ValidatorPQ"
+  - name: "ValidatorPreregistration"
