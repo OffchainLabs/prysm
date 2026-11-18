@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/OffchainLabs/methodical-ssz/ssz"
@@ -24,6 +25,32 @@ func generateBlobIdentifiers(n int) []*eth.BlobIdentifier {
 		}
 	}
 	return r
+}
+
+func TestLightClientBootstrapReq_SSZ(t *testing.T) {
+	req := LightClientBootstrapReq{1, 2, 3, 4}
+	t.Run("round trip", func(t *testing.T) {
+		marshalled, err := req.MarshalSSZ()
+		require.NoError(t, err)
+		require.Equal(t, fieldparams.RootLength, req.SizeSSZ())
+		require.Equal(t, fieldparams.RootLength, req.MaxSizeSSZ())
+		require.DeepEqual(t, req[:], marshalled)
+
+		prefixed, err := req.MarshalSSZTo([]byte{0xff})
+		require.NoError(t, err)
+		require.DeepEqual(t, append([]byte{0xff}, marshalled...), prefixed)
+
+		var got LightClientBootstrapReq
+		require.NoError(t, got.UnmarshalSSZ(marshalled))
+		require.DeepEqual(t, req, got)
+	})
+	for _, size := range []int{0, fieldparams.RootLength - 1, fieldparams.RootLength + 1} {
+		t.Run(fmt.Sprintf("invalid length %d", size), func(t *testing.T) {
+			got := LightClientBootstrapReq{9}
+			require.ErrorIs(t, got.UnmarshalSSZ(make([]byte, size)), ErrIncorrectByteSize)
+			require.Equal(t, byte(9), got[0])
+		})
+	}
 }
 
 func TestBlobSidecarsByRootReq_MarshalSSZ(t *testing.T) {

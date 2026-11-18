@@ -6,6 +6,7 @@ types:
   - name: "DataColumnSidecarsByRangeRequest"
   - name: "DepositSnapshot"
   - name: "ExecutionPayloadEnvelopesByRangeRequest"
+  - name: "LightClientUpdatesByRangeRequest"
   - name: "MetaDataV0"
   - name: "MetaDataV1"
   - name: "MetaDataV2"

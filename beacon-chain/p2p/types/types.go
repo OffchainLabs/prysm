@@ -23,6 +23,41 @@ const (
 
 var ErrIncorrectByteSize = errors.New("incorrect byte size")
 
+var _ ssz.Marshaler = (*LightClientBootstrapReq)(nil)
+var _ ssz.Unmarshaler = (*LightClientBootstrapReq)(nil)
+
+// LightClientBootstrapReq specifies the block root for a light client bootstrap.
+type LightClientBootstrapReq [fieldparams.RootLength]byte
+
+// SizeSSZ returns the size of the serialized request.
+func (r *LightClientBootstrapReq) SizeSSZ() int {
+	return fieldparams.RootLength
+}
+
+// MaxSizeSSZ returns the maximum SSZ-encoded size.
+func (r *LightClientBootstrapReq) MaxSizeSSZ() int {
+	return fieldparams.RootLength
+}
+
+// MarshalSSZTo appends the serialized request to dst.
+func (r *LightClientBootstrapReq) MarshalSSZTo(dst []byte) ([]byte, error) {
+	return append(dst, r[:]...), nil
+}
+
+// MarshalSSZ serializes the requested block root.
+func (r *LightClientBootstrapReq) MarshalSSZ() ([]byte, error) {
+	return r.MarshalSSZTo(make([]byte, 0, fieldparams.RootLength))
+}
+
+// UnmarshalSSZ decodes the requested block root.
+func (r *LightClientBootstrapReq) UnmarshalSSZ(buf []byte) error {
+	if len(buf) != fieldparams.RootLength {
+		return ErrIncorrectByteSize
+	}
+	copy(r[:], buf)
+	return nil
+}
+
 // SSZBytes is a bytes slice that satisfies the fast-ssz interface.
 type SSZBytes []byte
 
