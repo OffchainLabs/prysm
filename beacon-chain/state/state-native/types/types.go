@@ -134,6 +134,16 @@ func (f FieldIndex) String() string {
 		return "payloadExpectedWithdrawals"
 	case PTCWindow:
 		return "ptcWindow"
+	case ValidatorPQRegistrations:
+		return "validatorPQRegistrations"
+	case BuilderPQRegistrations:
+		return "builderPQRegistrations"
+	case ValidatorPreregistrations:
+		return "validatorPreregistrations"
+	case BuilderPreregistrations:
+		return "builderPreregistrations"
+	case AggregationCommitteeWindow:
+		return "aggregationCommitteeWindow"
 	default:
 		return fmt.Sprintf("unknown field index number: %d", f)
 	}
@@ -235,6 +245,16 @@ func (f FieldIndex) RealPosition() int {
 		return 44
 	case PTCWindow:
 		return 45
+	case ValidatorPQRegistrations:
+		return 46
+	case BuilderPQRegistrations:
+		return 47
+	case ValidatorPreregistrations:
+		return 48
+	case BuilderPreregistrations:
+		return 49
+	case AggregationCommitteeWindow:
+		return 50
 	default:
 		return -1
 	}
@@ -310,6 +330,11 @@ const (
 	PayloadExpectedWithdrawals    // Gloas: EIP-7732
 	PTCWindow                     // Gloas: EIP-7732
 	LatestExecutionPayloadBidHeze // Heze: EIP-7805
+	ValidatorPQRegistrations
+	BuilderPQRegistrations
+	ValidatorPreregistrations
+	BuilderPreregistrations
+	AggregationCommitteeWindow
 )
 
 // Enumerator keeps track of the number of states created since the node's start.

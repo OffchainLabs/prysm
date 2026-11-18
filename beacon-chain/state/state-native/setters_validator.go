@@ -56,6 +56,7 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 		}
 		if newVal != nil {
 			compactValidator := stateutil.CompactValidatorFromProto(newVal)
+			compactValidator.PQ, compactValidator.VrfRoot = v.PQ, v.VrfRoot
 			if err := b.validatorsMultiValue.UpdateAt(b, uint64(i), compactValidator); err != nil {
 				return errors.Wrapf(err, "could not update validator at index %d", i)
 			}
@@ -70,6 +71,13 @@ func (b *BeaconState) ApplyToEveryValidator(f func(idx int, val state.ReadOnlyVa
 // at a specific index to a new value.
 func (b *BeaconState) UpdateValidatorAtIndex(idx primitives.ValidatorIndex, val *ethpb.Validator) error {
 	compactValidator := stateutil.CompactValidatorFromProto(val)
+	if b.version == version.PQ {
+		current, err := b.validatorsMultiValue.At(b, uint64(idx))
+		if err != nil {
+			return errors.Wrap(err, "could not read validator")
+		}
+		compactValidator.PQ, compactValidator.VrfRoot = current.PQ, current.VrfRoot
+	}
 	if err := b.validatorsMultiValue.UpdateAt(b, uint64(idx), compactValidator); err != nil {
 		return errors.Wrap(err, "could not update validator")
 	}
