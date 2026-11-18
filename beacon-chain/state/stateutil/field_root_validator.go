@@ -90,6 +90,17 @@ func OptimizedValidatorRoots(validators []CompactValidator) ([][32]byte, error) 
 	if len(validators) == 0 {
 		return [][32]byte{}, nil
 	}
+	if validators[0].PQ {
+		roots := make([][32]byte, len(validators))
+		for i := range validators {
+			root, err := validators[i].Root()
+			if err != nil {
+				return nil, err
+			}
+			roots[i] = root
+		}
+		return roots, nil
+	}
 	wg := sync.WaitGroup{}
 	n := runtime.GOMAXPROCS(0)
 	rootsSize := len(validators) * validatorFieldRoots

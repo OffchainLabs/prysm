@@ -83,6 +83,9 @@ type BeaconState struct {
 	latestBlockHash               []byte
 	payloadExpectedWithdrawals    []*enginev1.Withdrawal
 	ptcWindow                     []*ethpb.PTCs
+	validatorPreregistrations     []*ethpb.ValidatorPreregistration
+	builderPreregistrations       []*ethpb.BuilderPreregistration
+	aggregationCommitteeWindow    []*ethpb.AggregationCommittees
 
 	id                    uint64
 	lock                  sync.RWMutex

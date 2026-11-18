@@ -126,6 +126,14 @@ func NewMultiValueValidators(vals []*ethpb.Validator) *MultiValueValidators {
 	return mv
 }
 
+func newMultiValueCompactValidators(compactVals []stateutil.CompactValidator) *MultiValueValidators {
+	mv := &MultiValueValidators{}
+	mv.Init(compactVals)
+	multiValueCountGauge.WithLabelValues(types.Validators.String()).Inc()
+	runtime.SetFinalizer(mv, validatorsFinalizer)
+	return mv
+}
+
 // Defragment checks whether each individual multi-value field in our state is fragmented
 // and if it is, it will 'reset' the field to create a new multivalue object.
 func (b *BeaconState) Defragment() {
