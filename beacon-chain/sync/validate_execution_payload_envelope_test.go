@@ -115,6 +115,12 @@ func TestValidateExecutionPayloadEnvelope_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name:      "execution block hash mismatch",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errExecutionBlockHash: errors.New("computed block hash mismatch")},
+			result:    pubsub.ValidationIgnore,
+			wantError: true,
+		},
+		{
 			name:      "signature invalid",
 			verifier:  mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("signature invalid")},
 			result:    pubsub.ValidationReject,
@@ -252,6 +258,7 @@ type mockExecutionPayloadEnvelopeVerifier struct {
 	errPayloadHash             error
 	errExecutionRequestsLimits error
 	errWithdrawalsLimit        error
+	errExecutionBlockHash      error
 	errSignature               error
 }
 
@@ -291,6 +298,10 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionRequestsLimits() e
 
 func (m *mockExecutionPayloadEnvelopeVerifier) VerifyWithdrawalsLimit() error {
 	return m.errWithdrawalsLimit
+}
+
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionBlockHash() error {
+	return m.errExecutionBlockHash
 }
 
 func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
@@ -351,6 +362,11 @@ func (r *recordingEnvelopeVerifier) VerifyExecutionRequestsLimits() error {
 
 func (r *recordingEnvelopeVerifier) VerifyWithdrawalsLimit() error {
 	r.recorded[verification.RequireWithdrawalsLimitValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyExecutionBlockHash() error {
+	r.recorded[verification.RequireExecutionBlockHashValid] = true
 	return nil
 }
 
