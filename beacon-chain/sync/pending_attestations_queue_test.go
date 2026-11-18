@@ -128,7 +128,7 @@ func TestProcessPendingAtts_RequestsBlockFromSender(t *testing.T) {
 	// Make other a best peer, which a random batch request would have picked.
 	p1.Peers().Add(new(enr.Record), other.PeerID(), nil, network.DirOutbound)
 	p1.Peers().SetConnectionState(other.PeerID(), peers.Connected)
-	p1.Peers().SetChainState(other.PeerID(), &ethpb.StatusV2{})
+	setPeerStatus(p1.PeerScoring(), other.PeerID(), &ethpb.StatusV2{})
 
 	r, rootA := pendingAttService(t, p1)
 	rootB := [32]byte{'B'}
@@ -288,10 +288,7 @@ func TestProcessPendingAtts_SkipsDisconnectedSender(t *testing.T) {
 		require.Equal(t, 0, len(r.pendingAttRequestPeers))
 
 		// The disconnected peer is not downscored.
-		count, err := p1.Peers().Scorers().BadResponsesScorer().Count(gone.PeerID())
-		if err == nil {
-			require.Equal(t, 0, count)
-		}
+		require.Equal(t, 0, p1.PeerScoring().StrikeCount(gone.PeerID()))
 	})
 
 	t.Run("connected sender asked instead", func(t *testing.T) {
@@ -354,10 +351,8 @@ func TestProcessPendingAtts_DownscoresSenderNotServingBlock(t *testing.T) {
 		<-senderRoots
 		waitRequestDone(t, r)
 
-		// One request with missing blocks counts as a single bad response.
-		count, err := p1.Peers().Scorers().BadResponsesScorer().Count(sender.PeerID())
-		require.NoError(t, err)
-		require.Equal(t, 1, count)
+		// One request with missing blocks counts as a single strike.
+		require.Equal(t, 1, p1.PeerScoring().StrikeCount(sender.PeerID()))
 
 		// The sender is no longer asked for the blocks it did not serve.
 		r.pendingAttsLock.RLock()
@@ -411,10 +406,7 @@ func TestProcessPendingAtts_DownscoresSenderNotServingBlock(t *testing.T) {
 		require.Eventually(t, func() bool { return r.isBlockInQueue(rootB) }, 5*time.Second, 10*time.Millisecond)
 		waitRequestDone(t, r)
 
-		count, err := p1.Peers().Scorers().BadResponsesScorer().Count(sender.PeerID())
-		if err == nil {
-			require.Equal(t, 0, count)
-		}
+		require.Equal(t, 0, p1.PeerScoring().StrikeCount(sender.PeerID()))
 
 		r.pendingAttsLock.RLock()
 		defer r.pendingAttsLock.RUnlock()

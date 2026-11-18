@@ -267,7 +267,7 @@ func blocksByRootProbe(t *testing.T, us *p2ptest.TestP2P, clock *startup.Clock) 
 	us.Connect(probe)
 	us.Peers().Add(new(enr.Record), probe.PeerID(), nil, network.DirOutbound)
 	us.Peers().SetConnectionState(probe.PeerID(), peers.Connected)
-	us.Peers().SetChainState(probe.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 1, HeadSlot: 1})
+	setPeerStatus(us.PeerScoring(), probe.PeerID(), &ethpb.StatusV2{FinalizedEpoch: 1, HeadSlot: 1})
 
 	topic, err := p2p.TopicFromMessage(p2p.BeaconBlocksByRootsMessageName, slots.ToEpoch(clock.CurrentSlot()))
 	require.NoError(t, err)

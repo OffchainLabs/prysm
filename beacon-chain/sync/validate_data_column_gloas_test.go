@@ -129,7 +129,7 @@ func TestValidateDataColumnGloas(t *testing.T) {
 		require.Equal(t, pubsub.ValidationIgnore, result)
 
 		// The queued entry must record the forwarding peer (`pid`), not msg.From which
-		// is empty under StrictNoSign/WithNoAuthor and would no-op the bad-response scorer.
+		// is empty under StrictNoSign/WithNoAuthor and would no-op the strike.
 		blockRoot := bytesutil.ToBytes32(sidecar.BeaconBlockRoot)
 		entry := service.pendingGloasColumns[blockRoot]
 		require.NotNil(t, entry)
@@ -679,11 +679,8 @@ func TestPendingGloasColumns(t *testing.T) {
 
 		require.Equal(t, false, s.hasPendingGloasColumns(unknownRoot))
 
-		scorer := p.Peers().Scorers().BadResponsesScorer()
-		_, err := scorer.Count("peerA")
-		require.NotNil(t, err)
-		_, err = scorer.Count("peerB")
-		require.NotNil(t, err)
+		require.Equal(t, 0, p.PeerScoring().StrikeCount("peerA"))
+		require.Equal(t, 0, p.PeerScoring().StrikeCount("peerB"))
 	})
 
 	t.Run("prune keeps current and next slot", func(t *testing.T) {

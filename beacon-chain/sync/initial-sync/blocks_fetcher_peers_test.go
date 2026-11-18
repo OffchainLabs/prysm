@@ -213,7 +213,7 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 			for _, pid := range tt.args.peers {
 				peerIDs = append(peerIDs, pid.ID)
 				fetcher.rateLimiter.Add(pid.ID.String(), pid.usedCapacity)
-				fetcher.p2p.Peers().SetChainState(pid.ID, &ethpb.StatusV2{})
+				setPeerStatus(fetcher.p2p.PeerScoring(), pid.ID, &ethpb.StatusV2{})
 			}
 			if tt.update != nil {
 				tt.update(fetcher.p2p.Peers().Scorers().BlockProviderScorer())
@@ -283,9 +283,9 @@ func TestBlocksFetcher_filterPeers(t *testing.T) {
 
 		peerIDs := []peer.ID{"a", "b", "c", "d", "e"}
 		for _, pid := range peerIDs[:4] {
-			fetcher.p2p.Peers().SetChainState(pid, &ethpb.StatusV2{EarliestAvailableSlot: start + 1})
+			setPeerStatus(fetcher.p2p.PeerScoring(), pid, &ethpb.StatusV2{EarliestAvailableSlot: start + 1})
 		}
-		fetcher.p2p.Peers().SetChainState("e", &ethpb.StatusV2{EarliestAvailableSlot: start})
+		setPeerStatus(fetcher.p2p.PeerScoring(), "e", &ethpb.StatusV2{EarliestAvailableSlot: start})
 
 		for range 100 {
 			filtered := fetcher.filterPeers(t.Context(), peerIDs, start, peersPercentagePerRequest)

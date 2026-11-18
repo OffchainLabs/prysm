@@ -27,18 +27,15 @@ func TestStore_GetSetDelete(t *testing.T) {
 
 	// Associate data.
 	store.SetPeerData(pid, &peerdata.PeerData{
-		BadResponses:    3,
 		ProcessedBlocks: 42,
 	})
 	peerData, ok = store.PeerData(pid)
 	assert.Equal(t, true, ok)
-	assert.Equal(t, 3, peerData.BadResponses)
 	assert.Equal(t, uint64(42), peerData.ProcessedBlocks)
 	require.Equal(t, 1, len(store.Peers()))
 	peers := store.Peers()
 	_, ok = peers[pid]
 	require.Equal(t, true, ok)
-	assert.Equal(t, 3, peers[pid].BadResponses)
 	assert.Equal(t, uint64(42), peers[pid].ProcessedBlocks)
 
 	// Remove data from peer.
@@ -66,14 +63,12 @@ func TestStore_PeerDataGetOrCreate(t *testing.T) {
 
 	peerData = store.PeerDataGetOrCreate(pid)
 	assert.NotNil(t, peerData)
-	assert.Equal(t, 0, peerData.BadResponses)
 	assert.Equal(t, uint64(0), peerData.ProcessedBlocks)
 	require.Equal(t, 1, len(store.Peers()))
 
 	// Method must be idempotent, check.
 	peerData = store.PeerDataGetOrCreate(pid)
 	assert.NotNil(t, peerData)
-	assert.Equal(t, 0, peerData.BadResponses)
 	assert.Equal(t, uint64(0), peerData.ProcessedBlocks)
 	require.Equal(t, 1, len(store.Peers()))
 }

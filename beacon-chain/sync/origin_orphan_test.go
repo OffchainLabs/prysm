@@ -82,10 +82,10 @@ func newOrphanTestService(t *testing.T, originRoot, finalizedRoot [32]byte) *Ser
 	for _, id := range []peer.ID{"peer1", "peer2"} {
 		p.Peers().Add(new(enr.Record), id, nil, network.DirOutbound)
 		p.Peers().SetConnectionState(id, peers.Connected)
-		p.Peers().SetChainState(id, &ethpb.StatusV2{
+		p.PeerScoring().SetPeerStatus(id, &ethpb.StatusV2{
 			FinalizedEpoch: 12,
 			FinalizedRoot:  bytesutil.PadTo([]byte("unknown"), 32),
-		})
+		}, nil)
 	}
 	return &Service{
 		cfg: &config{

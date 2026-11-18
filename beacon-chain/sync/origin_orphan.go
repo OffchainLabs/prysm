@@ -29,7 +29,7 @@ func (s *Service) detectOrphanedOrigin(ctx context.Context) {
 	}
 	conflicting := 0
 	for _, id := range s.cfg.p2p.Peers().Connected() {
-		cs, err := s.cfg.p2p.Peers().ChainState(id)
+		cs, err := s.cfg.p2p.PeerScoring().PeerStatus(id)
 		if err != nil || cs == nil || cs.FinalizedEpoch < cp.Epoch {
 			continue
 		}
