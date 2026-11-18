@@ -20,6 +20,9 @@ func setGenesisUpdateEpochs(b *BeaconChainConfig, fork int) {
 	case version.Heze:
 		b.HezeForkEpoch = 0
 		setGenesisUpdateEpochs(b, version.Gloas)
+	case version.PQ:
+		b.PQForkEpoch = 0
+		setGenesisUpdateEpochs(b, version.Gloas)
 	case version.Gloas:
 		b.GloasForkEpoch = 0
 		setGenesisUpdateEpochs(b, version.Fulu)
