@@ -25,7 +25,8 @@ import (
 
 // sendBeaconBlocksRequest sends the `requests` beacon blocks by root requests to
 // the peer with the given `id`. For each received block, it inserts the block into the
-// pending queue. Then, for each received blocks, it checks if all corresponding sidecars
+// pending queue, unless its proposer is not the one the head state's proposer lookahead expects at its slot.
+// Then, for each queued block, it checks if all corresponding sidecars
 // are stored, and, if not, sends the corresponding sidecar requests and stores the received sidecars.
 // For sidecars, only blob sidecars will be requested to the peer with the given `id`.
 // For other types of sidecars, the request will be sent to the best peers.
@@ -38,7 +39,10 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 		requestedRoots[root] = true
 	}
 
-	blks, err := SendBeaconBlocksByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, id, requests, func(blk interfaces.ReadOnlySignedBeaconBlock) error {
+	// Blocks that passed all checks. Sidecars are only fetched for these.
+	blks := make([]interfaces.ReadOnlySignedBeaconBlock, 0, len(*requests))
+
+	_, err := SendBeaconBlocksByRootRequest(ctx, s.cfg.clock, s.cfg.p2p, id, requests, func(blk interfaces.ReadOnlySignedBeaconBlock) error {
 		blkRoot, err := blk.Block().HashTreeRoot()
 		if err != nil {
 			return err
@@ -46,6 +50,12 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 
 		if ok := requestedRoots[blkRoot]; !ok {
 			return fmt.Errorf("received unexpected block with root %x", blkRoot)
+		}
+
+		// Skip, without queuing it, a block whose proposer is not the one the head state's proposer lookahead expects.
+		if err := s.verifyProposerInHeadLookahead(ctx, blk); err != nil {
+			log.WithError(err).WithFields(getBlockFields(blk)).WithField("peer", id).Debug("Skipped block received by root: could not verify proposer")
+			return nil
 		}
 
 		// Verify the signature before queueing, matching the gossip path, since a matched root does not cover it.
@@ -60,6 +70,7 @@ func (s *Service) sendBeaconBlocksRequest(ctx context.Context, requests *types.B
 			return errors.Wrapf(err, "insert block to pending queue for block with root %x", blkRoot)
 		}
 
+		blks = append(blks, blk)
 		return nil
 	})
 
