@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice"
 	lightclient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -118,6 +119,13 @@ func WithAttestationCache(c *cache.AttestationCache) Option {
 func WithAttestationPool(p attestations.Pool) Option {
 	return func(s *Service) error {
 		s.cfg.AttPool = p
+		return nil
+	}
+}
+
+func WithPQAttestationPool(p *pqpool.Pool) Option {
+	return func(s *Service) error {
+		s.cfg.PQAttPool = p
 		return nil
 	}
 }

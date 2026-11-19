@@ -228,6 +228,10 @@ func (s *Service) processAttestations(ctx context.Context, disparity time.Durati
 		atts = s.cfg.AttPool.ForkchoiceAttestations()
 	}
 
+	if s.cfg.PQAttPool != nil {
+		s.processPQAttestations(ctx, disparity)
+	}
+
 	for _, a := range atts {
 		// Based on the spec, don't process the attestation until the subsequent slot.
 		// This delays consideration in the fork choice until their slot is in the past.
@@ -294,4 +298,19 @@ func (s *Service) receiveAttestationNoPubsub(ctx context.Context, att ethpb.Att,
 	}
 
 	return nil
+}
+
+func (s *Service) processPQAttestations(ctx context.Context, disparity time.Duration) {
+	currentEpoch := slots.ToEpoch(s.CurrentSlot())
+	if currentEpoch > 1 {
+		s.cfg.PQAttPool.PruneBefore(currentEpoch - 1)
+	}
+	for _, a := range s.cfg.PQAttPool.TakeForkchoice() {
+		if err := s.OnAttestation(ctx, a, disparity); err != nil {
+			log.WithError(err).WithFields(logrus.Fields{
+				"slot":     a.Data.Slot,
+				"attester": a.AttesterIndex,
+			}).Debug("Could not process attestation for fork choice")
+		}
+	}
 }
