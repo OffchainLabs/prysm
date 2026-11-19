@@ -155,3 +155,13 @@ func VerifyIndexedAttestationProof(st state.ReadOnlyBeaconState, att *ethpb.Inde
 	}
 	return Proofs.Verify([]Statement{{Pubkeys: pubkeys, LeafIndex: leafIndex, Message: message}}, att.Proof)
 }
+
+// Spec: the signature check of the beacon_attestation gossip rule
+func VerifySingleAttestation(st state.ReadOnlyBeaconState, att *ethpb.SingleAttestationPQ) error {
+	leafIndex, message, err := attestationMessage(st, att.Data)
+	if err != nil {
+		return err
+	}
+	pubkey := st.PubkeyAtIndex(att.AttesterIndex)
+	return VerifyXMSS(pubkey[:], leafIndex, message, att.Signature)
+}

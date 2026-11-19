@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
@@ -57,6 +58,13 @@ func WithAttestationCache(c *cache.AttestationCache) Option {
 func WithAttestationPool(attPool attestations.Pool) Option {
 	return func(s *Service) error {
 		s.cfg.attPool = attPool
+		return nil
+	}
+}
+
+func WithPQAttestationPool(p *pqpool.Pool) Option {
+	return func(s *Service) error {
+		s.cfg.pqAttPool = p
 		return nil
 	}
 }

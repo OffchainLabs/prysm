@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
@@ -99,6 +100,7 @@ type config struct {
 	beaconDB                db.NoHeadAccessDatabase
 	attestationCache        *cache.AttestationCache
 	attPool                 attestations.Pool
+	pqAttPool               *pqpool.Pool
 	exitPool                voluntaryexits.PoolManager
 	slashingPool            slashings.PoolManager
 	syncCommsPool           synccommittee.Pool
