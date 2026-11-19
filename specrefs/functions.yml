@@ -4680,7 +4680,9 @@
     </spec>
 
 - name: get_inclusion_list_bits#heze
-  sources: []
+  sources:
+    - file: beacon-chain/cache/inclusion_list_store.go
+      search: func (s *InclusionListStore) Bits(
   spec: |
     <spec fn="get_inclusion_list_bits" fork="heze" hash="ebdce3b7">
     def get_inclusion_list_bits(
@@ -4710,7 +4712,9 @@
     </spec>
 
 - name: get_inclusion_list_committee#heze
-  sources: []
+  sources:
+    - file: beacon-chain/core/helpers/inclusion_list.go
+      search: func InclusionListCommittee(
   spec: |
     <spec fn="get_inclusion_list_committee" fork="heze" hash="6c0625d9">
     def get_inclusion_list_committee(state: BeaconState, slot: Slot) -> InclusionListCommittee:
@@ -4730,7 +4734,9 @@
     </spec>
 
 - name: get_inclusion_list_committee_assignment#heze
-  sources: []
+  sources:
+    - file: beacon-chain/core/helpers/inclusion_list.go
+      search: func InclusionListCommitteeAssignment(
   spec: |
     <spec fn="get_inclusion_list_committee_assignment" fork="heze" hash="338b0ead">
     def get_inclusion_list_committee_assignment(
@@ -4789,7 +4795,9 @@
     </spec>
 
 - name: get_inclusion_list_transactions#heze
-  sources: []
+  sources:
+    - file: beacon-chain/cache/inclusion_list_store.go
+      search: func (s *InclusionListStore) Transactions(
   spec: |
     <spec fn="get_inclusion_list_transactions" fork="heze" hash="18378c2a">
     def get_inclusion_list_transactions(
@@ -7500,7 +7508,9 @@
     </spec>
 
 - name: is_inclusion_list_bits_inclusive#heze
-  sources: []
+  sources:
+    - file: beacon-chain/cache/inclusion_list_store.go
+      search: func (s *InclusionListStore) IsBitsInclusive(
   spec: |
     <spec fn="is_inclusion_list_bits_inclusive" fork="heze" hash="ea1a888b">
     def is_inclusion_list_bits_inclusive(
@@ -7955,7 +7965,9 @@
     </spec>
 
 - name: is_valid_inclusion_list_signature#heze
-  sources: []
+  sources:
+    - file: beacon-chain/core/helpers/inclusion_list.go
+      search: func VerifyInclusionListSignature(
   spec: |
     <spec fn="is_valid_inclusion_list_signature" fork="heze" hash="ab8ab841">
     def is_valid_inclusion_list_signature(
@@ -10786,7 +10798,9 @@
     </spec>
 
 - name: process_inclusion_list#heze
-  sources: []
+  sources:
+    - file: beacon-chain/cache/inclusion_list_store.go
+      search: func (s *InclusionListStore) Process(
   spec: |
     <spec fn="process_inclusion_list" fork="heze" hash="a441f361">
     def process_inclusion_list(
