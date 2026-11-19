@@ -295,6 +295,22 @@ service BeaconNodeValidator {
     };
   }
 
+  rpc GetAggregateAndProofPQ(AggregateAndProofPQRequest)
+      returns (AggregateAttestationAndProofPQ) {
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/aggregate_pq"
+      body : "*"
+    };
+  }
+
+  rpc SubmitSignedAggregateAndProofPQ(SignedAggregateAttestationAndProofPQ)
+      returns (SignedAggregateSubmitResponse) {
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/signed_aggregate_pq"
+      body : "*"
+    };
+  }
+
   // Submit selection proof to the beacon node to aggregate all matching wire
   // attestations with the same data root. the beacon node responses with an
   // aggregate and proof object back to validator to sign over.
@@ -1074,6 +1090,21 @@ message AggregateSelectionRequest {
   // 96 byte signature of the validator on the slot. This is used as proof that
   // the validator is an aggregator for the given slot.
   bytes slot_signature = 4 [ (ethereum.eth.ext.ssz_size) = "96" ];
+}
+
+message AggregateAndProofPQRequest {
+  uint64 slot = 1 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
+  ];
+  uint64 committee_index = 2
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.CommitteeIndex" ];
+  uint64 aggregator_index = 3
+      [ (ethereum.eth.ext.cast_type) =
+            "github.com/OffchainLabs/prysm/v7/consensus-types/"
+            "primitives.ValidatorIndex" ];
 }
 
 message AggregateSelectionResponse {
