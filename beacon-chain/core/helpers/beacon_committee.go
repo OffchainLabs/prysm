@@ -695,6 +695,10 @@ func fillCommitteeCacheAsync(cc *cache.CommitteeCache, seed [32]byte, indices []
 // fillCommitteeAggregatesAsync computes the aggregate public key of every committee in the background.
 // It returns early when another call already computed or is computing them.
 func fillCommitteeAggregatesAsync(cc *cache.CommitteeCache, c *cache.Committees, s state.ReadOnlyBeaconState) {
+	// XMSS keys do not aggregate.
+	if s.Version() == version.PQ {
+		return
+	}
 	if !c.TryStartAggregating() {
 		return
 	}
