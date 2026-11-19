@@ -41,6 +41,9 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		if epoch >= params.BeaconConfig().HezeForkEpoch {
 			return &ethpb.SignedBeaconBlockHeze{}
 		}
+		if epoch >= params.BeaconConfig().PQForkEpoch {
+			return &ethpb.SignedBeaconBlockPQ{}
+		}
 		if epoch >= params.BeaconConfig().GloasForkEpoch {
 			return &ethpb.SignedBeaconBlockGloas{}
 		}
@@ -64,16 +67,25 @@ func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 		}
 		return gossipMessage(topic)
 	case AttestationSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().PQForkEpoch {
+			return &ethpb.SingleAttestationPQ{}
+		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.SingleAttestation{}
 		}
 		return gossipMessage(topic)
 	case AttesterSlashingSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().PQForkEpoch {
+			return &ethpb.AttesterSlashingPQ{}
+		}
 		if epoch >= params.BeaconConfig().ElectraForkEpoch {
 			return &ethpb.AttesterSlashingElectra{}
 		}
 		return gossipMessage(topic)
 	case AggregateAndProofSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().PQForkEpoch {
+			return &ethpb.SignedAggregateAttestationAndProofPQ{}
+		}
 		if epoch >= params.BeaconConfig().GloasForkEpoch {
 			return &ethpb.SignedAggregateAttestationAndProofGloas{}
 		}
@@ -172,6 +184,11 @@ func init() {
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProofGloas]()] = AggregateAndProofSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.LightClientOptimisticUpdateGloas]()] = LightClientOptimisticUpdateTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.LightClientFinalityUpdateGloas]()] = LightClientFinalityUpdateTopicFormat
+
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockPQ]()] = BlockSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SingleAttestationPQ]()] = AttestationSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashingPQ]()] = AttesterSlashingSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProofPQ]()] = AggregateAndProofSubnetTopicFormat
 
 	// Specially handle Heze objects.
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedBeaconBlockHeze]()] = BlockSubnetTopicFormat
