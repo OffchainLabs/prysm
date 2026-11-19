@@ -67,6 +67,13 @@ func ExecuteStateTransitionNoVerifyAnySig(
 		return nil, nil, errors.Wrap(err, "could not process slots")
 	}
 
+	// XMSS has no batch to defer to, and one check is cheap.
+	if signed.Block().Version() == version.PQ {
+		if err := pq.VerifyBlockSignature(st, signed); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// Execute per block transition.
 	sigSlice, st, err := ProcessBlockNoVerifyAnySig(ctx, st, signed)
 	if err != nil {
@@ -297,6 +304,9 @@ func ProcessBlockNoVerifyAnySig(
 		}
 		if err := pq.VerifyVRFProof(st, proposer, st.Slot(), blk.Body().VRFProof()); err != nil {
 			return set, nil, errors.Wrap(ErrRandaoSignatureInvalid, err.Error())
+		}
+		if err := pq.VerifyAttestationProof(ctx, st, blk.Body().Attestations(), blk.Body().AttestationProof()); err != nil {
+			return set, nil, errors.Wrap(ErrAttestationsSignatureInvalid, err.Error())
 		}
 		return set, st, nil
 	}
