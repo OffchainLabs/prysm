@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "execution.go",
         "execution_payload_envelope.go",
+        "execution_payload_envelope_pq.go",
         "factory.go",
         "get_payload.go",
         "getters.go",
