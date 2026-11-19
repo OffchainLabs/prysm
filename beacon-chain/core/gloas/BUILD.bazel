@@ -11,6 +11,7 @@ go_library(
         "log.go",
         "metrics.go",
         "parent_payload.go",
+        "parent_payload_pq.go",
         "payload.go",
         "payload_attestation.go",
         "pending_payment.go",

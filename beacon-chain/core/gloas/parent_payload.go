@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -31,13 +32,17 @@ func ProcessParentExecutionPayload(ctx context.Context, st state.BeaconState, bl
 		return errors.Wrap(err, "could not get parent execution payload bid")
 	}
 
+	parentBidBlockHash := parentBid.BlockHash()
+	isParentFull := bid.ParentBlockHash() == parentBidBlockHash
+
+	if st.Version() == version.PQ {
+		return processParentExecutionPayloadPQ(ctx, st, body.ParentExecutionRequestsPQ(), isParentFull, parentBid.ExecutionRequestsRoot())
+	}
+
 	parentExecutionRequests, err := body.ParentExecutionRequests()
 	if err != nil {
 		return errors.Wrap(err, "could not get parent execution requests")
 	}
-
-	parentBidBlockHash := parentBid.BlockHash()
-	isParentFull := bid.ParentBlockHash() == parentBidBlockHash
 
 	if !isParentFull {
 		if !IsEmptyExecutionRequests(parentExecutionRequests) {
