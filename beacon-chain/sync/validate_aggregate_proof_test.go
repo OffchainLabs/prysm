@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/async/event"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
@@ -468,19 +470,24 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:                 p,
-			beaconDB:            db,
-			initialSync:         &mockSync.Sync{IsSyncing: false},
-			chain:               chain,
-			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			attPool:             attestations.NewPool(),
-			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
+			p2p:                     p,
+			beaconDB:                db,
+			initialSync:             &mockSync.Sync{IsSyncing: false},
+			chain:                   chain,
+			clock:                   startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:                 attestations.NewPool(),
+			attestationNotifier:     (&mock.ChainService{}).OperationNotifier(),
+			slasherAttestationsFeed: new(event.Feed),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                  make(chan *signatureVerifier, verifierLimit),
+		slasherEnabled:                 true,
 	}
 	r.initCaches()
 	go r.verifierRoutine()
+	slasherAtts := make(chan *slashertypes.WrappedIndexedAtt, 1)
+	sub := r.cfg.slasherAttestationsFeed.Subscribe(slasherAtts)
+	defer sub.Unsubscribe()
 
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
@@ -499,6 +506,20 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, pubsub.ValidationAccept, res, "Validated status is false")
 	assert.NotNil(t, msg.ValidatorData, "Did not set validator data")
+
+	// The attestation cache may mutate the accepted aggregate. The slasher must not see the change.
+	accepted := msg.ValidatorData.(ethpb.SignedAggregateAttAndProof).AggregateAttestationAndProof().AggregateVal()
+	accepted.GetAggregationBits().SetBitAt(1, true)
+	accepted.SetSignature(make([]byte, fieldparams.BLSSignatureLength))
+
+	select {
+	case got := <-slasherAtts:
+		require.DeepEqual(t, att.Data, got.GetData())
+		require.DeepEqual(t, attestingIndices, got.GetAttestingIndices())
+		require.DeepEqual(t, att.Signature, got.GetSignature())
+	case <-time.After(5 * time.Second):
+		t.Fatal("Accepted aggregate was not sent to the slasher")
+	}
 }
 
 func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
