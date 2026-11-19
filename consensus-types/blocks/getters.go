@@ -172,6 +172,10 @@ func (b *SignedBeaconBlock) PbGenericBlock() (*eth.GenericSignedBeaconBlock, err
 		return &eth.GenericSignedBeaconBlock{
 			Block: &eth.GenericSignedBeaconBlock_Heze{Heze: pb.(*eth.SignedBeaconBlockHeze)},
 		}, nil
+	case version.PQ:
+		return &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Pq{Pq: pb.(*eth.SignedBeaconBlockPQ)},
+		}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}
@@ -1234,6 +1238,8 @@ func (b *BeaconBlock) AsSignRequestObject() (validatorpb.SignRequestObject, erro
 		return &validatorpb.SignRequest_BlockGloas{BlockGloas: pb.(*eth.BeaconBlockGloas)}, nil
 	case version.Heze:
 		return &validatorpb.SignRequest_BlockHeze{BlockHeze: pb.(*eth.BeaconBlockHeze)}, nil
+	case version.PQ:
+		return &validatorpb.SignRequest_BlockPq{BlockPq: pb.(*eth.BeaconBlockPQ)}, nil
 	default:
 		return nil, errIncorrectBlockVersion
 	}

@@ -89,3 +89,19 @@ func (b *BeaconBlockBody) ParentExecutionRequestsPQ() *enginev1.ExecutionRequest
 func (b *BeaconBlockBody) XMSSBidSignature() []byte {
 	return b.signedExecutionPayloadBidPQ.GetSignature()
 }
+
+func (b *SignedBeaconBlock) SetProposerSlashingsPQ(p []*eth.ProposerSlashingPQ) {
+	b.block.body.proposerSlashingsPQ = p
+}
+
+func (b *SignedBeaconBlock) SetAttestationProof(p []byte) {
+	b.block.body.attestationProof = p
+}
+
+func (b *SignedBeaconBlock) SetParentExecutionRequestsPQ(r *enginev1.ExecutionRequestsPQ) {
+	b.block.body.parentExecutionRequestsPQ = r
+}
+
+func (b *SignedBeaconBlock) SetSignedExecutionPayloadBidPQ(bid *eth.SignedExecutionPayloadBidPQ) {
+	b.block.body.signedExecutionPayloadBidPQ = bid
+}

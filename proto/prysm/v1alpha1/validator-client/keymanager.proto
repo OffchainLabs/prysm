@@ -8,6 +8,7 @@ import "proto/prysm/v1alpha1/beacon_core_types.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
 import "proto/prysm/v1alpha1/gloas_builder_api.proto";
 import "proto/prysm/v1alpha1/heze.proto";
+import "proto/prysm/v1alpha1/pq.proto";
 import "proto/prysm/v1alpha1/sync_committee.proto";
 
 option csharp_namespace = "Ethereum.Validator.Accounts.V2";
@@ -92,6 +93,8 @@ message SignRequest {
 
     // Heze objects.
     ethereum.eth.v1alpha1.BeaconBlockHeze block_heze = 128;
+
+    ethereum.eth.v1alpha1.BeaconBlockPQ block_pq = 129;
   }
 
   reserved 4, 5; // Reserving old, deleted fields.
