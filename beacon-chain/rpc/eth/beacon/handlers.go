@@ -682,6 +682,7 @@ func (s *Server) publishBlockSSZ(ctx context.Context, w http.ResponseWriter, r *
 var sszDecoders = map[string]blockDecoder{
 	version.String(version.Heze):      decodeHezeSSZ,
 	version.String(version.Gloas):     decodeGloasSSZ,
+	version.String(version.PQ):        decodePQSSZ,
 	version.String(version.Fulu):      decodeFuluSSZ,
 	version.String(version.Electra):   decodeElectraSSZ,
 	version.String(version.Deneb):     decodeDenebSSZ,
@@ -708,6 +709,16 @@ func decodeHezeSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
 	}
 	return &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_Heze{Heze: hezeBlock},
+	}, nil
+}
+
+func decodePQSSZ(body []byte) (*eth.GenericSignedBeaconBlock, error) {
+	pqBlock := &eth.SignedBeaconBlockPQ{}
+	if err := pqBlock.UnmarshalSSZ(body); err != nil {
+		return nil, decodingError(version.String(version.PQ), err)
+	}
+	return &eth.GenericSignedBeaconBlock{
+		Block: &eth.GenericSignedBeaconBlock_Pq{Pq: pqBlock},
 	}, nil
 }
 
