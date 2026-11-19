@@ -46,19 +46,20 @@ func checkAllBlocksBuildOnEmpty(blks []blocks.BlockWithROSidecars) error {
 	return nil
 }
 
-// validatePayloadBlockConsistency checks that the envelopes slice correponds to the blocks slice in
-// the peers responses. If they were given by the same peer then we also penalize the peer if they are
-// not consistent.
-func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse) {
+// validatePayloadBlockConsistency checks that the envelopes slice correponds to the blocks slice
+// r.bwb[first:] in the peers responses. If they were given by the same peer then we also penalize the
+// peer if they are not consistent.
+func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse, first int) {
+	gloasBlocks := r.bwb[first:]
 	if len(r.envelopes) == 0 {
 		// Only downscore with bad payload if the same peer provided available blocks
-		if err := checkAllBlocksBuildOnEmpty(r.bwb); err != nil && r.blocksFrom == r.payloadsFrom {
+		if err := checkAllBlocksBuildOnEmpty(gloasBlocks); err != nil && r.blocksFrom == r.payloadsFrom {
 			f.downscorePeer(r.blocksFrom, errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error()))
 		}
 		return
 	}
 
-	full, err := blocks.BlockBuiltOnParentEnvelope(r.envelopes[0], r.bwb[0].Block)
+	full, err := blocks.BlockBuiltOnParentEnvelope(r.envelopes[0], gloasBlocks[0].Block)
 	if err != nil {
 		r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
 		return
@@ -67,14 +68,14 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 	if full {
 		pidx = 1
 	}
-	bh, err := r.bwb[0].Block.ParentHash()
+	bh, err := gloasBlocks[0].Block.ParentHash()
 	if err != nil {
 		r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
 		f.downscorePeer(r.blocksFrom, r.err)
 		return
 	}
 
-	for i, b := range r.bwb[1:] {
+	for i, b := range gloasBlocks[1:] {
 		nh, err := b.Block.ParentHash()
 		if err != nil {
 			r.err = errors.Wrap(prysmsync.ErrInvalidFetchedData, err.Error())
@@ -92,7 +93,7 @@ func (f *blocksFetcher) validatePayloadBlockConsistency(r *fetchRequestResponse)
 		}
 		if pidx >= len(r.envelopes) {
 			log.Debug("Not enough envelopes corresponding to blocks, truncating the block batch")
-			r.bwb = r.bwb[:i+1]
+			r.bwb = r.bwb[:first+i+1]
 			return
 		}
 		env := r.envelopes[pidx]
@@ -142,21 +143,20 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 		r.payloadsFrom = ""
 		return
 	}
-	if firstGloasIndex > 0 {
-		// We leave the first Gloas block so that the post-state is a post-CL state.
-		log.Debug("Batch across the Fulu/Gloas fork, truncating it")
-		r.bwb = r.bwb[:firstGloasIndex+1]
-		r.payloadsFrom = ""
-		return
-	}
 
-	// The whole block batch is gloas
-	start := r.start
+	// Include the envelope before the batch for its first block's parent, but none before the fork.
+	start, count := r.start, r.count
 	gloasStart, err := slots.EpochStart(params.BeaconConfig().GloasForkEpoch)
-	if err == nil && start > gloasStart {
-		start--
+	if err == nil {
+		switch {
+		case start > gloasStart:
+			start--
+		case start < gloasStart:
+			count -= uint64(gloasStart - start)
+			start = gloasStart
+		}
 	}
-	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, r.count, r.blocksFrom, peers)
+	envelopes, pid, err := f.fetchPayloadEnvelopesFromPeer(ctx, start, count, r.blocksFrom, peers)
 	if err != nil {
 		r.err = errors.Wrap(err, "fetch payload envelopes from peer")
 		r.payloadsFrom = ""
@@ -164,7 +164,7 @@ func (f *blocksFetcher) fetchPayloads(ctx context.Context, r *fetchRequestRespon
 	}
 	r.envelopes = envelopes
 	r.payloadsFrom = pid
-	f.validatePayloadBlockConsistency(r)
+	f.validatePayloadBlockConsistency(r, firstGloasIndex)
 }
 
 // fetchPayloadEnvelopesFromPeer fetches execution payload envelopes by range,
