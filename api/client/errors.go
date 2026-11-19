@@ -24,6 +24,9 @@ var ErrInvalidNodeVersion = errors.New("invalid node version response")
 // ErrConnectionIssue represents a connection problem.
 var ErrConnectionIssue = errors.New("could not connect")
 
+// ErrResponseBodyTooLarge indicates that a successful HTTP response exceeds the configured body size limit.
+var ErrResponseBodyTooLarge = errors.New("http response body exceeds maximum size")
+
 // Non200Err is a function that parses an HTTP response to handle responses that are not 200 with a formatted error.
 func Non200Err(r *http.Response) error {
 	b, err := io.ReadAll(io.LimitReader(r.Body, MaxErrBodySize))
