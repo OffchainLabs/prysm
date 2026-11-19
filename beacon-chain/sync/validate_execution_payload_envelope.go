@@ -52,11 +52,16 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 
-	signedEnvelope, ok := m.(*ethpb.SignedExecutionPayloadEnvelope)
-	if !ok {
+	signedEnvelope, _ := m.(*ethpb.SignedExecutionPayloadEnvelope)
+	var e interfaces.ROSignedExecutionPayloadEnvelope
+	switch t := m.(type) {
+	case *ethpb.SignedExecutionPayloadEnvelope:
+		e, err = blocks.WrappedROSignedExecutionPayloadEnvelope(t)
+	case *ethpb.SignedExecutionPayloadEnvelopePQ:
+		e, err = blocks.WrappedROSignedExecutionPayloadEnvelopePQ(t)
+	default:
 		return pubsub.ValidationReject, errWrongMessage
 	}
-	e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnvelope)
 	if err != nil {
 		log.WithError(err).Error("failed to create read only signed payload execution envelope")
 		return pubsub.ValidationIgnore, err
@@ -71,6 +76,10 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
 	if err := v.VerifyBlockRootSeen(func(root [32]byte) bool { return s.cfg.chain.HasBlock(ctx, root) }); err != nil {
+		// The pending queue holds Gloas envelopes only.
+		if signedEnvelope == nil {
+			return pubsub.ValidationIgnore, nil
+		}
 		return s.queuePendingPayloadEnvelope(ctx, v, env, signedEnvelope)
 	}
 	root := env.BeaconBlockRoot()
@@ -158,7 +167,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 	s.setSeenPayloadEnvelope(root, env.BuilderIndex())
-	msg.ValidatorData = signedEnvelope
+	msg.ValidatorData = e.Proto()
 	startTime, err := slots.StartTime(s.cfg.clock.GenesisTime(), env.Slot())
 	if err == nil {
 		syncExecutionPayloadEnvelopeArrivalDelaySeconds.Observe(receivedTime.Sub(startTime).Seconds())
@@ -294,11 +303,16 @@ func (s *Service) queuePendingPayloadEnvelope(
 }
 
 func (s *Service) executionPayloadEnvelopeSubscriber(ctx context.Context, msg proto.Message) error {
-	e, ok := msg.(*ethpb.SignedExecutionPayloadEnvelope)
-	if !ok {
+	var env interfaces.ROSignedExecutionPayloadEnvelope
+	var err error
+	switch t := msg.(type) {
+	case *ethpb.SignedExecutionPayloadEnvelope:
+		env, err = blocks.WrappedROSignedExecutionPayloadEnvelope(t)
+	case *ethpb.SignedExecutionPayloadEnvelopePQ:
+		env, err = blocks.WrappedROSignedExecutionPayloadEnvelopePQ(t)
+	default:
 		return errWrongMessage
 	}
-	env, err := blocks.WrappedROSignedExecutionPayloadEnvelope(e)
 	if err != nil {
 		return errors.Wrap(err, "could not wrap signed execution payload envelope")
 	}
