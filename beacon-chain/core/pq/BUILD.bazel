@@ -3,6 +3,7 @@ load("@prysm//tools/go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
+        "aggregate.go",
         "aggregation_committee.go",
         "attestation.go",
         "bid.go",
