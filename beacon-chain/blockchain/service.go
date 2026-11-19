@@ -21,6 +21,7 @@ import (
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
@@ -88,6 +89,7 @@ type config struct {
 	BuilderCircuitBreaker     *cache.BuilderCircuitBreaker
 	AttestationCache          *cache.AttestationCache
 	AttPool                   attestations.Pool
+	PQAttPool                 *pqpool.Pool
 	ExitPool                  voluntaryexits.PoolManager
 	SlashingPool              slashings.PoolManager
 	BLSToExecPool             blstoexec.PoolManager

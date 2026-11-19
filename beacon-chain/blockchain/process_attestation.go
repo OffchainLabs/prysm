@@ -85,17 +85,24 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 		return err
 	}
 
-	// Use the target state to verify attesting indices are valid.
-	committees, err := helpers.AttestationCommitteesFromState(ctx, baseState, a)
-	if err != nil {
-		return err
-	}
-	indexedAtt, err := attestation.ConvertToIndexed(ctx, a, committees...)
-	if err != nil {
-		return err
-	}
-	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
-		return err
+	var attestingIndices []uint64
+	if a.IsSingle() {
+		// A single attestation names its attester, and gossip checked the committee.
+		attestingIndices = []uint64{uint64(a.GetAttestingIndex())}
+	} else {
+		// Use the target state to verify attesting indices are valid.
+		committees, err := helpers.AttestationCommitteesFromState(ctx, baseState, a)
+		if err != nil {
+			return err
+		}
+		indexedAtt, err := attestation.ConvertToIndexed(ctx, a, committees...)
+		if err != nil {
+			return err
+		}
+		if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
+			return err
+		}
+		attestingIndices = indexedAtt.GetAttestingIndices()
 	}
 
 	// Note that signature verification is ignored here because it was performed in sync's validation pipeline:
@@ -118,6 +125,6 @@ func (s *Service) OnAttestation(ctx context.Context, a ethpb.Att, disparity time
 			}
 		}
 	}
-	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, indexedAtt.GetAttestingIndices(), blockRoot, attData.Slot, payloadStatus)
+	s.cfg.ForkChoiceStore.ProcessAttestation(ctx, attestingIndices, blockRoot, attData.Slot, payloadStatus)
 	return nil
 }
