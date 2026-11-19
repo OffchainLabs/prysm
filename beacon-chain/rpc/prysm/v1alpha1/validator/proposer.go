@@ -703,6 +703,9 @@ func (vs *Server) handlePostBlockStateError(ctx context.Context, block interface
 		if err := block.SetAttestations([]ethpb.Att{}); err != nil {
 			return nil, errors.Wrap(err, "could not set attestations")
 		}
+		if block.Version() == version.PQ {
+			block.SetAttestationProof(nil)
+		}
 	case errors.Is(err, transition.ErrProcessBLSChangesFailed), errors.Is(err, transition.ErrBLSToExecutionChangesSignatureInvalid):
 		log.WithError(err).Warn("Retrying block construction without BLS to execution changes")
 		if err := block.SetBLSToExecutionChanges([]*ethpb.SignedBLSToExecutionChange{}); err != nil {
