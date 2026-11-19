@@ -64,6 +64,7 @@ go_library(
         "fulu.go",
         "gloas.go",
         "json_marshal_unmarshal.go",
+        "pq.go",
         "transaction_list.go",
         ":methodical_engine",  # keep
     ],

@@ -47,6 +47,10 @@ type ExecutionRequestLimits struct {
 	Consolidations  uint64
 	BuilderDeposits uint64
 	BuilderExits    uint64
+
+	ValidatorPreregistrations uint64
+	BuilderPreregistrations   uint64
+	VoluntaryExits            uint64
 }
 
 func (ebe *ExecutionBundleElectra) GetDecodedExecutionRequests(limits ExecutionRequestLimits) (*ExecutionRequests, error) {

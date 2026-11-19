@@ -19,6 +19,7 @@ type GetPayloadResponse struct {
 	Bid                    primitives.Wei
 	ExecutionRequests      *pb.ExecutionRequests
 	ExecutionRequestsGloas *pb.ExecutionRequestsGloas
+	ExecutionRequestsPQ    *pb.ExecutionRequestsPQ
 }
 
 // bundleGetter is an interface satisfied by get payload responses that have a blobs bundle.
@@ -79,7 +80,18 @@ func NewGetPayloadResponse(msg proto.Message) (*GetPayloadResponse, error) {
 
 	switch g := msg.(type) {
 	case executionRequestsGloasGetter:
-		requests, err := g.GetDecodedExecutionRequests(params.BeaconConfig().ExecutionRequestLimits())
+		limits := params.BeaconConfig().ExecutionRequestLimits()
+		requests, err := g.GetDecodedExecutionRequests(limits)
+		// The same engine bundle serves PQ, where the list can also hold the PQ request types.
+		pqGetter, ok := msg.(interface {
+			GetDecodedExecutionRequestsPQ(pb.ExecutionRequestLimits) (*pb.ExecutionRequestsPQ, error)
+		})
+		if ok {
+			r.ExecutionRequestsPQ, err = pqGetter.GetDecodedExecutionRequestsPQ(limits)
+			if err == nil {
+				requests = r.ExecutionRequestsPQ.Gloas()
+			}
+		}
 		if err != nil {
 			return nil, errors.Wrap(err, "get decoded execution requests")
 		}
