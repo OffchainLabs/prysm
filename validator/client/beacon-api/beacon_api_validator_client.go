@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client/event"
+	"github.com/OffchainLabs/prysm/v7/api/fallback"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
@@ -409,7 +410,13 @@ func (c *beaconApiValidatorClient) Host() string {
 }
 
 func (c *beaconApiValidatorClient) EnsureReady(ctx context.Context) bool {
-	return c.nodeClient.IsReady(ctx)
+	status := c.nodeClient.ReadyStatus(ctx)
+	if status == fallback.NodeReady {
+		return true
+	}
+
+	fallback.LogNotReady([]fallback.HostStatus{{Host: c.Host(), Status: status}})
+	return false
 }
 
 // ConnectionGeneration always returns 0: the active-active REST client queries

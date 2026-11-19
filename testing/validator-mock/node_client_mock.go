@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	fallback "github.com/OffchainLabs/prysm/v7/api/fallback"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	gomock "go.uber.org/mock/gomock"
@@ -57,20 +58,6 @@ func (mr *MockNodeClientMockRecorder) Genesis(ctx, in any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Genesis", reflect.TypeOf((*MockNodeClient)(nil).Genesis), ctx, in)
 }
 
-// IsReady mocks base method.
-func (m *MockNodeClient) IsReady(ctx context.Context) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsReady", ctx)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsReady indicates an expected call of IsReady.
-func (mr *MockNodeClientMockRecorder) IsReady(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsReady", reflect.TypeOf((*MockNodeClient)(nil).IsReady), ctx)
-}
-
 // Peers mocks base method.
 func (m *MockNodeClient) Peers(ctx context.Context, in *empty.Empty) (*eth.Peers, error) {
 	m.ctrl.T.Helper()
@@ -84,6 +71,20 @@ func (m *MockNodeClient) Peers(ctx context.Context, in *empty.Empty) (*eth.Peers
 func (mr *MockNodeClientMockRecorder) Peers(ctx, in any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Peers", reflect.TypeOf((*MockNodeClient)(nil).Peers), ctx, in)
+}
+
+// ReadyStatus mocks base method.
+func (m *MockNodeClient) ReadyStatus(ctx context.Context) fallback.NodeStatus {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadyStatus", ctx)
+	ret0, _ := ret[0].(fallback.NodeStatus)
+	return ret0
+}
+
+// ReadyStatus indicates an expected call of ReadyStatus.
+func (mr *MockNodeClientMockRecorder) ReadyStatus(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadyStatus", reflect.TypeOf((*MockNodeClient)(nil).ReadyStatus), ctx)
 }
 
 // SyncStatus mocks base method.

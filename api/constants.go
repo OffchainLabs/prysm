@@ -7,3 +7,9 @@ const (
 	SystemLogsPrefix    = "health/logs"
 	AuthTokenFileName   = "auth-token"
 )
+
+// Reasons returned by the gRPC GetHealth endpoint when the beacon node is not ready.
+const (
+	HealthSyncingReason    = "node is syncing"
+	HealthOptimisticReason = "node is optimistic"
+)
