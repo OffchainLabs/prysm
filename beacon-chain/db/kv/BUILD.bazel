@@ -15,6 +15,7 @@ go_library(
         "error.go",
         "execution_chain.go",
         "execution_payload_envelope.go",
+        "execution_payload_envelope_pq.go",
         "finalized_block_roots.go",
         "genesis.go",
         "key.go",

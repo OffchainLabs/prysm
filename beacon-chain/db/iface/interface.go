@@ -86,6 +86,7 @@ type ReadOnlyDatabase interface {
 	ExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
 	ExecutionPayloadEnvelopeByBlockHash(ctx context.Context, blockHash [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelope, error)
 	HasExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) bool
+	ExecutionPayloadEnvelopePQ(ctx context.Context, blockRoot [32]byte) (*ethpb.SignedBlindedExecutionPayloadEnvelopePQ, error)
 
 	// P2P Metadata operations.
 	MetadataSeqNum(ctx context.Context) (uint64, error)
@@ -135,6 +136,7 @@ type NoHeadAccessDatabase interface {
 	// Execution payload envelope operations (Gloas+).
 	SaveExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelope) error
 	SaveBlindedExecutionPayloadEnvelope(ctx context.Context, envelope *ethpb.SignedBlindedExecutionPayloadEnvelope) (EnvelopeSaveOutcome, error)
+	SaveExecutionPayloadEnvelopePQ(ctx context.Context, envelope *ethpb.SignedExecutionPayloadEnvelopePQ) error
 	DeleteExecutionPayloadEnvelope(ctx context.Context, blockRoot [32]byte) error
 
 	CleanUpDirtyStates(ctx context.Context, slotsPerArchivedPoint primitives.Slot) error

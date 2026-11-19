@@ -5,6 +5,7 @@ package eth
 import (
 	binary "encoding/binary"
 	"fmt"
+
 	go_bitfield "github.com/OffchainLabs/go-bitfield"
 	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
 	primitives "github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -2482,6 +2483,178 @@ func (c *BeaconStatePQ) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) 
 	return nil
 }
 
+func (c *BlindedExecutionPayloadEnvelopePQ) SizeSSZ() int {
+	size := 148
+	if c.ExecutionRequests == nil {
+		c.ExecutionRequests = new(v1.ExecutionRequestsPQ)
+	}
+	size += c.ExecutionRequests.SizeSSZ()
+	return size
+}
+
+func (c *BlindedExecutionPayloadEnvelopePQ) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *BlindedExecutionPayloadEnvelopePQ) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 148
+
+	// Field 0: BlockHash
+	if len(c.BlockHash) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.BlockHash...)
+
+	// Field 1: ExecutionRequests
+	if c.ExecutionRequests == nil {
+		c.ExecutionRequests = new(v1.ExecutionRequestsPQ)
+	}
+	dst = ssz.WriteOffset(dst, offset)
+	offset += c.ExecutionRequests.SizeSSZ()
+
+	// Field 2: BuilderIndex
+	if dst, err = c.BuilderIndex.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("BuilderIndex: %w", err)
+	}
+
+	// Field 3: BeaconBlockRoot
+	if len(c.BeaconBlockRoot) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.BeaconBlockRoot...)
+
+	// Field 4: Slot
+	if dst, err = c.Slot.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Slot: %w", err)
+	}
+
+	// Field 5: ParentBlockHash
+	if len(c.ParentBlockHash) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.ParentBlockHash...)
+
+	// Field 6: ParentBeaconBlockRoot
+	if len(c.ParentBeaconBlockRoot) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.ParentBeaconBlockRoot...)
+
+	// Field 1: ExecutionRequests
+	if dst, err = c.ExecutionRequests.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("ExecutionRequests: %w", err)
+	}
+	return dst, err
+}
+
+func (c *BlindedExecutionPayloadEnvelopePQ) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 148 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:32]    // c.BlockHash
+	sszSlice2 := buf[36:44]   // c.BuilderIndex
+	sszSlice3 := buf[44:76]   // c.BeaconBlockRoot
+	sszSlice4 := buf[76:84]   // c.Slot
+	sszSlice5 := buf[84:116]  // c.ParentBlockHash
+	sszSlice6 := buf[116:148] // c.ParentBeaconBlockRoot
+
+	sszVarOffset1 := ssz.ReadOffset(buf[32:36]) // c.ExecutionRequests
+	if sszVarOffset1 != 148 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset1 > size {
+		return ssz.ErrOffset
+	}
+	sszSlice1 := buf[sszVarOffset1:] // c.ExecutionRequests
+
+	// Field 0: BlockHash
+	c.BlockHash = make([]byte, 0, 32)
+	c.BlockHash = append(c.BlockHash, sszSlice0...)
+
+	// Field 1: ExecutionRequests
+	c.ExecutionRequests = new(v1.ExecutionRequestsPQ)
+	if err = c.ExecutionRequests.UnmarshalSSZ(sszSlice1); err != nil {
+		return fmt.Errorf("ExecutionRequests: %w", err)
+	}
+
+	// Field 2: BuilderIndex
+	if err = c.BuilderIndex.UnmarshalSSZ(sszSlice2); err != nil {
+		return fmt.Errorf("BuilderIndex: %w", err)
+	}
+
+	// Field 3: BeaconBlockRoot
+	c.BeaconBlockRoot = make([]byte, 0, 32)
+	c.BeaconBlockRoot = append(c.BeaconBlockRoot, sszSlice3...)
+
+	// Field 4: Slot
+	if err = c.Slot.UnmarshalSSZ(sszSlice4); err != nil {
+		return fmt.Errorf("Slot: %w", err)
+	}
+
+	// Field 5: ParentBlockHash
+	c.ParentBlockHash = make([]byte, 0, 32)
+	c.ParentBlockHash = append(c.ParentBlockHash, sszSlice5...)
+
+	// Field 6: ParentBeaconBlockRoot
+	c.ParentBeaconBlockRoot = make([]byte, 0, 32)
+	c.ParentBeaconBlockRoot = append(c.ParentBeaconBlockRoot, sszSlice6...)
+	return err
+}
+
+func (c *BlindedExecutionPayloadEnvelopePQ) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *BlindedExecutionPayloadEnvelopePQ) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: BlockHash
+	if len(c.BlockHash) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.BlockHash)
+	// Field 1: ExecutionRequests
+	if err := c.ExecutionRequests.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("ExecutionRequests: %w", err)
+	}
+	// Field 2: BuilderIndex
+	if err := c.BuilderIndex.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("BuilderIndex: %w", err)
+	}
+	// Field 3: BeaconBlockRoot
+	if len(c.BeaconBlockRoot) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.BeaconBlockRoot)
+	// Field 4: Slot
+	if err := c.Slot.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Slot: %w", err)
+	}
+	// Field 5: ParentBlockHash
+	if len(c.ParentBlockHash) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.ParentBlockHash)
+	// Field 6: ParentBeaconBlockRoot
+	if len(c.ParentBeaconBlockRoot) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.ParentBeaconBlockRoot)
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *BuilderPQ) SizeSSZ() int {
 	size := 77
 
@@ -3459,6 +3632,100 @@ func (c *SignedBeaconBlockPQ) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	// Field 0: Block
 	if err := c.Block.HashTreeRootWith(hh); err != nil {
 		return fmt.Errorf("Block: %w", err)
+	}
+	// Field 1: Signature
+	if len(c.Signature) != 2404 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.Signature)
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *SignedBlindedExecutionPayloadEnvelopePQ) SizeSSZ() int {
+	size := 2408
+	if c.Message == nil {
+		c.Message = new(BlindedExecutionPayloadEnvelopePQ)
+	}
+	size += c.Message.SizeSSZ()
+	return size
+}
+
+func (c *SignedBlindedExecutionPayloadEnvelopePQ) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *SignedBlindedExecutionPayloadEnvelopePQ) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 2408
+
+	// Field 0: Message
+	if c.Message == nil {
+		c.Message = new(BlindedExecutionPayloadEnvelopePQ)
+	}
+	dst = ssz.WriteOffset(dst, offset)
+	offset += c.Message.SizeSSZ()
+
+	// Field 1: Signature
+	if len(c.Signature) != 2404 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.Signature...)
+
+	// Field 0: Message
+	if dst, err = c.Message.MarshalSSZTo(dst); err != nil {
+		return nil, fmt.Errorf("Message: %w", err)
+	}
+	return dst, err
+}
+
+func (c *SignedBlindedExecutionPayloadEnvelopePQ) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 2408 {
+		return ssz.ErrSize
+	}
+
+	sszSlice1 := buf[4:2408] // c.Signature
+
+	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.Message
+	if sszVarOffset0 != 2408 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset0 > size {
+		return ssz.ErrOffset
+	}
+	sszSlice0 := buf[sszVarOffset0:] // c.Message
+
+	// Field 0: Message
+	c.Message = new(BlindedExecutionPayloadEnvelopePQ)
+	if err = c.Message.UnmarshalSSZ(sszSlice0); err != nil {
+		return fmt.Errorf("Message: %w", err)
+	}
+
+	// Field 1: Signature
+	c.Signature = make([]byte, 0, 2404)
+	c.Signature = append(c.Signature, sszSlice1...)
+	return err
+}
+
+func (c *SignedBlindedExecutionPayloadEnvelopePQ) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *SignedBlindedExecutionPayloadEnvelopePQ) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Message
+	if err := c.Message.HashTreeRootWith(hh); err != nil {
+		return fmt.Errorf("Message: %w", err)
 	}
 	// Field 1: Signature
 	if len(c.Signature) != 2404 {
