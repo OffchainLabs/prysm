@@ -439,6 +439,10 @@ func (b *BeaconChainConfig) ExecutionRequestLimits() enginev1.ExecutionRequestLi
 		Consolidations:  b.MaxConsolidationsRequestsPerPayload,
 		BuilderDeposits: b.MaxBuilderDepositRequestsPerPayload,
 		BuilderExits:    b.MaxBuilderExitRequestsPerPayload,
+
+		ValidatorPreregistrations: b.MaxValidatorPreregistrationRequestsPerPayload,
+		BuilderPreregistrations:   b.MaxBuilderPreregistrationRequestsPerPayload,
+		VoluntaryExits:            b.MaxVoluntaryExitRequestsPerPayload,
 	}
 }
 

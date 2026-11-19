@@ -20,17 +20,11 @@ type pqEnvelopeCache struct {
 	envelope *ethpb.ExecutionPayloadEnvelopePQ
 }
 
-// The engine API returns Gloas requests, the PQ only request types stay empty until an execution client produces them.
-func executionRequestsPQ(r *enginev1.ExecutionRequestsGloas) *enginev1.ExecutionRequestsPQ {
-	if r == nil {
+func executionRequestsPQ(local *consensusblocks.GetPayloadResponse) *enginev1.ExecutionRequestsPQ {
+	if local.ExecutionRequestsPQ == nil {
 		return &enginev1.ExecutionRequestsPQ{}
 	}
-	return &enginev1.ExecutionRequestsPQ{
-		Deposits:        r.Deposits,
-		Withdrawals:     r.Withdrawals,
-		Consolidations:  r.Consolidations,
-		BuilderDeposits: r.BuilderDeposits,
-	}
+	return local.ExecutionRequestsPQ
 }
 
 func (vs *Server) storeExecutionPayloadEnvelopePQ(sBlk interfaces.SignedBeaconBlock, local *consensusblocks.GetPayloadResponse) error {
@@ -43,7 +37,7 @@ func (vs *Server) storeExecutionPayloadEnvelopePQ(sBlk interfaces.SignedBeaconBl
 	defer vs.pqEnvelopes.mu.Unlock()
 	vs.pqEnvelopes.envelope = &ethpb.ExecutionPayloadEnvelopePQ{
 		Payload:               extractExecutionPayloadGloas(local),
-		ExecutionRequests:     executionRequestsPQ(local.ExecutionRequestsGloas),
+		ExecutionRequests:     executionRequestsPQ(local),
 		BuilderIndex:          params.BeaconConfig().BuilderIndexSelfBuild,
 		BeaconBlockRoot:       blockRoot[:],
 		ParentBeaconBlockRoot: parentRoot[:],

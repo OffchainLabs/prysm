@@ -44,7 +44,7 @@ func (vs *Server) buildBlockPQ(ctx context.Context, sBlk interfaces.SignedBeacon
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not create execution payload bid: %v", err)
 	}
-	requestsRoot, err := executionRequestsPQ(local.ExecutionRequestsGloas).HashTreeRoot()
+	requestsRoot, err := executionRequestsPQ(local).HashTreeRoot()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not hash execution requests: %v", err)
 	}
