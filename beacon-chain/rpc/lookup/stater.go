@@ -343,7 +343,6 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 // written. A miss is not an error: the caller falls back to replaying.
 func (p *BeaconDbStater) stateFromDiffTree(ctx context.Context, target primitives.Slot) (state.BeaconState, bool) {
 	if p.BeaconDB == nil || !features.Get().EnableStateDiff {
-		stateFromDiffTreeMiss.WithLabelValues(missDisabled).Inc()
 		return nil, false
 	}
 	_, lvl, err := p.BeaconDB.SlotInDiffTree(target)
@@ -363,9 +362,9 @@ func (p *BeaconDbStater) stateFromDiffTree(ctx context.Context, target primitive
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			stateFromDiffTreeMiss.WithLabelValues(missNotFound).Inc()
-		} else {
-			stateFromDiffTreeMiss.WithLabelValues(missError).Inc()
+			return nil, false
 		}
+		stateFromDiffTreeMiss.WithLabelValues(missError).Inc()
 		return nil, false
 	}
 	if st == nil || st.IsNil() {

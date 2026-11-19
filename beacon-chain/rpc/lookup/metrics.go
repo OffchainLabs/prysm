@@ -8,7 +8,6 @@ import (
 const (
 	pathDiffTree         = "diff_tree"
 	pathReplay           = "replay"
-	missDisabled         = "disabled"
 	missNotBoundary      = "not_boundary"
 	missSlotBeforeOffset = "slot_before_offset"
 	missNotFound         = "not_found"
@@ -35,7 +34,7 @@ var (
 )
 
 func init() {
-	for _, reason := range []string{missDisabled, missNotBoundary, missSlotBeforeOffset, missNotFound, missError, missNilState} {
+	for _, reason := range []string{missNotBoundary, missSlotBeforeOffset, missNotFound, missError, missNilState} {
 		stateFromDiffTreeMiss.WithLabelValues(reason)
 	}
 }

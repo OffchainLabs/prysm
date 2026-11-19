@@ -604,8 +604,8 @@ func TestStateBySlot_DiffTreeMetrics(t *testing.T) {
 	}{
 		{name: "tree hit", enabled: true, db: &diffTreeLookupDB{level: 0, readState: treeState}, path: pathDiffTree, wantState: treeState},
 		{name: "non-boundary", enabled: true, db: &diffTreeLookupDB{level: -1}, missReason: missNotBoundary, path: pathReplay, wantState: replayedState},
-		{name: "feature disabled", db: &diffTreeLookupDB{level: 0, readState: treeState}, missReason: missDisabled, path: pathReplay, wantState: replayedState},
-		{name: "no database", enabled: true, missReason: missDisabled, path: pathReplay, wantState: replayedState},
+		{name: "feature disabled", db: &diffTreeLookupDB{level: 0, readState: treeState}, missReason: "", path: pathReplay, wantState: replayedState},
+		{name: "no database", enabled: true, missReason: "", path: pathReplay, wantState: replayedState},
 		{name: "slot before offset", enabled: true, db: &diffTreeLookupDB{slotErr: errors.Wrap(db.ErrSlotBeforeOffset, "before offset")}, missReason: missSlotBeforeOffset, path: pathReplay, wantState: replayedState},
 		{name: "slot lookup error", enabled: true, db: &diffTreeLookupDB{slotErr: errors.New("slot lookup failed")}, missReason: missError, path: pathReplay, wantState: replayedState},
 		// kv wraps ErrNotFoundState for missing diffs and missing snapshots.
@@ -636,7 +636,7 @@ func TestStateBySlot_DiffTreeMetrics(t *testing.T) {
 				ReplayerBuilder:    replayer,
 			}
 			paths := []string{pathDiffTree, pathReplay}
-			reasons := []string{missDisabled, missNotBoundary, missSlotBeforeOffset, missNotFound, missError, missNilState}
+			reasons := []string{missNotBoundary, missSlotBeforeOffset, missNotFound, missError, missNilState}
 			beforePaths := make(map[string]uint64, len(paths))
 			beforeMisses := make(map[string]float64, len(reasons))
 			for _, path := range paths {
