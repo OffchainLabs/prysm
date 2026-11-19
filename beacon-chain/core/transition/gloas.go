@@ -69,7 +69,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 
 	bb := block.Body()
 	var exitInfo *v.ExitInfo
-	hasSlashings := len(bb.ProposerSlashings()) > 0 || len(bb.AttesterSlashings()) > 0
+	hasSlashings := len(bb.ProposerSlashings()) > 0 || len(bb.ProposerSlashingsPQ()) > 0 || len(bb.AttesterSlashings()) > 0
 	hasExits := len(bb.VoluntaryExits()) > 0
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
@@ -79,6 +79,10 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 		}
 	}
 	st, err = blocks.ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo)
+	if err != nil {
+		return nil, errors.Wrap(ErrProcessProposerSlashingsFailed, err.Error())
+	}
+	st, err = blocks.ProcessProposerSlashingsPQ(ctx, st, bb.ProposerSlashingsPQ(), exitInfo)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessProposerSlashingsFailed, err.Error())
 	}

@@ -13,6 +13,7 @@ go_library(
         "log.go",
         "payload.go",
         "proposer_slashing.go",
+        "proposer_slashing_pq.go",
         "randao.go",
         "signature.go",
         "withdrawals.go",
@@ -21,6 +22,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/pq:go_default_library",
         "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/time:go_default_library",
         "//beacon-chain/core/validators:go_default_library",

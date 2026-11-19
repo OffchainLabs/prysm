@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -265,6 +266,12 @@ func VerifyIndexedAttestation(ctx context.Context, beaconState state.ReadOnlyBea
 	ctx, span := trace.StartSpan(ctx, "core.VerifyIndexedAttestation")
 	defer span.End()
 
+	if pqAtt, ok := indexedAtt.(*ethpb.IndexedAttestationPQ); ok {
+		if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlotPQ); err != nil {
+			return err
+		}
+		return pq.VerifyIndexedAttestationProof(beaconState, pqAtt)
+	}
 	if err := attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot); err != nil {
 		return err
 	}
