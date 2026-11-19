@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -14,9 +15,15 @@ import (
 
 // SaveHotStateSnapshot saves a hot (unfinalized) state to the hot state snapshots bucket.
 // This should be only used in state diff mode in long non finalization.
-func (s *Store) SaveHotStateSnapshot(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
+func (s *Store) SaveHotStateSnapshot(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) (err error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveHotStateSnapshot")
 	defer span.End()
+	start := time.Now()
+	defer func() {
+		if err == nil {
+			stateDiffHotSnapshotTime.WithLabelValues("save_hot").Observe(msSince(start))
+		}
+	}()
 
 	compressedEnc, err := encodeHotStateSnapshot(st)
 	if err != nil {
@@ -103,9 +110,15 @@ func (s *Store) DeleteHotStateSnapshots(ctx context.Context, blockRoots [][32]by
 	})
 }
 
-func (s *Store) ClearHotStateSnapshots(ctx context.Context) error {
+func (s *Store) ClearHotStateSnapshots(ctx context.Context) (err error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.ClearHotStateSnapshots")
 	defer span.End()
+	start := time.Now()
+	defer func() {
+		if err == nil {
+			stateDiffHotSnapshotTime.WithLabelValues("clear").Observe(msSince(start))
+		}
+	}()
 
 	return s.db.Update(func(tx *bolt.Tx) error {
 		if tx.Bucket(hotStateSnapshotsBucket) == nil {
@@ -132,9 +145,16 @@ func encodeHotStateSnapshot(st state.ReadOnlyBeaconState) ([]byte, error) {
 	return enc, nil
 }
 
-func (s *Store) SaveArchiveResumeSnapshot(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) error {
+func (s *Store) SaveArchiveResumeSnapshot(ctx context.Context, st state.ReadOnlyBeaconState, blockRoot [32]byte) (err error) {
 	_, span := trace.StartSpan(ctx, "BeaconDB.SaveArchiveResumeSnapshot")
 	defer span.End()
+	start := time.Now()
+	wrote := false
+	defer func() {
+		if err == nil && wrote {
+			stateDiffHotSnapshotTime.WithLabelValues("save_archive_resume").Observe(msSince(start))
+		}
+	}()
 
 	compressedEnc, err := encodeHotStateSnapshot(st)
 	if err != nil {
@@ -153,7 +173,11 @@ func (s *Store) SaveArchiveResumeSnapshot(ctx context.Context, st state.ReadOnly
 		if err := hot.Put(blockRoot[:], compressedEnc); err != nil {
 			return err
 		}
-		return tracked.Put(blockRoot[:], []byte{1})
+		if err := tracked.Put(blockRoot[:], []byte{1}); err != nil {
+			return err
+		}
+		wrote = true
+		return nil
 	})
 }
 

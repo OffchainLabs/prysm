@@ -110,6 +110,7 @@ func (s *Store) DeleteStateDiffBeforeSlot(ctx context.Context, cutoffSlot primit
 		if err := s.deleteStateDiffKeys(keys); err != nil {
 			return 0, fmt.Errorf("delete state diff keys: %w", err)
 		}
+		stateDiffPrunedKeys.Add(float64(len(keys)))
 
 		return len(keys), nil
 	}
@@ -264,6 +265,9 @@ func (s *Store) reanchorStateDiff(previousAnchorKey []byte, offset uint64) (int,
 	}); err != nil {
 		return 0, err
 	}
+	stateDiffPrunedKeys.Add(float64(deleted))
+	stateDiffReanchors.Inc()
+	setOffsetGauge(offset)
 
 	if err := s.reanchorStateDiffCache(offset); err != nil {
 		return deleted, fmt.Errorf("reanchor state diff cache: %w", err)
