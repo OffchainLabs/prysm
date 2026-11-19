@@ -126,10 +126,15 @@ func IsSyncing(
 		httputil.WriteError(w, errJson)
 		return true
 	}
+	currentSlot := timeFetcher.CurrentSlot()
+	var syncDistance uint64
+	if currentSlot > headSlot {
+		syncDistance = uint64(currentSlot - headSlot)
+	}
 	syncDetails := &structs.SyncDetailsContainer{
 		Data: &structs.SyncDetails{
 			HeadSlot:     strconv.FormatUint(uint64(headSlot), 10),
-			SyncDistance: strconv.FormatUint(uint64(timeFetcher.CurrentSlot()-headSlot), 10),
+			SyncDistance: strconv.FormatUint(syncDistance, 10),
 			IsSyncing:    true,
 			IsOptimistic: isOptimistic,
 		},

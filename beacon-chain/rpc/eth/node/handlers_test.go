@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strconv"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -25,7 +26,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
-	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -38,38 +38,42 @@ func (_ dummyIdentity) Verify(_ *enr.Record, _ []byte) error { return nil }
 func (id dummyIdentity) NodeAddr(_ *enr.Record) []byte       { return id[:] }
 
 func TestSyncStatus(t *testing.T) {
-	currentSlot := new(primitives.Slot)
-	*currentSlot = 110
-	state, err := util.NewBeaconState()
-	require.NoError(t, err)
-	err = state.SetSlot(100)
-	require.NoError(t, err)
-	chainService := &mock.ChainService{Slot: currentSlot, State: state, Optimistic: true}
-	syncChecker := &syncmock.Sync{}
-	syncChecker.IsSyncing = true
-
-	s := &Server{
-		HeadFetcher:               chainService,
-		GenesisTimeFetcher:        chainService,
-		OptimisticModeFetcher:     chainService,
-		SyncChecker:               syncChecker,
-		ExecutionChainInfoFetcher: &testutil.MockExecutionChainInfoFetcher{},
+	tests := []struct {
+		name         string
+		headSlot     primitives.Slot
+		syncDistance string
+	}{
+		{name: "head behind current slot", headSlot: 100, syncDistance: "10"},
+		{name: "head at current slot", headSlot: 110, syncDistance: "0"},
+		{name: "head ahead of current slot", headSlot: 111, syncDistance: "0"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			currentSlot := primitives.Slot(110)
+			chainService := &mock.ChainService{Slot: &currentSlot, MockHeadSlot: &tt.headSlot, Optimistic: true}
+			s := &Server{
+				HeadFetcher:               chainService,
+				GenesisTimeFetcher:        chainService,
+				OptimisticModeFetcher:     chainService,
+				SyncChecker:               &syncmock.Sync{IsSyncing: true},
+				ExecutionChainInfoFetcher: &testutil.MockExecutionChainInfoFetcher{},
+			}
 
-	request := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
-	writer := httptest.NewRecorder()
-	writer.Body = &bytes.Buffer{}
+			request := httptest.NewRequest(http.MethodGet, "/eth/v1/node/syncing", nil)
+			writer := httptest.NewRecorder()
+			s.GetSyncStatus(writer, request)
 
-	s.GetSyncStatus(writer, request)
-	assert.Equal(t, http.StatusOK, writer.Code)
-	resp := &structs.SyncStatusResponse{}
-	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
-	require.NotNil(t, resp)
-	assert.Equal(t, "100", resp.Data.HeadSlot)
-	assert.Equal(t, "10", resp.Data.SyncDistance)
-	assert.Equal(t, true, resp.Data.IsSyncing)
-	assert.Equal(t, true, resp.Data.IsOptimistic)
-	assert.Equal(t, false, resp.Data.ElOffline)
+			assert.Equal(t, http.StatusOK, writer.Code)
+			resp := &structs.SyncStatusResponse{}
+			require.NoError(t, json.Unmarshal(writer.Body.Bytes(), resp))
+			require.NotNil(t, resp.Data)
+			assert.Equal(t, strconv.FormatUint(uint64(tt.headSlot), 10), resp.Data.HeadSlot)
+			assert.Equal(t, tt.syncDistance, resp.Data.SyncDistance)
+			assert.Equal(t, true, resp.Data.IsSyncing)
+			assert.Equal(t, true, resp.Data.IsOptimistic)
+			assert.Equal(t, false, resp.Data.ElOffline)
+		})
+	}
 }
 
 func TestGetVersion(t *testing.T) {
