@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -39,6 +40,9 @@ func NewClient(host string, opts ...ClientOpt) (*Client, error) {
 	}
 	for _, o := range opts {
 		o(c)
+	}
+	if c.maxBodySize < 0 {
+		return nil, errors.New("max body size must not be negative")
 	}
 	return c, nil
 }
@@ -97,9 +101,16 @@ func (c *Client) Get(ctx context.Context, path string, opts ...ReqOption) ([]byt
 	if r.StatusCode != http.StatusOK {
 		return nil, Non200Err(r)
 	}
-	b, err := io.ReadAll(io.LimitReader(r.Body, c.maxBodySize))
+	readLimit := c.maxBodySize
+	if readLimit < math.MaxInt64 {
+		readLimit++
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, readLimit))
 	if err != nil {
 		return nil, errors.Wrap(err, "error reading http response body")
+	}
+	if int64(len(b)) > c.maxBodySize {
+		return nil, errors.Wrapf(ErrResponseBodyTooLarge, "limit %d bytes", c.maxBodySize)
 	}
 	return b, nil
 }
