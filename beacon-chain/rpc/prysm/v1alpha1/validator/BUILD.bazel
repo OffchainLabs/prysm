@@ -7,6 +7,7 @@ go_library(
     srcs = [
         "aggregator.go",
         "attester.go",
+        "aggregator_pq.go",
         "attester_pq.go",
         "blocks.go",
         "builder_preferences.go",
