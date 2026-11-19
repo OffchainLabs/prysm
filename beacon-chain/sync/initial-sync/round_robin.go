@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/das"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -382,6 +383,14 @@ func (s *Service) processBlock(
 	if !s.cfg.Chain.HasBlock(ctx, blk.Block().ParentRoot()) {
 		return fmt.Errorf("%w: (in processBlock, slot=%d) %#x", errParentDoesNotExist, blk.Block().Slot(), blk.Block().ParentRoot())
 	}
+	// The state transition does not check the proposer signature, so check it here.
+	headState, err := s.cfg.Chain.HeadStateReadOnly(ctx)
+	if err != nil {
+		return errors.Wrap(err, "head state")
+	}
+	if err := coreblocks.VerifyBlockSignatureUsingCurrentFork(headState, blk, blkRoot); err != nil {
+		return errors.Wrapf(err, "verify proposer signature (slot=%d, root=%#x)", blk.Block().Slot(), blkRoot)
+	}
 	return blockReceiver(ctx, blk, blkRoot, avs)
 }
 
@@ -563,7 +572,7 @@ func (s *Service) processBlocksWithDataColumns(ctx context.Context, bwbs []block
 }
 
 func isPunishableError(err error) bool {
-	return errors.Is(err, verification.ErrInvalid)
+	return errors.Is(err, verification.ErrInvalid) || errors.Is(err, coreblocks.ErrInvalidSignature)
 }
 
 // updatePeerScorerStats adjusts monitored metrics for a peer.
