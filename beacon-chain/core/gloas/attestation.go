@@ -3,6 +3,7 @@ package gloas
 import (
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -45,7 +46,14 @@ func MatchingPayload(
 		return true, nil
 	}
 
-	executionPayloadAvail, err := beaconState.ExecutionPayloadAvailability(parentSlot)
+	blockSlot := parentSlot
+	if beaconState.Version() == version.PQ {
+		blockSlot, err = pq.LatestBlockSlot(beaconState, dataSlot, parentSlot)
+		if err != nil {
+			return false, errors.Wrap(err, "failed to get latest block slot")
+		}
+	}
+	executionPayloadAvail, err := beaconState.ExecutionPayloadAvailability(blockSlot)
 	if err != nil {
 		return false, errors.Wrap(err, "failed to get execution payload availability status")
 	}

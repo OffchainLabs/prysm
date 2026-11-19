@@ -87,12 +87,17 @@ func VerifyAttestationNoVerifySignature(
 	}
 
 	s := att.GetData().Slot
-	minInclusionCheck := s+params.BeaconConfig().MinAttestationInclusionDelay <= beaconState.Slot()
-	if !minInclusionCheck {
+	minInclusionDelay := params.BeaconConfig().MinAttestationInclusionDelay
+	maxCommittees := params.BeaconConfig().MaxCommitteesPerSlot
+	if beaconState.Version() == version.PQ {
+		minInclusionDelay = params.BeaconConfig().MinAttestationInclusionDelayPQ
+		maxCommittees = params.BeaconConfig().MaxCommitteesPerSlotPQ
+	}
+	if s+minInclusionDelay > beaconState.Slot() {
 		return fmt.Errorf(
 			"attestation slot %d + inclusion delay %d > state slot %d",
 			s,
-			params.BeaconConfig().MinAttestationInclusionDelay,
+			minInclusionDelay,
 			beaconState.Slot(),
 		)
 	}
@@ -195,7 +200,7 @@ func VerifyAttestationNoVerifySignature(
 		}
 	}
 
-	return attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, params.BeaconConfig().MaxCommitteesPerSlot)
+	return attestation.IsValidAttestationIndices(ctx, indexedAtt, params.BeaconConfig().MaxValidatorsPerCommittee, maxCommittees)
 }
 
 // ProcessAttestationNoVerifySignature processes the attestation without verifying the attestation signature. This
