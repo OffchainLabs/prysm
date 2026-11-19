@@ -23,6 +23,7 @@ go_library(
         "options.go",
         "origin_orphan.go",
         "pending_attestations_queue.go",
+        "pending_attestations_queue_pq.go",
         "pending_blocks_queue.go",
         "pending_payload_attestation.go",
         "pending_payload_envelope.go",
