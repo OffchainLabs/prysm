@@ -9,6 +9,7 @@ import (
 	b "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -176,6 +177,10 @@ func processBlockForProposing(ctx context.Context, st state.BeaconState, signed 
 	if err != nil {
 		return nil, err
 	}
+	// An empty BLS batch verifies as false.
+	if signed.Block().Version() == version.PQ {
+		return st, nil
+	}
 	// We first try to verify all sigantures batched optimistically. We ignore block proposer signature.
 	sigSet := set.Batch()
 	valid, err := sigSet.Verify()
@@ -283,6 +288,17 @@ func ProcessBlockNoVerifyAnySig(
 	st, err := ProcessBlockForStateRoot(ctx, st, signed)
 	if err != nil {
 		return set, nil, err
+	}
+
+	if blk.Version() == version.PQ {
+		proposer, err := helpers.BeaconProposerIndex(ctx, st)
+		if err != nil {
+			return set, nil, err
+		}
+		if err := pq.VerifyVRFProof(st, proposer, st.Slot(), blk.Body().VRFProof()); err != nil {
+			return set, nil, errors.Wrap(ErrRandaoSignatureInvalid, err.Error())
+		}
+		return set, st, nil
 	}
 
 	randaoReveal := signed.Block().Body().RandaoReveal()
@@ -490,11 +506,17 @@ func ProcessBlockForStateRoot(
 		}
 	}
 
-	randaoReveal := signed.Block().Body().RandaoReveal()
-	state, err = b.ProcessRandaoNoVerify(state, randaoReveal[:])
-	if err != nil {
-		tracing.AnnotateError(span, err)
-		return nil, errors.Wrap(ErrProcessRandaoFailed, err.Error())
+	if blk.Version() == version.PQ {
+		if err := pq.MixInVRFProof(state, body.VRFProof()); err != nil {
+			return nil, errors.Wrap(ErrProcessRandaoFailed, err.Error())
+		}
+	} else {
+		randaoReveal := signed.Block().Body().RandaoReveal()
+		state, err = b.ProcessRandaoNoVerify(state, randaoReveal[:])
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return nil, errors.Wrap(ErrProcessRandaoFailed, err.Error())
+		}
 	}
 
 	state, err = b.ProcessEth1DataInBlock(ctx, state, signed.Block().Body().Eth1Data())
@@ -509,7 +531,7 @@ func ProcessBlockForStateRoot(
 		return nil, errors.Wrap(err, "could not process block operation")
 	}
 
-	if signed.Block().Version() == version.Phase0 {
+	if signed.Block().Version() == version.Phase0 || signed.Block().Version() == version.PQ {
 		return state, nil
 	}
 
