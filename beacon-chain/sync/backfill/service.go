@@ -121,7 +121,13 @@ func WithVerifierWaiter(viw InitializerWaiter) ServiceOption {
 func WithSyncNeedsWaiter(f func() (das.SyncNeeds, error)) ServiceOption {
 	return func(s *Service) error {
 		if f != nil {
-			s.syncNeedsWaiter = f
+			s.syncNeedsWaiter = func() (das.SyncNeeds, error) {
+				needs, err := f()
+				if err == nil {
+					backfillTargetSlot.Set(float64(needs.Currently().Block.Begin))
+				}
+				return needs, err
+			}
 		}
 		return nil
 	}
@@ -188,6 +194,7 @@ func (s *Service) importBatches(ctx context.Context) {
 			break
 		}
 		// Calling update with state=batchImportComplete will advance the batch list.
+		backfillBlocksImported.Add(float64(len(ib.blocks)))
 		s.batchSeq.update(ib.withState(batchImportComplete))
 		imported += 1
 		log.WithFields(ib.logFields()).WithField("batchesRemaining", s.batchSeq.numTodo()).Debug("Imported batch")
@@ -204,6 +211,7 @@ func (s *Service) importBatches(ctx context.Context) {
 func (s *Service) logProgress() {
 	status := s.store.status()
 	target := s.syncNeeds.Currently().Block.Begin
+	backfillTargetSlot.Set(float64(target))
 	lowest := primitives.Slot(status.LowSlot)
 	origin := primitives.Slot(status.OriginSlot)
 
@@ -407,6 +415,7 @@ func newDataColumnVerifierFromInitializer(ini *verification.Initializer) verific
 }
 
 func (s *Service) markComplete() {
+	backfillComplete.Set(1)
 	close(s.complete)
 	log.Info("Marked as complete")
 }

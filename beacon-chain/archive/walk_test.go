@@ -19,6 +19,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func TestNextBoundary(t *testing.T) {
@@ -62,7 +64,18 @@ func TestWalk_SavesEveryBoundaryIncludingSkippedSlots(t *testing.T) {
 	want := buildChain(t, ctx, store, genesisState, keys, target, map[primitives.Slot]bool{2 * slotsPerEpoch: true})
 
 	svc := newTestService(t, store)
+	replayBefore := archiveMetric(t, boundaryMilliseconds.WithLabelValues("replay").(prometheus.Metric)).GetHistogram().GetSampleCount()
+	saveBefore := archiveMetric(t, boundaryMilliseconds.WithLabelValues("save").(prometheus.Metric)).GetHistogram().GetSampleCount()
+	matchBefore := archiveMetric(t, stateRootChecks.WithLabelValues("match")).GetCounter().GetValue()
+	buckets := archiveMetric(t, boundaryMilliseconds.WithLabelValues("replay").(prometheus.Metric)).GetHistogram().GetBucket()
+	require.Equal(t, len(archiveBoundaryMillisecondsBuckets), len(buckets))
+	for i, bucket := range buckets {
+		require.Equal(t, archiveBoundaryMillisecondsBuckets[i], bucket.GetUpperBound())
+	}
 	require.NoError(t, svc.walk(ctx, target))
+	require.Equal(t, uint64(3), archiveMetric(t, boundaryMilliseconds.WithLabelValues("replay").(prometheus.Metric)).GetHistogram().GetSampleCount()-replayBefore)
+	require.Equal(t, uint64(3), archiveMetric(t, boundaryMilliseconds.WithLabelValues("save").(prometheus.Metric)).GetHistogram().GetSampleCount()-saveBefore)
+	require.Equal(t, float64(1), archiveMetric(t, stateRootChecks.WithLabelValues("match")).GetCounter().GetValue()-matchBefore)
 
 	as, err := store.ArchiveStatus(ctx)
 	require.NoError(t, err)
@@ -76,6 +89,58 @@ func TestWalk_SavesEveryBoundaryIncludingSkippedSlots(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want[slot], gotRoot, "state at boundary slot %d differs", slot)
 	}
+}
+
+func TestReplayBlock_VerificationInterval(t *testing.T) {
+	ctx := t.Context()
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	blk, err := util.GenerateFullBlock(genesisState.Copy(), keys, util.DefaultBlockGenConfig(), 1)
+	require.NoError(t, err)
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name        string
+		sinceVerify int
+		checks      float64
+	}{
+		{name: "not yet due", sinceVerify: 0, checks: 0},
+		{name: "periodic check", sinceVerify: verifyEveryNBlocks - 1, checks: 1},
+		{name: "first block of walk", sinceVerify: verifyEveryNBlocks, checks: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := archiveMetric(t, stateRootChecks.WithLabelValues("match")).GetCounter().GetValue()
+			_, _, err := replayBlock(ctx, genesisState.Copy(), signed, tc.sinceVerify)
+			require.NoError(t, err)
+			require.Equal(t, tc.checks, archiveMetric(t, stateRootChecks.WithLabelValues("match")).GetCounter().GetValue()-before)
+		})
+	}
+}
+
+type failingArchiveStatusDatabase struct{ Database }
+
+func (*failingArchiveStatusDatabase) SaveArchiveStatus(context.Context, *kv.ArchiveStatus) error {
+	return errors.New("status write failed")
+}
+
+func TestWalk_FailedStatusWriteDoesNotObserveBoundary(t *testing.T) {
+	setStateDiffExponents([]int{11, 9, 5})
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})
+	defer resetCfg()
+
+	ctx := t.Context()
+	store := testDB.SetupDB(t).(*kv.Store)
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, store.InitializeArchiveOrigin(ctx, genesisState))
+	buildChain(t, ctx, store, genesisState, keys, 32, nil)
+
+	svc := newTestService(t, store)
+	svc.db = &failingArchiveStatusDatabase{Database: store}
+	replayBefore := archiveMetric(t, boundaryMilliseconds.WithLabelValues("replay").(prometheus.Metric)).GetHistogram().GetSampleCount()
+	saveBefore := archiveMetric(t, boundaryMilliseconds.WithLabelValues("save").(prometheus.Metric)).GetHistogram().GetSampleCount()
+	require.ErrorContains(t, "status write failed", svc.walk(ctx, 32))
+	require.Equal(t, replayBefore, archiveMetric(t, boundaryMilliseconds.WithLabelValues("replay").(prometheus.Metric)).GetHistogram().GetSampleCount())
+	require.Equal(t, saveBefore, archiveMetric(t, boundaryMilliseconds.WithLabelValues("save").(prometheus.Metric)).GetHistogram().GetSampleCount())
 }
 
 // A resumed walk must pick up from the recorded frontier and produce the same tree as an uninterrupted run.
@@ -201,6 +266,21 @@ func TestWalk_RejectsWrongOriginState(t *testing.T) {
 	// The replay cannot succeed: the block commits to a state root derived from the real origin, so either the
 	// header's parent-root check or the state-root check rejects it.
 	require.NotNil(t, newTestService(t, store).walk(ctx, slotsPerEpoch))
+}
+
+func TestReplayBlock_RejectsMismatchedStateRoot(t *testing.T) {
+	ctx := t.Context()
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	blk, err := util.GenerateFullBlock(genesisState.Copy(), keys, util.DefaultBlockGenConfig(), 1)
+	require.NoError(t, err)
+	blk.Block.StateRoot[0] ^= 1
+	signed, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+
+	before := archiveMetric(t, stateRootChecks.WithLabelValues("mismatch")).GetCounter().GetValue()
+	_, _, err = replayBlock(ctx, genesisState.Copy(), signed, verifyEveryNBlocks)
+	require.ErrorContains(t, "replayed state root", err)
+	require.Equal(t, float64(1), archiveMetric(t, stateRootChecks.WithLabelValues("mismatch")).GetCounter().GetValue()-before)
 }
 
 func newTestService(t *testing.T, store *kv.Store) *Service {

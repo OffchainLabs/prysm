@@ -9,6 +9,34 @@ import (
 )
 
 var (
+	backfillLowSlot = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "backfill_low_slot",
+			Help: "Lowest slot imported by backfill.",
+		},
+	)
+	backfillOriginSlot = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "backfill_origin_slot",
+			Help: "Slot backfill started from (the sync origin).",
+		},
+	)
+	backfillTargetSlot = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "backfill_target_slot",
+			Help: "Lowest slot backfill must reach.",
+		},
+	)
+	backfillBlocksImported = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "backfill_blocks_imported_total",
+		Help: "Blocks imported by backfill.",
+	})
+	backfillComplete = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "backfill_complete",
+			Help: "Whether backfill has marked itself complete (also set when backfill stops on a fatal error).",
+		},
+	)
 	oldestBatch = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "backfill_earliest_wip_slot",

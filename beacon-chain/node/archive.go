@@ -76,6 +76,7 @@ func (b *BeaconNode) finalizeArchiveOrigin(ctx context.Context, st state.BeaconS
 		return errors.Wrap(err, "could not read the archive status just written")
 	}
 	b.archiveRegenPending = !as.Complete
+	archive.ReportStatus(as)
 	log.WithFields(logrus.Fields{
 		"originSlot":             st.Slot(),
 		"originEpoch":            slots.ToEpoch(st.Slot()),

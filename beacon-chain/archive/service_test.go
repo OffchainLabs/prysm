@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -14,7 +15,29 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
+
+func archiveMetric(t *testing.T, metric prometheus.Metric) *dto.Metric {
+	t.Helper()
+	m := new(dto.Metric)
+	require.NoError(t, metric.Write(m))
+	return m
+}
+
+func TestReportStatus(t *testing.T) {
+	setPhase("")
+	ReportStatus(&kv.ArchiveStatus{OriginSlot: 32, RegeneratedThroughSlot: 64})
+	require.Equal(t, float64(32), archiveMetric(t, archiveOriginSlot).GetGauge().GetValue())
+	require.Equal(t, float64(64), archiveMetric(t, regeneratedThroughSlot).GetGauge().GetValue())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("complete")).GetGauge().GetValue())
+
+	ReportStatus(&kv.ArchiveStatus{OriginSlot: 64, RegeneratedThroughSlot: 128, Complete: true})
+	require.Equal(t, float64(64), archiveMetric(t, archiveOriginSlot).GetGauge().GetValue())
+	require.Equal(t, float64(128), archiveMetric(t, regeneratedThroughSlot).GetGauge().GetValue())
+	require.Equal(t, float64(1), archiveMetric(t, regenerationPhase.WithLabelValues("complete")).GetGauge().GetValue())
+}
 
 // A round walks to the finalized epoch start and then offers the handoff. The handoff is offered with the
 // first boundary the walk has *not* written, which is what stategen compares against the finalized slot.
@@ -69,6 +92,8 @@ func TestRound_WalksThenOffersHandoff(t *testing.T) {
 	done, err = svc.round(ctx)
 	require.NoError(t, err)
 	require.Equal(t, true, done)
+	require.Equal(t, float64(1), archiveMetric(t, regenerationPhase.WithLabelValues("complete")).GetGauge().GetValue())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("walking")).GetGauge().GetValue())
 	persisted, err := store.ArchiveStatus(ctx)
 	require.NoError(t, err)
 	require.Equal(t, true, persisted.Complete)
@@ -127,6 +152,7 @@ func TestStop_UnblocksBackfillWait(t *testing.T) {
 	})
 	go svc.Start()
 	<-waiting
+	require.Equal(t, float64(1), archiveMetric(t, regenerationPhase.WithLabelValues("waiting_for_backfill")).GetGauge().GetValue())
 
 	stopped := make(chan error, 1)
 	go func() {
@@ -138,6 +164,85 @@ func TestStop_UnblocksBackfillWait(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Stop did not return while the service was waiting for backfill")
 	}
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("waiting_for_backfill")).GetGauge().GetValue())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("complete")).GetGauge().GetValue())
+}
+
+func TestStart_ResumesAndCountsFailedRounds(t *testing.T) {
+	setStateDiffExponents([]int{11, 9, 5})
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})
+	defer resetCfg()
+
+	ctx := t.Context()
+	store := testDB.SetupDB(t).(*kv.Store)
+	genesisState, keys := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, store.InitializeArchiveOrigin(ctx, genesisState))
+	buildChain(t, ctx, store, genesisState, keys, 96, nil)
+	require.NoError(t, newTestService(t, store).walk(ctx, 96))
+	as, err := store.ArchiveStatus(ctx)
+	require.NoError(t, err)
+	require.Equal(t, primitives.Slot(96), as.RegeneratedThroughSlot)
+	as.OriginSlot = 32
+	require.NoError(t, store.SaveArchiveStatus(ctx, as))
+
+	cs := startup.NewClockSynchronizer()
+	require.NoError(t, cs.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+	waiting := make(chan struct{})
+	unblock := make(chan struct{})
+	svc := New(ctx, store, &mockStateManager{pending: true, handoff: true, markErr: errors.New("handoff failed")}, cs, func() error {
+		close(waiting)
+		<-unblock
+		return nil
+	})
+	before := archiveMetric(t, roundFailures).GetCounter().GetValue()
+	archiveOriginSlot.Set(-1)
+	regeneratedThroughSlot.Set(-1)
+	// The handoff fails after the waiter releases.
+	go svc.Start()
+	<-waiting
+	require.Equal(t, float64(as.OriginSlot), archiveMetric(t, archiveOriginSlot).GetGauge().GetValue())
+	require.Equal(t, float64(as.RegeneratedThroughSlot), archiveMetric(t, regeneratedThroughSlot).GetGauge().GetValue())
+	require.Equal(t, float64(1), archiveMetric(t, regenerationPhase.WithLabelValues("waiting_for_backfill")).GetGauge().GetValue())
+	close(unblock)
+	require.Eventually(t, func() bool {
+		return archiveMetric(t, roundFailures).GetCounter().GetValue() >= before+1
+	}, 5*time.Second, 10*time.Millisecond)
+	require.Equal(t, float64(1), archiveMetric(t, regenerationPhase.WithLabelValues("walking")).GetGauge().GetValue())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("waiting_for_backfill")).GetGauge().GetValue())
+	require.NoError(t, svc.Stop())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("walking")).GetGauge().GetValue())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("complete")).GetGauge().GetValue())
+}
+
+type cancelOnTargetDatabase struct {
+	Database
+	cancel context.CancelFunc
+}
+
+func (d *cancelOnTargetDatabase) FinalizedCheckpoint(ctx context.Context) (*ethpb.Checkpoint, error) {
+	d.cancel()
+	return nil, ctx.Err()
+}
+
+func TestStart_DoesNotCountCanceledRound(t *testing.T) {
+	setStateDiffExponents([]int{11, 9, 5})
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true, EnableArchive: true})
+	defer resetCfg()
+
+	ctx := t.Context()
+	store := testDB.SetupDB(t).(*kv.Store)
+	genesisState, _ := util.DeterministicGenesisState(t, 64)
+	require.NoError(t, store.InitializeArchiveOrigin(ctx, genesisState))
+	cs := startup.NewClockSynchronizer()
+	require.NoError(t, cs.SetClock(startup.NewClock(time.Now(), [32]byte{})))
+	db := &cancelOnTargetDatabase{Database: store}
+	svc := New(ctx, db, &mockStateManager{pending: true}, cs, nil)
+	db.cancel = svc.cancel
+	before := archiveMetric(t, roundFailures).GetCounter().GetValue()
+	svc.Start()
+	require.Equal(t, before, archiveMetric(t, roundFailures).GetCounter().GetValue())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("walking")).GetGauge().GetValue())
+	require.Equal(t, float64(0), archiveMetric(t, regenerationPhase.WithLabelValues("waiting_for_backfill")).GetGauge().GetValue())
 }
 
 func TestRound_NoHandoffBeforeOriginIsVerified(t *testing.T) {
