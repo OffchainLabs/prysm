@@ -308,8 +308,8 @@ func (s *Service) processPQAttestations(ctx context.Context, disparity time.Dura
 	for _, a := range s.cfg.PQAttPool.TakeForkchoice() {
 		if err := s.OnAttestation(ctx, a, disparity); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
-				"slot":     a.Data.Slot,
-				"attester": a.AttesterIndex,
+				"slot":   a.GetData().Slot,
+				"single": a.IsSingle(),
 			}).Debug("Could not process attestation for fork choice")
 		}
 	}

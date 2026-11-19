@@ -22,10 +22,19 @@ const maxProofSize = 1 << 20
 type group struct {
 	data       *ethpb.AttestationData
 	signatures map[primitives.CommitteeIndex]map[primitives.ValidatorIndex][]byte
+	aggregates map[primitives.CommitteeIndex][]*Aggregate
+}
+
+type candidate struct {
+	bits       bitfield.Bitlist
+	signatures [][]byte
+	proof      []byte
+	fresh      int
+	size       int
 }
 
 // Pack builds the attestations for a block at the slot of st, and the proof of their signatures.
-func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.SingleAttestationPQ) ([]ethpb.Att, []byte, error) {
+func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.SingleAttestationPQ, aggregates []*Aggregate) ([]ethpb.Att, []byte, error) {
 	cfg := params.BeaconConfig()
 	slot := st.Slot()
 	currentEpoch := slots.ToEpoch(slot)
@@ -41,37 +50,64 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 	if err != nil {
 		return nil, nil, err
 	}
+	participation := func(data *ethpb.AttestationData) []byte {
+		if data.Slot+cfg.MinAttestationInclusionDelayPQ > slot {
+			return nil
+		}
+		switch data.Target.Epoch {
+		case currentEpoch:
+			return currentParticipation
+		case previousEpoch:
+			return previousParticipation
+		}
+		return nil
+	}
+	// A validator whose target vote is on chain earns nothing from another inclusion.
+	fresh := func(p []byte, index primitives.ValidatorIndex) bool {
+		return uint64(index) < uint64(len(p)) && p[index]>>cfg.TimelyTargetFlagIndex&1 == 0
+	}
 
 	groups := make(map[[32]byte]*group)
-	for _, single := range singles {
-		data := single.Data
-		if data.Slot+cfg.MinAttestationInclusionDelayPQ > slot {
-			continue
-		}
-		participation := currentParticipation
-		if data.Target.Epoch != currentEpoch {
-			if data.Target.Epoch != previousEpoch {
-				continue
-			}
-			participation = previousParticipation
-		}
-		// A validator whose target vote is on chain earns nothing from another inclusion.
-		if uint64(single.AttesterIndex) >= uint64(len(participation)) || participation[single.AttesterIndex]>>cfg.TimelyTargetFlagIndex&1 == 1 {
-			continue
-		}
+	groupFor := func(data *ethpb.AttestationData) (*group, error) {
 		root, err := data.HashTreeRoot()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		g, ok := groups[root]
 		if !ok {
-			g = &group{data: data, signatures: make(map[primitives.CommitteeIndex]map[primitives.ValidatorIndex][]byte)}
+			g = &group{
+				data:       data,
+				signatures: make(map[primitives.CommitteeIndex]map[primitives.ValidatorIndex][]byte),
+				aggregates: make(map[primitives.CommitteeIndex][]*Aggregate),
+			}
 			groups[root] = g
+		}
+		return g, nil
+	}
+	for _, single := range singles {
+		p := participation(single.Data)
+		if p == nil || !fresh(p, single.AttesterIndex) {
+			continue
+		}
+		g, err := groupFor(single.Data)
+		if err != nil {
+			return nil, nil, err
 		}
 		if g.signatures[single.CommitteeId] == nil {
 			g.signatures[single.CommitteeId] = make(map[primitives.ValidatorIndex][]byte)
 		}
 		g.signatures[single.CommitteeId][single.AttesterIndex] = single.Signature
+	}
+	for _, aggregate := range aggregates {
+		if participation(aggregate.Att.Data) == nil {
+			continue
+		}
+		g, err := groupFor(aggregate.Att.Data)
+		if err != nil {
+			return nil, nil, err
+		}
+		ci := aggregate.Att.GetCommitteeIndex()
+		g.aggregates[ci] = append(g.aggregates[ci], aggregate)
 	}
 
 	ordered := make([]*group, 0, len(groups))
@@ -86,72 +122,172 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 		return slices.Compare(a.data.BeaconBlockRoot, b.data.BeaconBlockRoot)
 	})
 
-	budget := maxProofSize / pq.XMSSSignatureLength
+	budget := maxProofSize
 	var atts []ethpb.Att
-	var statements []pq.Statement
-	var signatures [][][]byte
+	var proofs [][]byte
 	for _, g := range ordered {
 		if uint64(len(atts)) >= cfg.MaxAttestationsPQ || budget == 0 {
 			break
 		}
-		committeeIndices := make([]primitives.CommitteeIndex, 0, len(g.signatures))
+		p := participation(g.data)
+		committeeIndices := make([]primitives.CommitteeIndex, 0, len(g.signatures)+len(g.aggregates))
 		for ci := range g.signatures {
 			committeeIndices = append(committeeIndices, ci)
+		}
+		for ci := range g.aggregates {
+			if _, ok := g.signatures[ci]; !ok {
+				committeeIndices = append(committeeIndices, ci)
+			}
 		}
 		slices.Sort(committeeIndices)
 
 		committeeBits := ethpb.NewCommitteeBitsPQ()
-		var bits []bool
-		var groupSignatures [][][]byte
+		var chosen []*candidate
 		used := 0
 		for _, ci := range committeeIndices {
 			committee, err := helpers.BeaconCommitteeFromState(ctx, st, g.data.Slot, ci)
 			if err != nil {
 				continue
 			}
-			committeeBitsSet := make([]bool, len(committee))
-			var committeeSignatures [][]byte
-			for i, index := range committee {
-				if sig, ok := g.signatures[ci][index]; ok {
-					committeeBitsSet[i] = true
-					committeeSignatures = append(committeeSignatures, sig)
-				}
-			}
-			if len(committeeSignatures) == 0 || len(committeeSignatures) > budget-used {
+			best := bestCandidate(committee, g.signatures[ci], g.aggregates[ci], func(index primitives.ValidatorIndex) bool {
+				return fresh(p, index)
+			})
+			if best.fresh == 0 || best.size > budget-used {
 				continue
 			}
 			committeeBits.SetBitAt(uint64(ci), true)
-			bits = append(bits, committeeBitsSet...)
-			groupSignatures = append(groupSignatures, committeeSignatures)
-			used += len(committeeSignatures)
+			chosen = append(chosen, best)
+			used += best.size
 		}
-		if used == 0 {
+		if len(chosen) == 0 {
 			continue
 		}
-		aggregationBits := bitfield.NewBitlist(uint64(len(bits)))
-		for i, set := range bits {
-			if set {
-				aggregationBits.SetBitAt(uint64(i), true)
-			}
-		}
-		att := &ethpb.AttestationPQ{AggregationBits: aggregationBits, Data: g.data, CommitteeBits: committeeBits}
+		att := &ethpb.AttestationPQ{AggregationBits: joinBits(chosen), Data: g.data, CommitteeBits: committeeBits}
 		if err := blocks.VerifyAttestationNoVerifySignature(ctx, st, att); err != nil {
 			log.WithError(err).WithField("slot", g.data.Slot).Debug("Skipping attestation that does not fit the block")
 			continue
 		}
-		attStatements, err := pq.AttestationStatements(ctx, st, att)
+		statements, err := pq.AttestationStatements(ctx, st, att)
 		if err != nil {
 			return nil, nil, err
 		}
+		for i, c := range chosen {
+			if c.proof == nil {
+				c.proof, err = pq.Proofs.Prove(statements[i:i+1], [][][]byte{c.signatures})
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+			proofs = append(proofs, c.proof)
+		}
 		atts = append(atts, att)
-		statements = append(statements, attStatements...)
-		signatures = append(signatures, groupSignatures...)
 		budget -= used
 	}
 
-	proof, err := pq.Proofs.Prove(statements, signatures)
+	proof, err := pq.Proofs.Merge(proofs)
 	if err != nil {
 		return nil, nil, err
 	}
 	return atts, proof, nil
+}
+
+func bestCandidate(committee []primitives.ValidatorIndex, signatures map[primitives.ValidatorIndex][]byte, aggregates []*Aggregate, fresh func(primitives.ValidatorIndex) bool) *candidate {
+	best := localCandidate(committee, signatures)
+	for _, aggregate := range aggregates {
+		bits := aggregate.Att.AggregationBits
+		if bits.Len() != uint64(len(committee)) {
+			continue
+		}
+		c := &candidate{bits: bits, proof: aggregate.Proof, size: len(aggregate.Proof)}
+		for _, i := range bits.BitIndices() {
+			if fresh(committee[i]) {
+				c.fresh++
+			}
+		}
+		// A network aggregate wins a tie, it is already proven.
+		if c.fresh >= best.fresh {
+			best = c
+		}
+	}
+	return best
+}
+
+func joinBits(chosen []*candidate) bitfield.Bitlist {
+	total := uint64(0)
+	for _, c := range chosen {
+		total += c.bits.Len()
+	}
+	out := bitfield.NewBitlist(total)
+	offset := uint64(0)
+	for _, c := range chosen {
+		for _, i := range c.bits.BitIndices() {
+			out.SetBitAt(offset+uint64(i), true)
+		}
+		offset += c.bits.Len()
+	}
+	return out
+}
+
+func localCandidate(committee []primitives.ValidatorIndex, signatures map[primitives.ValidatorIndex][]byte) *candidate {
+	c := &candidate{bits: bitfield.NewBitlist(uint64(len(committee)))}
+	for i, index := range committee {
+		if sig, ok := signatures[index]; ok {
+			c.bits.SetBitAt(uint64(i), true)
+			c.signatures = append(c.signatures, sig)
+		}
+	}
+	c.fresh = len(c.signatures)
+	c.size = len(c.signatures) * pq.XMSSSignatureLength
+	return c
+}
+
+// BuildAggregate proves the largest set of matching single attestations of one committee.
+func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.SingleAttestationPQ, slot primitives.Slot, index primitives.CommitteeIndex) (*Aggregate, error) {
+	type votes struct {
+		data       *ethpb.AttestationData
+		signatures map[primitives.ValidatorIndex][]byte
+	}
+	byRoot := make(map[[32]byte]*votes)
+	var best *votes
+	for _, single := range singles {
+		if single.Data.Slot != slot || single.CommitteeId != index {
+			continue
+		}
+		root, err := single.Data.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		v, ok := byRoot[root]
+		if !ok {
+			v = &votes{data: single.Data, signatures: make(map[primitives.ValidatorIndex][]byte)}
+			byRoot[root] = v
+		}
+		v.signatures[single.AttesterIndex] = single.Signature
+		if best == nil || len(v.signatures) > len(best.signatures) {
+			best = v
+		}
+	}
+	if best == nil {
+		return nil, nil
+	}
+	committee, err := helpers.BeaconCommitteeFromState(ctx, st, slot, index)
+	if err != nil {
+		return nil, err
+	}
+	c := localCandidate(committee, best.signatures)
+	if c.fresh == 0 {
+		return nil, nil
+	}
+	committeeBits := ethpb.NewCommitteeBitsPQ()
+	committeeBits.SetBitAt(uint64(index), true)
+	att := &ethpb.AttestationPQ{AggregationBits: c.bits, Data: best.data, CommitteeBits: committeeBits}
+	statements, err := pq.AttestationStatements(ctx, st, att)
+	if err != nil {
+		return nil, err
+	}
+	proof, err := pq.Proofs.Prove(statements, [][][]byte{c.signatures})
+	if err != nil {
+		return nil, err
+	}
+	return &Aggregate{Att: att, Proof: proof}, nil
 }
