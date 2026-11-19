@@ -66,16 +66,16 @@ func TestSetRemoteBidFallback(t *testing.T) {
 			Signature: make([]byte, 96),
 		}
 	}
-	newServer := func(p2pBid *ethpb.SignedExecutionPayloadBid) *Server {
+	newServer := func(t *testing.T, p2pBid *ethpb.SignedExecutionPayloadBid) *Server {
 		bidCache := cache.NewHighestExecutionPayloadBidCache()
 		if p2pBid != nil {
-			bidCache.SetIfHigher(p2pBid)
+			bidCache.SetIfHigher(wrapBid(t, p2pBid))
 		}
 		return &Server{HighestBidCache: bidCache, ForkchoiceFetcher: &chainMock.ChainService{}}
 	}
-	builderWin := func(value primitives.Gwei) *winningBuilderBid {
+	builderWin := func(t *testing.T, value primitives.Gwei) *winningBuilderBid {
 		return &winningBuilderBid{
-			bid:   newRemoteBid(9, value),
+			bid:   wrapBid(t, newRemoteBid(9, value)),
 			entry: &ethpb.BuilderEntry{Url: []byte("http://builder"), MaxExecutionPayment: math.MaxUint64, BuilderBoostFactor: 100},
 		}
 	}
@@ -89,15 +89,15 @@ func TestSetRemoteBidFallback(t *testing.T) {
 		wantErrStr string
 	}{
 		{name: "cached p2p bid only", p2p: newRemoteBid(7, 1000), wantSrc: bidSourceP2P, wantIdx: 7},
-		{name: "builder bid only", builder: builderWin(1000), wantSrc: bidSourceBuilderAPI, wantIdx: 9},
-		{name: "builder bid beats p2p", p2p: newRemoteBid(7, 1000), builder: builderWin(2000), wantSrc: bidSourceBuilderAPI, wantIdx: 9},
-		{name: "p2p bid beats builder", p2p: newRemoteBid(7, 3000), builder: builderWin(2000), wantSrc: bidSourceP2P, wantIdx: 7},
+		{name: "builder bid only", builder: builderWin(t, 1000), wantSrc: bidSourceBuilderAPI, wantIdx: 9},
+		{name: "builder bid beats p2p", p2p: newRemoteBid(7, 1000), builder: builderWin(t, 2000), wantSrc: bidSourceBuilderAPI, wantIdx: 9},
+		{name: "p2p bid beats builder", p2p: newRemoteBid(7, 3000), builder: builderWin(t, 2000), wantSrc: bidSourceP2P, wantIdx: 7},
 		{name: "no remote bids", wantErrStr: "no builder or cached P2P bid"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sBlk := newBlock(t)
-			src, err := newServer(tt.p2p).setRemoteBidFallback(context.Background(), sBlk, st, false, tt.builder, nil)
+			src, err := newServer(t, tt.p2p).setRemoteBidFallback(context.Background(), sBlk, st, false, tt.builder, nil)
 			if tt.wantErrStr != "" {
 				require.ErrorContains(t, tt.wantErrStr, err)
 				return
@@ -112,14 +112,14 @@ func TestSetRemoteBidFallback(t *testing.T) {
 
 	t.Run("p2p bid is looked up on the state-derived parent hash", func(t *testing.T) {
 		sBlk := newBlock(t)
-		_, err := newServer(newRemoteBid(7, 1000)).setRemoteBidFallback(context.Background(), sBlk, st, true, nil, nil)
+		_, err := newServer(t, newRemoteBid(7, 1000)).setRemoteBidFallback(context.Background(), sBlk, st, true, nil, nil)
 		require.ErrorContains(t, "no builder or cached P2P bid", err)
 	})
 
 	t.Run("nil bid cache still uses the builder bid", func(t *testing.T) {
 		sBlk := newBlock(t)
 		vs := &Server{ForkchoiceFetcher: &chainMock.ChainService{}}
-		src, err := vs.setRemoteBidFallback(context.Background(), sBlk, st, false, builderWin(1000), nil)
+		src, err := vs.setRemoteBidFallback(context.Background(), sBlk, st, false, builderWin(t, 1000), nil)
 		require.NoError(t, err)
 		require.Equal(t, bidSourceBuilderAPI, src)
 	})
@@ -146,7 +146,7 @@ func TestSetRemoteBidFallback_GloasForkBoundary(t *testing.T) {
 	require.NoError(t, err)
 
 	bidCache := cache.NewHighestExecutionPayloadBidCache()
-	bidCache.SetIfHigher(&ethpb.SignedExecutionPayloadBid{
+	bidCache.SetIfHigher(wrapBid(t, &ethpb.SignedExecutionPayloadBid{
 		Message: &ethpb.ExecutionPayloadBid{
 			Slot:                  slot,
 			ParentBlockHash:       fuluBlockHash[:],
@@ -161,7 +161,7 @@ func TestSetRemoteBidFallback_GloasForkBoundary(t *testing.T) {
 			ExecutionRequestsRoot: make([]byte, 32),
 		},
 		Signature: make([]byte, 96),
-	})
+	}))
 
 	vs := &Server{HighestBidCache: bidCache, ForkchoiceFetcher: &chainMock.ChainService{BlockSlot: slot - 1}}
 	src, err := vs.setRemoteBidFallback(t.Context(), sBlk, st, true, nil, nil)

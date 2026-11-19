@@ -56,7 +56,7 @@ func TestValidateExecutionPayloadBidGossip_BlockHashEqualsParent(t *testing.T) {
 	require.Equal(t, pubsub.ValidationReject, result)
 
 	// The rejected bid must not be cached as seen.
-	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustWrapBid(t, signedBid).Bid())))
 }
 
 func TestValidateExecutionPayloadBidGossip_AlreadySeenTuple(t *testing.T) {
@@ -64,7 +64,7 @@ func TestValidateExecutionPayloadBidGossip_AlreadySeenTuple(t *testing.T) {
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	key := executionPayloadBidTupleKey(mustBid(t, signedBid))
+	key := executionPayloadBidTupleKey(mustWrapBid(t, signedBid).Bid())
 	s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestValidateExecutionPayloadBidGossip_SameBuilderDifferentParentAccepted(t 
 func TestValidateExecutionPayloadBidGossip_DedupShortCircuitsAllLaterChecks(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
-	key := executionPayloadBidTupleKey(mustBid(t, signedBid))
+	key := executionPayloadBidTupleKey(mustWrapBid(t, signedBid).Bid())
 	s.setSeenExecutionPayloadBid(signedBid.Message.Slot, key)
 	// Every subsequent verifier method would Reject/Ignore if it ran; the cache hit must skip them all.
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{
@@ -247,13 +247,13 @@ func TestValidateExecutionPayloadBidGossip_LowerOrEqualBidIgnored(t *testing.T) 
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
 
-	s.setHighestExecutionPayloadBid(signedBid)
+	s.highestExecutionPayloadBidCache.SetIfHigher(mustWrapBid(t, signedBid))
 
 	var err error
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustWrapBid(t, signedBid).Bid())))
 }
 
 func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksTupleSeen(t *testing.T) {
@@ -263,7 +263,7 @@ func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksTupleSeen(t 
 
 	higherBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
 	higherBid.Message.Value = signedBid.Message.Value + 1
-	s.setHighestExecutionPayloadBid(higherBid)
+	s.highestExecutionPayloadBidCache.SetIfHigher(mustWrapBid(t, higherBid))
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
@@ -288,7 +288,7 @@ func TestValidateExecutionPayloadBidGossip_HigherBidAccepted(t *testing.T) {
 	require.NoError(t, err)
 	lowerBid := proto.Clone(signedBid).(*ethpb.SignedExecutionPayloadBid)
 	lowerBid.Message.Value = wrapped.Bid().Value() - 1
-	s.setHighestExecutionPayloadBid(lowerBid)
+	s.highestExecutionPayloadBidCache.SetIfHigher(mustWrapBid(t, lowerBid))
 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
@@ -304,7 +304,7 @@ func TestValidateExecutionPayloadBidGossip_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept, result)
 
-	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustWrapBid(t, signedBid).Bid())))
 	got, ok := msg.ValidatorData.(*ethpb.SignedExecutionPayloadBid)
 	require.Equal(t, true, ok)
 	require.DeepEqual(t, signedBid, got)
@@ -328,7 +328,7 @@ func TestValidateExecutionPayloadBidGossip_BlacklistedBuilderIgnored(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 
-	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustWrapBid(t, signedBid).Bid())))
 	_, cached := s.highestExecutionPayloadBidCache.Get(
 		signedBid.Message.Slot,
 		bytesutil.ToBytes32(signedBid.Message.ParentBlockHash),
@@ -407,10 +407,11 @@ func TestExecutionPayloadBidSubscriber_HappyPath(t *testing.T) {
 	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
 	err := s.executionPayloadBidSubscriber(context.Background(), signedBid)
 	require.NoError(t, err)
-	bid := mustBid(t, signedBid)
+	wrapped := mustWrapBid(t, signedBid)
+	bid := wrapped.Bid()
 	got, ok := s.highestExecutionPayloadBidCache.Get(bid.Slot(), bid.ParentBlockHash(), bid.ParentBlockRoot())
 	require.Equal(t, true, ok)
-	require.DeepEqual(t, signedBid, got)
+	require.Equal(t, wrapped, got)
 }
 
 // TestProposerDependentRoot_DelegatesToForkchoice asserts that the helper
@@ -643,10 +644,10 @@ func executionPayloadBidToPubsub(t *testing.T, s *Service, p p2p.P2P, bid *ethpb
 	}
 }
 
-func mustBid(t *testing.T, signedBid *ethpb.SignedExecutionPayloadBid) interfaces.ROExecutionPayloadBid {
+func mustWrapBid(t *testing.T, signedBid *ethpb.SignedExecutionPayloadBid) interfaces.ROSignedExecutionPayloadBid {
 	t.Helper()
 
 	wrapped, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
 	require.NoError(t, err)
-	return wrapped.Bid()
+	return wrapped
 }
