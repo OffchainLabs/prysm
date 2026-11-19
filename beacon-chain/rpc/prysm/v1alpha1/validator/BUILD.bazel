@@ -33,6 +33,7 @@ go_library(
         "proposer_execution_payload.go",
         "proposer_exits.go",
         "proposer_gloas.go",
+        "proposer_payload_envelope_pq.go",
         "proposer_pq.go",
         "proposer_bid.go",
         "proposer_payload_attestation.go",
