@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
@@ -69,6 +70,7 @@ type Server struct {
 	P2P                              p2p.Broadcaster
 	AttestationCache                 *cache.AttestationCache
 	AttPool                          attestations.Pool
+	PQAttPool                        *pqpool.Pool
 	PayloadAttestationPool           payloadattestation.PoolManager
 	SlashingsPool                    slashings.PoolManager
 	ExitPool                         voluntaryexits.PoolManager

@@ -27,6 +27,7 @@ import "proto/prysm/v1alpha1/sync_committee.proto";
 import "proto/prysm/v1alpha1/attestation.proto";
 import "proto/prysm/v1alpha1/gloas.proto";
 import "proto/prysm/v1alpha1/gloas_builder_api.proto";
+import "proto/prysm/v1alpha1/pq.proto";
 
 option csharp_namespace = "Ethereum.Eth.V1";
 option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
@@ -283,6 +284,13 @@ service BeaconNodeValidator {
     option deprecated = true;
     option (google.api.http) = {
       post : "/eth/v1alpha1/validator/attestation_electra"
+      body : "*"
+    };
+  }
+
+  rpc ProposeAttestationPQ(SingleAttestationPQ) returns (AttestResponse) {
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/attestation_pq"
       body : "*"
     };
   }
