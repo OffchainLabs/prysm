@@ -174,7 +174,12 @@ func (v *EnvelopeVerifier) VerifyExecutionRequestsRoot(bid interfaces.ROExecutio
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
 	}
-	requestsRoot, err := env.ExecutionRequests().HashTreeRoot()
+	var requestsRoot [32]byte
+	if r := env.ExecutionRequestsPQ(); r != nil {
+		requestsRoot, err = r.HashTreeRoot()
+	} else {
+		requestsRoot, err = env.ExecutionRequests().HashTreeRoot()
+	}
 	if err != nil {
 		return errors.Wrap(err, "could not compute execution requests root")
 	}
@@ -191,6 +196,10 @@ func (v *EnvelopeVerifier) VerifyExecutionRequestsLimits() (err error) {
 	env, err := v.e.Envelope()
 	if err != nil {
 		return errors.Wrap(err, "failed to get envelope")
+	}
+	// SSZ decoding already bounds the PQ request lists.
+	if env.ExecutionRequestsPQ() != nil {
+		return nil
 	}
 	return gloas.ValidateExecutionRequestLengths(env.ExecutionRequests())
 }
@@ -299,6 +308,9 @@ func validatePayloadEnvelopeSignature(ctx context.Context, st state.ReadOnlyBeac
 }
 
 func verifyPayloadEnvelopeSignature(e interfaces.ROSignedExecutionPayloadEnvelope, pubkey []byte, fork *ethpb.Fork, epoch primitives.Epoch, genesisValidatorsRoot []byte) error {
+	if xmssSig := e.XMSSSignature(); xmssSig != nil {
+		return verifyPayloadEnvelopeSignaturePQ(e, pubkey, fork, epoch, genesisValidatorsRoot, xmssSig)
+	}
 	pub, err := bls.PublicKeyFromBytes(pubkey)
 	if err != nil {
 		return errors.Wrap(err, "invalid public key")
