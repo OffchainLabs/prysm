@@ -204,6 +204,9 @@ func (vs *Server) getParentState(ctx context.Context, slot primitives.Slot) (sta
 }
 
 func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, skipMevBoost bool, builderBoostFactor primitives.Gwei, parentFull, eagerPayloadStateRoot bool, builderConfig *ethpb.BuilderConfig) (*ethpb.GenericBeaconBlock, error) {
+	if sBlk.Version() == version.PQ {
+		return vs.buildBlockPQ(ctx, sBlk, head, parentFull)
+	}
 	if sBlk.Version() >= version.Gloas {
 		return vs.buildBlockGloas(ctx, sBlk, head, skipMevBoost, parentFull, eagerPayloadStateRoot, builderConfig)
 	}
