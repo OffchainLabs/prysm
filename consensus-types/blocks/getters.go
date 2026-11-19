@@ -1419,7 +1419,11 @@ func (b *BeaconBlockBody) SignedExecutionPayloadBid() (interfaces.ROSignedExecut
 		return WrappedROSignedExecutionPayloadBidHeze(b.signedExecutionPayloadBidHeze)
 	}
 	if b.version == version.PQ {
-		return WrappedROSignedExecutionPayloadBid(&eth.SignedExecutionPayloadBid{Message: b.signedExecutionPayloadBidPQ.GetMessage()})
+		// The wrapper requires a BLS sized signature, the XMSS one is read with XMSSBidSignature.
+		return WrappedROSignedExecutionPayloadBid(&eth.SignedExecutionPayloadBid{
+			Message:   b.signedExecutionPayloadBidPQ.GetMessage(),
+			Signature: make([]byte, field_params.BLSSignatureLength),
+		})
 	}
 	if b.version >= version.Gloas {
 		return WrappedROSignedExecutionPayloadBid(b.signedExecutionPayloadBid)
