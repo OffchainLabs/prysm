@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -165,6 +166,18 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 		eventData        any
 	)
 
+	if singlePQ, ok := att.(*eth.SingleAttestationPQ); ok {
+		if err := pq.VerifySingleAttestation(preState, singlePQ); err != nil {
+			attBadSignatureBatchCount.Inc()
+			return pubsub.ValidationReject, wrapAttestationError(err, att)
+		}
+		if first := s.setSeenUnaggregatedAtt(attKey); !first {
+			return pubsub.ValidationIgnore, nil
+		}
+		msg.ValidatorData = singlePQ
+		return pubsub.ValidationAccept, nil
+	}
+
 	if att.Version() >= version.Electra {
 		singleAtt, ok := att.(*eth.SingleAttestation)
 		if !ok {
@@ -311,11 +324,10 @@ func validateAttesterData(
 	committee []primitives.ValidatorIndex,
 ) (pubsub.ValidationResult, error) {
 	if a.Version() >= version.Electra {
-		singleAtt, ok := a.(*eth.SingleAttestation)
-		if !ok {
-			return pubsub.ValidationIgnore, fmt.Errorf("attestation has wrong type (expected %T, got %T)", &eth.SingleAttestation{}, a)
+		if !a.IsSingle() {
+			return pubsub.ValidationIgnore, fmt.Errorf("attestation of type %T is not a single attestation", a)
 		}
-		return validateAttestingIndex(ctx, singleAtt.AttesterIndex, committee)
+		return validateAttestingIndex(ctx, a.GetAttestingIndex(), committee)
 	}
 
 	// Verify number of aggregation bits matches the committee size.

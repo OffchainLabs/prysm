@@ -16,6 +16,10 @@ import (
 )
 
 func (s *Service) committeeIndexBeaconAttestationSubscriber(_ context.Context, msg proto.Message) error {
+	if single, ok := msg.(*eth.SingleAttestationPQ); ok {
+		s.cfg.pqAttPool.Save(single)
+		return nil
+	}
 	a, ok := msg.(eth.Att)
 	if !ok {
 		return fmt.Errorf("message was not type eth.Att, type=%T", msg)
