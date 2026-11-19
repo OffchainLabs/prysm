@@ -123,8 +123,19 @@ type PartialColumnBroadcaster struct {
 	// map groupID -> map[peer.ID]bool
 	headerSentCache  map[string]map[peer.ID]bool
 	incomingReq      chan request
+	priorityReq      chan request
 	eagerPushed      map[string]*eagerPushAgg
 	republishSkipped map[string]map[uint64]bool
+	republishWindow  time.Duration
+	republishLast    map[republishKey]time.Time
+	republishDirty   map[republishKey]struct{}
+	republishTimer   *time.Timer
+	republishTimerC  <-chan time.Time
+}
+
+type republishKey struct {
+	topic string
+	group string
 }
 
 type eagerPushAgg struct {
@@ -207,6 +218,18 @@ func (p *PartialColumnBroadcaster) enqueue(ctx context.Context, kind requestKind
 	}
 }
 
+func (p *PartialColumnBroadcaster) enqueuePriority(ctx context.Context, kind requestKind, v requestValues) (request, error) {
+	req := newRequest(ctx, kind, v)
+	select {
+	case p.priorityReq <- req:
+		return req, nil
+	case <-p.ctx.Done():
+		return req, errPartialBroadcasterStopped
+	case <-ctx.Done():
+		return req, ctx.Err()
+	}
+}
+
 // tryEnqueue creates and enqueues a request without blocking.
 // Returns false if the request channel is full.
 func (p *PartialColumnBroadcaster) tryEnqueue(kind requestKind, v requestValues) (request, bool) {
@@ -219,14 +242,14 @@ func (p *PartialColumnBroadcaster) tryEnqueue(kind requestKind, v requestValues)
 	}
 }
 
-// waitForResponse blocks until the request has been processed and returns the result.
-// If the request's context is cancelled before a response arrives, it returns the context error.
-func (r request) waitForResponse() error {
+func (p *PartialColumnBroadcaster) waitForResponse(r request) error {
 	select {
 	case err := <-r.response:
 		return err
 	case <-r.ctx.Done():
 		return r.ctx.Err()
+	case <-p.ctx.Done():
+		return errPartialBroadcasterStopped
 	}
 }
 
@@ -294,12 +317,17 @@ func NewBroadcaster(ctx context.Context, logger *logrus.Logger) *PartialColumnBr
 
 		// GossipSub sends the messages to this channel. The buffer should be
 		// big enough to avoid dropping messages. We don't want to block the gossipsub event loop for this.
-		incomingReq: make(chan request, 128*16),
+		incomingReq: make(chan request, 128*64),
+		priorityReq: make(chan request, 128),
 		logger:      logger.WithField("package", logPackage),
 
 		peerFeedbackSemaphore:            make(chan struct{}, concurrency),
 		concurrentValidatorSemaphore:     make(chan struct{}, concurrency),
 		concurrentHeaderHandlerSemaphore: make(chan struct{}, concurrency),
+
+		republishWindow: republishCoalesceWindow,
+		republishLast:   make(map[republishKey]time.Time),
+		republishDirty:  make(map[republishKey]struct{}),
 	}
 }
 
@@ -469,42 +497,29 @@ var (
 func (p *PartialColumnBroadcaster) loop() {
 	cleanup := time.NewTicker(params.BeaconConfig().SlotDuration())
 	for {
+		// Own requests first, so a burst of peer RPCs never delays publishing our own columns.
 		select {
+		case req := <-p.priorityReq:
+			p.handle(req)
+			continue
+		default:
+		}
+		select {
+		case req := <-p.priorityReq:
+			p.handle(req)
 		case req := <-p.incomingReq:
-			// This check enables the requester to cancel the request by cancelling the given context.
-			if req.ctx.Err() != nil {
-				p.logger.WithError(req.ctx.Err()).WithField("kind", req.kind.String()).
-					Debug("Context canceled for PartialColumnBroadcaster event.") // Debug log level to avoid log storm at node shutdown.
-				req.finish(req.ctx.Err())
-				continue
-			}
-			var err error
-			switch req.kind {
-			case requestKindPublish:
-				err = p.publish(req.publish.topicsAndColumns)
-			case requestKindSubscribe:
-				err = p.subscribe(req.sub.t)
-			case requestKindUnsubscribe:
-				err = p.unsubscribe(req.unsub.topic)
-			case requestKindGossip:
-				p.gossip(req.gossip.topic, req.gossip.groupID)
-			case requestKindHandleIncomingRPC:
-				err = p.handleIncomingRPC(req.incomingRPC)
-			case requestKindCellsValidated:
-				err = p.handleCellsValidated(req.cellsValidated)
-			default:
-				err = errUnknownRequestKind
-			}
-			if err != nil {
-				p.logger.WithField("kind", req.kind.String()).WithError(err).
-					Error("Failure handling PartialColumnBroadcaster event.")
-				err = errors.Wrap(err, "partial column broadcaster "+req.kind.String()+" event")
-			}
-			req.finish(err)
+			p.handle(req)
+		case <-p.republishTimerC:
+			// The coalescing timer fired: mark it unarmed (flushRepublish re-arms it if columns are
+			// still waiting) and republish every dirty column whose window has elapsed.
+			p.republishTimerC = nil
+			p.flushRepublish()
 		case <-p.ctx.Done():
 			// Drain remaining requests before exiting the loop.
 			for {
 				select {
+				case req := <-p.priorityReq:
+					req.finish(errPartialBroadcasterStopped)
 				case req := <-p.incomingReq:
 					req.finish(errPartialBroadcasterStopped)
 				default:
@@ -516,6 +531,40 @@ func (p *PartialColumnBroadcaster) loop() {
 			p.evictExpiredGroups()
 		}
 	}
+}
+
+// handle runs one request on the event loop.
+func (p *PartialColumnBroadcaster) handle(req request) {
+	// This check enables the requester to cancel the request by cancelling the given context.
+	if req.ctx.Err() != nil {
+		p.logger.WithError(req.ctx.Err()).WithField("kind", req.kind.String()).
+			Debug("Context canceled for PartialColumnBroadcaster event.") // Debug log level to avoid log storm at node shutdown.
+		req.finish(req.ctx.Err())
+		return
+	}
+	var err error
+	switch req.kind {
+	case requestKindPublish:
+		err = p.publish(req.publish.topicsAndColumns)
+	case requestKindSubscribe:
+		err = p.subscribe(req.sub.t)
+	case requestKindUnsubscribe:
+		err = p.unsubscribe(req.unsub.topic)
+	case requestKindGossip:
+		p.gossip(req.gossip.topic, req.gossip.groupID)
+	case requestKindHandleIncomingRPC:
+		err = p.handleIncomingRPC(req.incomingRPC)
+	case requestKindCellsValidated:
+		err = p.handleCellsValidated(req.cellsValidated)
+	default:
+		err = errUnknownRequestKind
+	}
+	if err != nil {
+		p.logger.WithField("kind", req.kind.String()).WithError(err).
+			Error("Failure handling PartialColumnBroadcaster event.")
+		err = errors.Wrap(err, "partial column broadcaster "+req.kind.String()+" event")
+	}
+	req.finish(err)
 }
 
 func (p *PartialColumnBroadcaster) headerSentCacheFor(groupID []byte, col *blocks.PartialDataColumn) map[peer.ID]bool {
@@ -579,6 +628,12 @@ func (p *PartialColumnBroadcaster) evictExpiredGroups() {
 		delete(p.groupTTL, groupID)
 		delete(p.validHeaderCache, groupID)
 		delete(p.headerSentCache, groupID)
+		for key := range p.republishLast {
+			if key.group == groupID {
+				delete(p.republishLast, key)
+				delete(p.republishDirty, key)
+			}
+		}
 		for topic, msgStore := range p.partialMsgStore {
 			delete(msgStore, groupID)
 			if len(msgStore) == 0 {
@@ -896,7 +951,8 @@ func (p *PartialColumnBroadcaster) republishColumn(ourDataColumn *blocks.Partial
 	}
 
 	if shouldRepublish {
-		err := p.publishPartialCol(topicId, ourDataColumn.GroupID(), ourDataColumn)
+		// Coalesced: publishes now, or only marks the column for the next flush if it was republished recently.
+		err := p.requestRepublish(topicId, ourDataColumn)
 		if err != nil {
 			return errors.Wrap(err, "publish partial column")
 		}
@@ -1003,7 +1059,8 @@ func (p *PartialColumnBroadcaster) handleCellsValidated(cells *cellsValidated) e
 			return nil
 		}
 
-		err = p.publishPartialCol(cells.topic, ourDataColumn.GroupID(), ourDataColumn)
+		// The column grew, so peers should hear about the new cells; coalesced with the other republish triggers.
+		err = p.requestRepublish(cells.topic, ourDataColumn)
 		if err != nil {
 			return errors.Wrap(err, "publish partial column")
 		}
@@ -1016,7 +1073,7 @@ func (p *PartialColumnBroadcaster) Publish(ctx context.Context, topicsAndColumns
 	if p.peerFeedback == nil || p.publishPartialCol == nil {
 		return errors.New("pubsub not initialized")
 	}
-	req, err := p.enqueue(ctx, requestKindPublish, requestValues{
+	req, err := p.enqueuePriority(ctx, requestKindPublish, requestValues{
 		publish: publish{
 			topicsAndColumns: topicsAndColumns,
 		},
@@ -1024,7 +1081,7 @@ func (p *PartialColumnBroadcaster) Publish(ctx context.Context, topicsAndColumns
 	if err != nil {
 		return err
 	}
-	return req.waitForResponse()
+	return p.waitForResponse(req)
 }
 
 func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
@@ -1043,7 +1100,8 @@ func (p *PartialColumnBroadcaster) gossip(topic string, groupID []byte) {
 	if !existing.Column.Published {
 		return
 	}
-	err := p.publishPartialCol(topic, existing.Column.GroupID(), existing.Column)
+	// A gossip emission is just another republish trigger, so it goes through the same coalescing.
+	err := p.requestRepublish(topic, existing.Column)
 	if err != nil {
 		p.logger.WithFields(logrus.Fields{"err": err}).Warn("Failed to publish gossip")
 	}
@@ -1120,7 +1178,7 @@ func (p *PartialColumnBroadcaster) publish(topicsAndColumns iter.Seq2[string, bl
 }
 
 func (p *PartialColumnBroadcaster) Subscribe(ctx context.Context, t *pubsub.Topic) error {
-	req, err := p.enqueue(ctx, requestKindSubscribe, requestValues{
+	req, err := p.enqueuePriority(ctx, requestKindSubscribe, requestValues{
 		sub: subscribe{
 			t: t,
 		},
@@ -1128,7 +1186,7 @@ func (p *PartialColumnBroadcaster) Subscribe(ctx context.Context, t *pubsub.Topi
 	if err != nil {
 		return err
 	}
-	return req.waitForResponse()
+	return p.waitForResponse(req)
 }
 
 func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
@@ -1143,7 +1201,7 @@ func (p *PartialColumnBroadcaster) subscribe(t *pubsub.Topic) error {
 }
 
 func (p *PartialColumnBroadcaster) Unsubscribe(ctx context.Context, topic string) error {
-	req, err := p.enqueue(ctx, requestKindUnsubscribe, requestValues{
+	req, err := p.enqueuePriority(ctx, requestKindUnsubscribe, requestValues{
 		unsub: unsubscribe{
 			topic: topic,
 		},
@@ -1151,7 +1209,7 @@ func (p *PartialColumnBroadcaster) Unsubscribe(ctx context.Context, topic string
 	if err != nil {
 		return err
 	}
-	return req.waitForResponse()
+	return p.waitForResponse(req)
 }
 
 func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
@@ -1163,4 +1221,67 @@ func (p *PartialColumnBroadcaster) unsubscribe(topic string) error {
 	delete(p.partialMsgStore, topic)
 	p.publishedTopics.Delete(topic)
 	return nil
+}
+
+// republishCoalesceWindow is the minimum time between two republishes of the same (topic, group).
+const republishCoalesceWindow = 250 * time.Millisecond
+
+func (p *PartialColumnBroadcaster) requestRepublish(topic string, col *blocks.PartialDataColumn) error {
+	key := republishKey{topic: topic, group: string(col.GroupID())}
+	now := time.Now()
+	last, seen := p.republishLast[key]
+	// Never republished, coalescing disabled, or window already elapsed: publish right now.
+	if !seen || p.republishWindow <= 0 || now.Sub(last) >= p.republishWindow {
+		p.republishLast[key] = now
+		return p.publishPartialCol(topic, col.GroupID(), col)
+	}
+	// Inside the window: any number of triggers collapse into this one dirty mark, and the timer
+	// publishes the column when the window ends.
+	p.republishDirty[key] = struct{}{}
+	p.armRepublishTimer(last.Add(p.republishWindow))
+	return nil
+}
+
+func (p *PartialColumnBroadcaster) armRepublishTimer(at time.Time) {
+	if p.republishTimerC != nil {
+		return
+	}
+	d := max(time.Until(at), 0)
+	if p.republishTimer == nil {
+		p.republishTimer = time.NewTimer(d)
+	} else {
+		p.republishTimer.Reset(d)
+	}
+	p.republishTimerC = p.republishTimer.C
+}
+
+// flushRepublish runs when the timer fires. It republishes every dirty column whose window has
+// elapsed (one publish per column, carrying all cells gathered during the window), skips columns
+// that were evicted or never published in the meantime, and re-arms the timer for the earliest
+// column whose window is still running.
+func (p *PartialColumnBroadcaster) flushRepublish() {
+	now := time.Now()
+	var next time.Time
+	for key := range p.republishDirty {
+		deadline := p.republishLast[key].Add(p.republishWindow)
+		if now.Before(deadline) {
+			// Marked dirty after the timer was armed and still inside its window: handle it on the next flush.
+			if next.IsZero() || deadline.Before(next) {
+				next = deadline
+			}
+			continue
+		}
+		delete(p.republishDirty, key)
+		verifier := p.getPartialVerifier(key.topic, []byte(key.group))
+		if verifier == nil || !verifier.Column.Published {
+			continue
+		}
+		p.republishLast[key] = now
+		if err := p.publishPartialCol(key.topic, verifier.Column.GroupID(), verifier.Column); err != nil {
+			p.logger.WithError(err).WithFields(logrus.Fields{"topic": key.topic, "group": fmt.Sprintf("%#x", key.group)}).Warn("Failed to republish partial column")
+		}
+	}
+	if !next.IsZero() {
+		p.armRepublishTimer(next)
+	}
 }
