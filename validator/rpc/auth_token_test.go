@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -230,4 +231,31 @@ func Test_UseRegisteredClaimInsteadOfStandClaims(t *testing.T) {
 	if wantedTokenString != gotTokenString {
 		t.Errorf("%s != %s", wantedTokenString, gotTokenString)
 	}
+}
+
+// The web UI login URL carries the bearer token. It must not go through logrus, whose output
+// also reaches the log files and the unauthenticated log stream endpoint of the web API.
+func TestLogValidatorWebAuth_DoesNotLogToken(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{
+		EnableWeb: true,
+	})
+	defer resetCfg()
+	hook := logTest.NewGlobal()
+	walletDir := setupWalletDir(t)
+	authTokenPath := filepath.Join(walletDir, api.AuthTokenFileName)
+
+	require.NoError(t, CreateAuthToken(authTokenPath, "127.0.0.1:7500"))
+
+	f, err := os.Open(filepath.Clean(authTokenPath))
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, f.Close())
+	}()
+	_, token, err := readAuthTokenFile(f)
+	require.NoError(t, err)
+	require.NoError(t, api.ValidateAuthToken(token))
+
+	require.LogsContain(t, hook, "Validator Client auth token for gRPC and REST authentication set at "+authTokenPath)
+	require.LogsDoNotContain(t, hook, token)
+	require.LogsDoNotContain(t, hook, "initialize?token=")
 }
