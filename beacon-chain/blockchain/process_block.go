@@ -273,21 +273,24 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 				builderPubkeys[i] = &pk
 			}
 		}
-		sig := b.Signature()
-		root := b.Root()
-		domain, err := signing.Domain(preState.Fork(), slots.ToEpoch(preState.Slot()), params.BeaconConfig().DomainBeaconProposer, preState.GenesisValidatorsRoot())
-		if err != nil {
-			return err
+		// The transition already checked the XMSS block signature.
+		if b.Version() != version.PQ {
+			sig := b.Signature()
+			root := b.Root()
+			domain, err := signing.Domain(preState.Fork(), slots.ToEpoch(preState.Slot()), params.BeaconConfig().DomainBeaconProposer, preState.GenesisValidatorsRoot())
+			if err != nil {
+				return err
+			}
+			proposer, err := preState.ValidatorAtIndex(b.Block().ProposerIndex())
+			if err != nil {
+				return err
+			}
+			proposerSig, err := signing.BlockSignatureBatch(proposer.PublicKey, sig[:], domain, func() ([32]byte, error) { return root, nil })
+			if err != nil {
+				return err
+			}
+			sigSet.Join(proposerSig)
 		}
-		proposer, err := preState.ValidatorAtIndex(b.Block().ProposerIndex())
-		if err != nil {
-			return err
-		}
-		proposerSig, err := signing.BlockSignatureBatch(proposer.PublicKey, sig[:], domain, func() ([32]byte, error) { return root, nil })
-		if err != nil {
-			return err
-		}
-		sigSet.Join(proposerSig)
 		if b.Root() == br && eidx < len(envelopes) {
 			envSigSet, err := gloas.VerifyExecutionPayloadEnvelopeWithDeferredSig(ctx, preState, envelopes[eidx])
 			if err != nil {
@@ -327,10 +330,14 @@ func (s *Service) onBlockBatch(ctx context.Context, blks []consensusblocks.ROBlo
 		return errBatchEnvelopeMismatch
 	}
 
+	// An empty BLS batch verifies as false.
 	var verify bool
-	if features.Get().EnableVerboseSigVerification {
+	switch {
+	case len(sigSet.Signatures) == 0:
+		verify = true
+	case features.Get().EnableVerboseSigVerification:
 		verify, err = sigSet.VerifyVerbosely()
-	} else {
+	default:
 		verify, err = sigSet.Verify()
 	}
 	if err != nil {
