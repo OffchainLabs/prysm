@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 )
@@ -52,6 +53,7 @@ var (
 	errWrongSszEncodedDataColumnSidecarSize = errors.New("wrong SSZ encoded data column sidecar size")
 	errDataColumnSidecarsFromDifferentSlots = errors.New("data column sidecars from different slots")
 	errNoDataColumnBasePath                 = errors.New("DataColumnStorage base path not specified in init")
+	errDataColumnStorageClosed              = errors.New("data column storage is closed")
 )
 
 type (
@@ -63,6 +65,7 @@ type (
 		cache           *dataColumnStorageSummaryCache
 		dataColumnFeed  *event.Feed
 		pruneMu         sync.RWMutex
+		warmed, closed  bool
 
 		mu      sync.Mutex // protects muChans
 		muChans map[[fieldparams.RootLength]byte]*muChan
@@ -176,6 +179,8 @@ func NewDataColumnStorage(ctx context.Context, opts ...DataColumnStorageOption) 
 }
 
 // WarmCache warms the cache of the data column filesystem.
+// It loads the cache snapshot written at the previous graceful shutdown if any,
+// and walks the whole data column filesystem otherwise.
 // It holds the database (read) lock for all the time it is running.
 func (dcs *DataColumnStorage) WarmCache() {
 	start := time.Now()
@@ -184,13 +189,30 @@ func (dcs *DataColumnStorage) WarmCache() {
 	dcs.pruneMu.Lock()
 	defer dcs.pruneMu.Unlock()
 
+	if dcs.consumeSnapshot() {
+		dcs.prune()
+		dcs.warmed = true
+		log.WithField("elapsed", time.Since(start)).Info("Data column filesystem cache warm-up complete (loaded from snapshot)")
+		return
+	}
+
+	// A cache missing some listed directories must not be persisted in a snapshot.
+	dcs.warmed = dcs.walkFilesystem()
+
+	log.WithField("elapsed", time.Since(start)).Info("Data column filesystem cache warm-up complete")
+}
+
+// walkFilesystem populates the cache by reading the metadata of every data column file, then prunes.
+// It returns false if some directories could not be listed or some files could not be processed.
+func (dcs *DataColumnStorage) walkFilesystem() bool {
+	complete := true
 	highestStoredEpoch := primitives.Epoch(0)
 
 	// List all period directories
 	periodFileInfos, err := afero.ReadDir(dcs.fs, ".")
 	if err != nil {
 		log.WithError(err).Error("Error reading top directory during warm cache")
-		return
+		return false
 	}
 
 	// Iterate through periods
@@ -205,6 +227,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 		epochFileInfos, err := afero.ReadDir(dcs.fs, periodPath)
 		if err != nil {
 			log.WithError(err).WithField("period", periodPath).Error("Error reading period directory during warm cache")
+			complete = false
 			continue
 		}
 
@@ -220,6 +243,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 			files, err := listEpochFiles(dcs.fs, epochPath)
 			if err != nil {
 				log.WithError(err).WithField("epoch", epochPath).Error("Error listing epoch files during warm cache")
+				complete = false
 				continue
 			}
 
@@ -231,6 +255,7 @@ func (dcs *DataColumnStorage) WarmCache() {
 			epochHighest, err := dcs.processEpochFiles(files)
 			if err != nil {
 				log.WithError(err).WithField("epoch", epochPath).Error("Error processing epoch files during warm cache")
+				complete = false
 			}
 
 			highestStoredEpoch = max(highestStoredEpoch, epochHighest)
@@ -240,10 +265,44 @@ func (dcs *DataColumnStorage) WarmCache() {
 	// Prune the cache and the filesystem
 	dcs.prune()
 
-	totalElapsed := time.Since(start)
+	return complete
+}
 
-	// Log summary
-	log.WithField("elapsed", totalElapsed).Info("Data column filesystem cache warm-up complete")
+// Close writes the cache snapshot, so the next startup does not need to walk the whole data column filesystem.
+// No data column sidecars can be saved, removed or pruned after Close.
+func (dcs *DataColumnStorage) Close() error {
+	dcs.pruneMu.Lock()
+	defer dcs.pruneMu.Unlock()
+
+	if dcs.closed {
+		return nil
+	}
+
+	dcs.closed = true
+
+	// An unwarmed cache does not reflect the filesystem.
+	if !dcs.warmed {
+		return nil
+	}
+
+	start := time.Now()
+
+	// The snapshot must not claim data column sidecars that are not durably written.
+	if dcs.base != "" {
+		if err := syncFilesystem(dcs.base); err != nil {
+			return errors.Wrap(err, "sync filesystem")
+		}
+	}
+
+	if err := dcs.writeSnapshot(); err != nil {
+		return errors.Wrap(err, "write snapshot")
+	}
+
+	log.WithFields(logrus.Fields{
+		"elapsed": time.Since(start),
+		"path":    filepath.Join(dcs.base, snapshotFileName),
+	}).Info("Data column filesystem cache snapshot written")
+	return nil
 }
 
 // listEpochFiles lists all .sszs files in an epoch directory.
@@ -281,7 +340,7 @@ func (dcs *DataColumnStorage) processEpochFiles(files []string) (primitives.Epoc
 			epoch, err := dcs.processFile(filePath)
 			if err != nil {
 				log.WithError(err).WithField("file", filePath).Error("Error processing file during warm cache")
-				return nil
+				return fmt.Errorf("process file %s: %w", filePath, err)
 			}
 
 			mu.Lock()
@@ -442,6 +501,10 @@ func (dcs *DataColumnStorage) saveFilesystem(root [fieldparams.RootLength]byte, 
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
+	if dcs.closed {
+		return errDataColumnStorageClosed
+	}
+
 	fileMu, toStore := dcs.fileMutexChan(root)
 	toStore <- dataColumnSidecars
 
@@ -565,6 +628,10 @@ func (dcs *DataColumnStorage) Remove(blockRoot [fieldparams.RootLength]byte) err
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
+	if dcs.closed {
+		return errDataColumnStorageClosed
+	}
+
 	fileMu, _ := dcs.fileMutexChan(blockRoot)
 	fileMu.Lock()
 	defer fileMu.Unlock()
@@ -610,6 +677,11 @@ func (dcs *DataColumnStorage) Clear() error {
 
 // prune clean the cache, the filesystem and mutexes.
 func (dcs *DataColumnStorage) prune() {
+	// The cache snapshot written at Close must still reflect the filesystem.
+	if dcs.closed {
+		return
+	}
+
 	startTime := time.Now()
 	defer func() {
 		dataColumnPruneLatency.Observe(float64(time.Since(startTime).Milliseconds()))
@@ -642,6 +714,11 @@ func (dcs *DataColumnStorage) prune() {
 	}
 
 	for _, periodFileInfo := range periodFileInfos {
+		// Skip non directories, such as the cache snapshot.
+		if !periodFileInfo.IsDir() {
+			continue
+		}
+
 		periodStr := periodFileInfo.Name()
 		period, err := strconv.ParseUint(periodStr, 10, 64)
 		if err != nil {
