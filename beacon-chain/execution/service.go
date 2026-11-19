@@ -119,6 +119,8 @@ type config struct {
 	beaconNodeStatsUpdater  BeaconNodeStatsUpdater
 	currHttpEndpoint        network.Endpoint
 	rpcClientDialer         RPCClientDialer
+	getPayloadOverride      GetPayloadOverride
+	getBlobsOverride        GetBlobsOverride
 	headers                 []string
 	finalizedStateAtStartup state.BeaconState
 	jwtId                   string
