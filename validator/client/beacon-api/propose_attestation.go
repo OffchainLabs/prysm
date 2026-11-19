@@ -21,6 +21,13 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 		return nil, err
 	}
 
+	attestationDataRoot, err := attestation.Data.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute attestation data root")
+	}
+	// The validator already signed this data, so the aggregate must use its root even if the broadcast fails.
+	c.attestationDataRoots.set(attestation.Data.Slot, uint64(attestation.Data.CommitteeIndex), attestationDataRoot[:])
+
 	headers := map[string]string{"Eth-Consensus-Version": version.String(attestation.Version())}
 	err = c.handler.Post(
 		ctx,
@@ -31,11 +38,6 @@ func (c *beaconApiValidatorClient) proposeAttestation(ctx context.Context, attes
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	attestationDataRoot, err := attestation.Data.HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to compute attestation data root")
 	}
 
 	return &ethpb.AttestResponse{AttestationDataRoot: attestationDataRoot[:]}, nil
@@ -49,6 +51,13 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
+	attestationDataRoot, err := attestation.Data.HashTreeRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compute attestation data root")
+	}
+	// The validator already signed this data, so the aggregate must use its root even if the broadcast fails.
+	c.attestationDataRoots.set(attestation.Data.Slot, uint64(attestation.CommitteeId), attestationDataRoot[:])
+
 	consensusVersion := version.String(slots.ToForkVersion(attestation.Data.Slot))
 	headers := map[string]string{"Eth-Consensus-Version": consensusVersion}
 	if err = c.handler.Post(
@@ -59,11 +68,6 @@ func (c *beaconApiValidatorClient) proposeAttestationElectra(ctx context.Context
 		nil,
 	); err != nil {
 		return nil, err
-	}
-
-	attestationDataRoot, err := attestation.Data.HashTreeRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to compute attestation data root")
 	}
 
 	return &ethpb.AttestResponse{AttestationDataRoot: attestationDataRoot[:]}, nil
