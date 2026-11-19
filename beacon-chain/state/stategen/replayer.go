@@ -94,6 +94,7 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 		return nil, errors.Wrap(err, msg)
 	}
 	if diff == 0 {
+		replayBlockCount.Observe(0)
 		return s, nil
 	}
 
@@ -126,6 +127,7 @@ func (rs *stateReplayer) ReplayBlocks(ctx context.Context) (state.BeaconState, e
 		"duration": duration,
 	}).Debug("Finished calling process_blocks on all blocks in ReplayBlocks")
 	replayBlocksSummary.Observe(float64(duration.Milliseconds()))
+	replayBlockCount.Observe(float64(len(descendants)))
 	return s, nil
 }
 

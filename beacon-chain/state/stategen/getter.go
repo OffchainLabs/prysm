@@ -4,9 +4,10 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
+	coretime "github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -107,7 +108,7 @@ func (s *State) ActiveNonSlashedBalancesByRoot(ctx context.Context, blockRoot [3
 	if st == nil || st.IsNil() {
 		return nil, errNilState
 	}
-	epoch := time.CurrentEpoch(st)
+	epoch := coretime.CurrentEpoch(st)
 
 	balances := make([]uint64, st.NumValidators())
 	for idx, val := range st.ValidatorsReadOnlySeq() {
@@ -181,6 +182,7 @@ func (s *State) StateByRootInitialSync(ctx context.Context, blockRoot [32]byte) 
 	if err != nil {
 		return nil, errors.Wrap(err, "could not replay blocks")
 	}
+	replayBlockCount.Observe(float64(len(blks)))
 	return startState, nil
 }
 
@@ -270,10 +272,12 @@ func (s *State) loadStateByRootNoCopy(ctx context.Context, blockRoot [32]byte) (
 // loadStateByRootFromDBOrReplay loads a state from the DB or by replaying blocks from the latest ancestor.
 // This is the shared tail of loadStateByRoot and loadStateByRootNoCopy.
 func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32]byte) (state.BeaconState, error) {
+	start := time.Now()
 	// Short circuit if the state is already in the DB.
 	if s.beaconDB.HasState(ctx, blockRoot) {
 		st, err := s.beaconDB.State(ctx, blockRoot)
 		if err == nil {
+			stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceDB).Observe(float64(time.Since(start).Milliseconds()))
 			return st, nil
 		}
 		if !stderrors.Is(err, db.ErrNotFoundState) {
@@ -298,6 +302,7 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 	}
 
 	if startState.Slot() == targetSlot {
+		stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceAncestor).Observe(float64(time.Since(start).Milliseconds()))
 		return startState, nil
 	}
 
@@ -306,8 +311,12 @@ func (s *State) loadStateByRootFromDBOrReplay(ctx context.Context, blockRoot [32
 		return nil, errors.Wrap(err, "could not load blocks for hot state using root")
 	}
 
-	replayBlockCount.Observe(float64(len(blks)))
-	return s.replayBlocks(ctx, startState, blks, targetSlot)
+	st, err := s.replayBlocks(ctx, startState, blks, targetSlot)
+	if err == nil {
+		replayBlockCount.Observe(float64(len(blks)))
+		stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceReplay).Observe(float64(time.Since(start).Milliseconds()))
+	}
+	return st, err
 }
 
 // latestAncestor returns the highest available ancestor state of the input block root.

@@ -21,6 +21,7 @@ import (
 )
 
 func TestStateByRoot_GenesisState(t *testing.T) {
+	before := readStateGenMetric(t, stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceDB)).Histogram.GetSampleCount()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
@@ -34,7 +35,65 @@ func TestStateByRoot_GenesisState(t *testing.T) {
 	require.NoError(t, service.beaconDB.SaveGenesisBlockRoot(ctx, bRoot))
 	loadedState, err := service.StateByRoot(ctx, params.BeaconConfig().ZeroHash) // Zero hash is genesis state root.
 	require.NoError(t, err)
+	require.Equal(t, before+1, readStateGenMetric(t, stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceDB)).Histogram.GetSampleCount())
 	require.DeepSSZEqual(t, loadedState.ToContainerUnsafe(), beaconState.ToContainerUnsafe())
+}
+
+func TestStateByRootInitialSyncGenesis(t *testing.T) {
+	beaconDB := testDB.SetupDB(t)
+	st, _ := util.DeterministicGenesisState(t, 32)
+	service := New(&initialSyncGenesisDB{NoHeadAccessDatabase: beaconDB, st: st}, doublylinkedtree.New())
+	got, err := service.StateByRootInitialSync(t.Context(), params.BeaconConfig().ZeroHash)
+	require.NoError(t, err)
+	require.Equal(t, st.Slot(), got.Slot())
+}
+
+type initialSyncGenesisDB struct {
+	db.NoHeadAccessDatabase
+	st state.BeaconState
+}
+
+func (d *initialSyncGenesisDB) GenesisState(context.Context) (state.BeaconState, error) {
+	return d.st, nil
+}
+
+func TestStateByRootInitialSyncCached(t *testing.T) {
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+	st, _ := util.DeterministicGenesisState(t, 32)
+	hotRoot := [32]byte{1}
+	boundaryRoot := [32]byte{2}
+
+	service.hotStateCache.put(hotRoot, st)
+	got, err := service.StateByRootInitialSync(t.Context(), hotRoot)
+	require.NoError(t, err)
+	require.Equal(t, st.Slot(), got.Slot())
+
+	require.NoError(t, service.epochBoundaryStateCache.put(boundaryRoot, st))
+	got, err = service.StateByRootInitialSync(t.Context(), boundaryRoot)
+	require.NoError(t, err)
+	require.Equal(t, st.Slot(), got.Slot())
+}
+
+func TestLoadStateByRootFromAncestor(t *testing.T) {
+	ctx := t.Context()
+	beaconDB := testDB.SetupDB(t)
+	service := New(beaconDB, doublylinkedtree.New())
+	st, _ := util.DeterministicGenesisState(t, 32)
+	require.NoError(t, st.SetSlot(1))
+	b := util.NewBeaconBlock()
+	b.Block.Slot = 1
+	root, err := b.Block.HashTreeRoot()
+	require.NoError(t, err)
+	util.SaveBlock(t, ctx, beaconDB, b)
+	require.NoError(t, beaconDB.SaveStateSummary(ctx, &ethpb.StateSummary{Slot: 1, Root: root[:]}))
+	service.finalizedInfo = &finalizedInfo{root: root, state: st}
+
+	before := readStateGenMetric(t, stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceAncestor)).Histogram.GetSampleCount()
+	got, err := service.loadStateByRootFromDBOrReplay(ctx, root)
+	require.NoError(t, err)
+	require.Equal(t, st.Slot(), got.Slot())
+	require.Equal(t, before+1, readStateGenMetric(t, stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceAncestor)).Histogram.GetSampleCount())
 }
 
 func TestStateByRoot_ColdState(t *testing.T) {
@@ -203,6 +262,7 @@ func (d *notFoundOnRootDB) State(ctx context.Context, blockRoot [32]byte) (state
 }
 
 func TestStateByRoot_FallsBackToReplayOnNotFoundStateFromDirectRead(t *testing.T) {
+	before := readStateGenMetric(t, stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceReplay)).Histogram.GetSampleCount()
 	ctx := t.Context()
 	beaconDB := testDB.SetupDB(t)
 
@@ -242,6 +302,7 @@ func TestStateByRoot_FallsBackToReplayOnNotFoundStateFromDirectRead(t *testing.T
 
 	got, err := service.StateByRoot(ctx, rob10.Root())
 	require.NoError(t, err)
+	require.Equal(t, before+1, readStateGenMetric(t, stategenLoadStateMilliseconds.WithLabelValues(loadStateSourceReplay)).Histogram.GetSampleCount())
 
 	gotRoot, err := got.HashTreeRoot(ctx)
 	require.NoError(t, err)
@@ -283,10 +344,11 @@ func TestLoadStateByRoot(t *testing.T) {
 	}
 
 	cases := []struct {
-		name         string
-		slots        testSetupSlots
-		persistState func(r testChain, s primitives.Slot)
-		loader       testLoader // ie loadStateByRoot; StateByRootInitialSync; StateByRoot
+		name               string
+		slots              testSetupSlots
+		persistState       func(r testChain, s primitives.Slot)
+		loader             testLoader // ie loadStateByRoot; StateByRootInitialSync; StateByRoot
+		wantReplayObserved bool
 	}{
 		// loadStateByRoot tests
 		{
@@ -369,10 +431,11 @@ func TestLoadStateByRoot(t *testing.T) {
 			slots:        testSetupSlots{stateAt: 9, lastblock: 10},
 		},
 		{
-			name:         "StateByRootInitSync - with replay - using db",
-			persistState: persistDB,
-			loader:       sbrInit(11),
-			slots:        testSetupSlots{stateAt: 9, lastblock: 11},
+			name:               "StateByRootInitSync - with replay - using db",
+			persistState:       persistDB,
+			loader:             sbrInit(11),
+			slots:              testSetupSlots{stateAt: 9, lastblock: 11},
+			wantReplayObserved: true,
 		},
 		{
 			name:         "StateByRootInitSync - using finalizedInfo struct field",
@@ -535,10 +598,14 @@ func TestLoadStateByRoot(t *testing.T) {
 				}
 			}
 			c.persistState(r, slots.stateAt)
+			beforeReplay := readStateGenMetric(t, replayBlockCount).Histogram.GetSampleCount()
 			// DeepSSZEqual spams full state diffs on failures, so try to fail faster with more specific assertions.
 			expect := r.state(t, slots.lastblock)
 			got, err := c.loader(r)
 			require.NoError(t, err)
+			if c.wantReplayObserved {
+				require.Equal(t, beforeReplay+1, readStateGenMetric(t, replayBlockCount).Histogram.GetSampleCount())
+			}
 			require.Equal(t, slots.lastblock, got.Slot())
 			lbrE, err := expect.LatestBlockHeader().HashTreeRoot()
 			require.NoError(t, err)

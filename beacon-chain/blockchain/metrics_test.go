@@ -6,7 +6,26 @@ import (
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
+
+func TestBlockProcessingMetricsAreHistograms(t *testing.T) {
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, name := range []string{"on_block_processing_milliseconds", "chain_service_processing_milliseconds"} {
+		t.Run(name, func(t *testing.T) {
+			for _, family := range families {
+				if family.GetName() == name {
+					require.Equal(t, dto.MetricType_HISTOGRAM, family.GetType())
+					require.Equal(t, len(blockProcessingMillisecondsBuckets), len(family.GetMetric()[0].GetHistogram().GetBucket()))
+					return
+				}
+			}
+			t.Fatalf("metric %s was not gathered", name)
+		})
+	}
+}
 
 func TestReportEpochMetrics_BadAttestation(t *testing.T) {
 	s, err := util.NewBeaconState()

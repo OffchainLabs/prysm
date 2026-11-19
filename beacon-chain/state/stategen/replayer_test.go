@@ -44,6 +44,7 @@ func headerFromBlock(b interfaces.ReadOnlySignedBeaconBlock) (*ethpb.BeaconBlock
 }
 
 func TestReplayBlocks_ZeroDiff(t *testing.T) {
+	before := readStateGenMetric(t, replayBlockCount).Histogram.GetSampleCount()
 	logHook := logTest.NewGlobal()
 	ctx := t.Context()
 	specs := []mockHistorySpec{{slot: 0}}
@@ -51,6 +52,7 @@ func TestReplayBlocks_ZeroDiff(t *testing.T) {
 	ch := NewCanonicalHistory(hist, hist, hist)
 	_, err := ch.ReplayerForSlot(0).ReplayBlocks(ctx)
 	require.NoError(t, err)
+	require.Equal(t, before+1, readStateGenMetric(t, replayBlockCount).Histogram.GetSampleCount())
 	require.LogsDoNotContain(t, logHook, "Replaying canonical blocks from most recent state")
 }
 
