@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -11,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/common"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -92,7 +94,11 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		if amount != 0 {
 			return fmt.Errorf("self-build amount must be zero, got %d", amount)
 		}
-		if signedBid.Signature() != common.InfiniteSignature {
+		if st.Version() == version.PQ {
+			if err := pq.VerifySelfBuildBidSignature(block.Body().XMSSBidSignature()); err != nil {
+				return err
+			}
+		} else if signedBid.Signature() != common.InfiniteSignature {
 			return errors.New("self-build signature must be point at infinity")
 		}
 	} else {
@@ -120,6 +126,9 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 			return fmt.Errorf("builder %d cannot cover bid amount %d", builderIndex, amount)
 		}
 
+		if st.Version() == version.PQ {
+			return errors.New("XMSS builder bid verification is not wired yet")
+		}
 		if err := ValidatePayloadBidSignature(st, signedBid); err != nil {
 			return errors.Wrap(err, "bid signature validation failed")
 		}
