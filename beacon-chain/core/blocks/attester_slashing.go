@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -41,21 +42,18 @@ func ProcessAttesterSlashings(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []ethpb.AttSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "blocks.ProcessAttesterSlashings")
 	defer span.End()
 
 	span.SetAttributes(trace.Int64Attribute("count", int64(len(slashings))))
 
-	if exitInfo == nil && len(slashings) > 0 {
-		return nil, errors.New("exit info required to process attester slashings")
-	}
 	var err error
-	for _, slashing := range slashings {
-		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, exitInfo)
+	for i, slashing := range slashings {
+		beaconState, err = ProcessAttesterSlashing(ctx, beaconState, slashing, preElectraExitInfo)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("process attester slashing %d: %w", i, err)
 		}
 	}
 	return beaconState, nil
@@ -68,16 +66,13 @@ func ProcessAttesterSlashingsNoVerify(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashings []ethpb.AttSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
-	if exitInfo == nil && len(slashings) > 0 {
-		return nil, errors.New("exit info required to process attester slashings")
-	}
 	var err error
-	for _, slashing := range slashings {
-		beaconState, err = ProcessAttesterSlashingNoVerify(ctx, beaconState, slashing, exitInfo)
+	for i, slashing := range slashings {
+		beaconState, err = ProcessAttesterSlashingNoVerify(ctx, beaconState, slashing, preElectraExitInfo)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("process attester slashing %d: %w", i, err)
 		}
 	}
 	return beaconState, nil
@@ -88,15 +83,12 @@ func ProcessAttesterSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing ethpb.AttSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
-	if exitInfo == nil {
-		return nil, errors.New("exit info is required to process attester slashing")
-	}
 	if err := VerifyAttesterSlashing(ctx, beaconState, slashing); err != nil {
 		return nil, errors.Wrap(err, "could not verify attester slashing")
 	}
-	return processAttesterSlashing(ctx, beaconState, slashing, exitInfo)
+	return processAttesterSlashing(ctx, beaconState, slashing, preElectraExitInfo)
 }
 
 // ProcessAttesterSlashingNoVerify processes individual attester slashing without verifying it.
@@ -106,19 +98,16 @@ func ProcessAttesterSlashingNoVerify(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing ethpb.AttSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
-	if exitInfo == nil {
-		return nil, errors.New("exit info is required to process attester slashing")
-	}
-	return processAttesterSlashing(ctx, beaconState, slashing, exitInfo)
+	return processAttesterSlashing(ctx, beaconState, slashing, preElectraExitInfo)
 }
 
 func processAttesterSlashing(
 	ctx context.Context,
 	beaconState state.BeaconState,
 	slashing ethpb.AttSlashing,
-	exitInfo *validators.ExitInfo,
+	preElectraExitInfo *validators.ExitInfo,
 ) (state.BeaconState, error) {
 	slashableIndices := SlashableAttesterIndices(slashing)
 	sort.SliceStable(slashableIndices, func(i, j int) bool {
@@ -131,10 +120,10 @@ func processAttesterSlashing(
 	for _, validatorIndex := range slashableIndices {
 		val, err = beaconState.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(validatorIndex))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get validator %d: %w", validatorIndex, err)
 		}
 		if helpers.IsSlashableValidator(val.ActivationEpoch(), val.WithdrawableEpoch(), val.Slashed(), currentEpoch) {
-			beaconState, err = validators.SlashValidator(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), exitInfo)
+			beaconState, err = validators.SlashValidator(ctx, beaconState, primitives.ValidatorIndex(validatorIndex), preElectraExitInfo)
 			if err != nil {
 				return nil, errors.Wrapf(err, "could not slash validator index %d", validatorIndex)
 			}

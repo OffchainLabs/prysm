@@ -5,9 +5,15 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/time"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -211,6 +217,97 @@ func TestElectraOperations_ProcessingErrors(t *testing.T) {
 			_, err = transition.ElectraOperations(ctx, st, b.Block())
 			require.NotNil(t, err, "Expected an error but got nil")
 			tc.errCheck(t, err)
+		})
+	}
+}
+
+// TestOperations_SlashingAndExitEpochsPostElectra checks that a slashing and a voluntary
+// exit get the exit epochs from the state churn without an exit info.
+func TestOperations_SlashingAndExitEpochsPostElectra(t *testing.T) {
+	cfg := params.BeaconConfig()
+	tests := []struct {
+		name    string
+		genesis func(testing.TB, uint64) (state.BeaconState, []bls.SecretKey)
+		process func(context.Context, state.BeaconState, *ethpb.ProposerSlashing, *ethpb.SignedVoluntaryExit) (state.BeaconState, error)
+		// Exit epochs of slashed validator 0 and exited validator 1.
+		wantEpochs [2]primitives.Epoch
+	}{
+		{
+			name: "electra",
+			genesis: func(t testing.TB, n uint64) (state.BeaconState, []bls.SecretKey) {
+				return util.DeterministicGenesisStateElectra(t, n)
+			},
+			process: func(ctx context.Context, st state.BeaconState, ps *ethpb.ProposerSlashing, exit *ethpb.SignedVoluntaryExit) (state.BeaconState, error) {
+				blk := util.NewBeaconBlockElectra()
+				blk.Block.Slot = st.Slot()
+				blk.Block.Body.ProposerSlashings = []*ethpb.ProposerSlashing{ps}
+				blk.Block.Body.VoluntaryExits = []*ethpb.SignedVoluntaryExit{exit}
+				b, err := blocks.NewSignedBeaconBlock(blk)
+				if err != nil {
+					return nil, err
+				}
+				return transition.ElectraOperations(ctx, st, b.Block())
+			},
+			// Churn: min(256 ETH, 12,800,000 ETH / 65,536) = 195 ETH.
+			// 261 + ceil((100,000 - 195) / 195) = 773, and 35 ETH of churn is left.
+			// 773 + ceil((100,000 - 35) / 195) = 1286.
+			wantEpochs: [2]primitives.Epoch{773, 1286},
+		},
+		{
+			name:    "gloas",
+			genesis: util.DeterministicGenesisStateGloas,
+			process: func(ctx context.Context, st state.BeaconState, ps *ethpb.ProposerSlashing, exit *ethpb.SignedVoluntaryExit) (state.BeaconState, error) {
+				blk := util.NewBeaconBlockGloas()
+				blk.Block.Slot = st.Slot()
+				blk.Block.Body.ProposerSlashings = []*ethpb.ProposerSlashing{ps}
+				blk.Block.Body.VoluntaryExits = []*ethpb.SignedVoluntaryExit{exit}
+				b, err := blocks.NewSignedBeaconBlock(blk)
+				if err != nil {
+					return nil, err
+				}
+				return transition.GloasOperations(ctx, st, b.Block(), st.Slot()-1)
+			},
+			// EIP-8061 churn: 12,800,000 ETH / 32,768 = 390 ETH, with no 256 ETH cap.
+			// 261 + ceil((100,000 - 390) / 390) = 517, and 230 ETH of churn is left.
+			// 517 + ceil((100,000 - 230) / 390) = 773.
+			wantEpochs: [2]primitives.Epoch{517, 773},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helpers.ClearCache()
+			t.Cleanup(helpers.ClearCache)
+
+			st, ks := tt.genesis(t, 128)
+			require.NoError(t, st.SetSlot(primitives.Slot(cfg.ShardCommitteePeriod)*cfg.SlotsPerEpoch))
+			// Make the total active balance 12,800,000 ETH, so the exit churn is above its minimum.
+			// Then a wrong total active balance gives different exit epochs.
+			vals := st.Validators()
+			for _, val := range vals {
+				val.EffectiveBalance = 100_000 * cfg.GweiPerEth
+			}
+			require.NoError(t, st.SetValidators(vals))
+
+			ps, err := util.GenerateProposerSlashingForValidator(st, ks[0], 0)
+			require.NoError(t, err)
+			exit := &ethpb.SignedVoluntaryExit{Exit: &ethpb.VoluntaryExit{Epoch: time.CurrentEpoch(st), ValidatorIndex: 1}}
+			// EIP-7044: exits are signed with the Capella fork version.
+			capellaFork := &ethpb.Fork{CurrentVersion: cfg.CapellaForkVersion, PreviousVersion: cfg.CapellaForkVersion}
+			domain, err := signing.Domain(capellaFork, exit.Exit.Epoch, cfg.DomainVoluntaryExit, st.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			sr, err := signing.ComputeSigningRoot(exit.Exit, domain)
+			require.NoError(t, err)
+			exit.Signature = ks[1].Sign(sr[:]).Marshal()
+
+			st, err = tt.process(t.Context(), st, ps, exit)
+			require.NoError(t, err)
+
+			// The earliest exit epoch is 256 + 1 + MAX_SEED_LOOKAHEAD = 261.
+			for idx, want := range tt.wantEpochs {
+				val, err := st.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(idx))
+				require.NoError(t, err)
+				require.Equal(t, want, val.ExitEpoch(), "validator %d", idx)
+			}
 		})
 	}
 }

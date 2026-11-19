@@ -83,23 +83,23 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 	for _, idx := range eligibleForActivationQ {
 		v, err := st.ValidatorAtIndex(idx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get validator %d eligible for the activation queue: %w", idx, err)
 		}
 		v.ActivationEligibilityEpoch = activationEligibilityEpoch
 		if err := st.UpdateValidatorAtIndex(idx, v); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("update validator %d eligible for the activation queue: %w", idx, err)
 		}
 	}
 
 	// Process validators eligible for ejection.
 	if len(eligibleForEjection) > 0 {
-		// It is safe to compute exitInfo once for all ejections in the epoch, as the ExitInfo pointer is
+		// It is safe to compute preElectraExitInfo once for all ejections in the epoch, as the ExitInfo pointer is
 		// updated within InitiateValidatorExit which is the only function that uses it.
-		exitInfo := validators.ExitInformation(st)
+		preElectraExitInfo := validators.ExitInformation(st)
 		for _, idx := range eligibleForEjection {
 			// Here is fine to do a quadratic loop since this should
 			// barely happen
-			st, err = validators.InitiateValidatorExit(ctx, st, idx, exitInfo)
+			st, err = validators.InitiateValidatorExit(ctx, st, idx, preElectraExitInfo)
 			if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 				return nil, errors.Wrapf(err, "could not initiate exit for validator %d", idx)
 			}
@@ -131,11 +131,11 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) (state.Be
 	for _, index := range eligibleForActivation[:limit] {
 		validator, err := st.ValidatorAtIndex(index)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get validator %d eligible for activation: %w", index, err)
 		}
 		validator.ActivationEpoch = activationExitEpoch
 		if err := st.UpdateValidatorAtIndex(index, validator); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("update validator %d eligible for activation: %w", index, err)
 		}
 	}
 	return st, nil

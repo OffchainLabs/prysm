@@ -334,6 +334,8 @@ func TestProcessAttesterSlashing_ExitEpochGetsUpdated(t *testing.T) {
 	vals[2].EffectiveBalance = uint64(perEpochChurn / 3)
 	vals[3].EffectiveBalance = uint64(perEpochChurn / 3)
 	require.NoError(t, st.SetValidators(vals))
+	// The total active balance changed, so drop the cached value.
+	helpers.ClearCache()
 
 	sl1att1 := util.HydrateIndexedAttestationElectra(&ethpb.IndexedAttestationElectra{
 		Data: &ethpb.AttestationData{
@@ -393,9 +395,12 @@ func TestProcessAttesterSlashing_ExitEpochGetsUpdated(t *testing.T) {
 	aggregateSig = bls.AggregateSignatures([]bls.Signature{sig0, sig1})
 	sl2att2.Signature = aggregateSig.Marshal()
 
-	exitInfo := v.ExitInformation(st)
-	assert.Equal(t, primitives.Epoch(0), exitInfo.HighestExitEpoch)
-	_, err = blocks.ProcessAttesterSlashings(t.Context(), st, []ethpb.AttSlashing{slashing1, slashing2}, exitInfo)
+	st, err = blocks.ProcessAttesterSlashings(t.Context(), st, []ethpb.AttSlashing{slashing1, slashing2}, nil /* post-Electra */)
 	require.NoError(t, err)
-	assert.Equal(t, primitives.Epoch(6), exitInfo.HighestExitEpoch)
+	earliestExitEpoch, err := st.EarliestExitEpoch()
+	require.NoError(t, err)
+	assert.Equal(t, primitives.Epoch(6), earliestExitEpoch)
+	val, err := st.ValidatorAtIndexReadOnly(3)
+	require.NoError(t, err)
+	assert.Equal(t, primitives.Epoch(6), val.ExitEpoch())
 }

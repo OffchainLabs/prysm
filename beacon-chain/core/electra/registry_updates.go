@@ -69,7 +69,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	for _, idx := range eligibleForActivationQ {
 		v, err := st.ValidatorAtIndex(idx)
 		if err != nil {
-			return err
+			return fmt.Errorf("get validator %d eligible for the activation queue: %w", idx, err)
 		}
 		v.ActivationEligibilityEpoch = currentEpoch + 1
 		if err := st.UpdateValidatorAtIndex(idx, v); err != nil {
@@ -80,8 +80,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	// Handle validator ejections.
 	for _, idx := range eligibleForEjection {
 		var err error
-		// exit info is not used in electra
-		st, err = validators.InitiateValidatorExit(ctx, st, idx, &validators.ExitInfo{})
+		st, err = validators.InitiateValidatorExit(ctx, st, idx, nil /* post-Electra */)
 		if err != nil && !errors.Is(err, validators.ErrValidatorAlreadyExited) {
 			return fmt.Errorf("failed to initiate validator exit at index %d: %w", idx, err)
 		}
@@ -91,7 +90,7 @@ func ProcessRegistryUpdates(ctx context.Context, st state.BeaconState) error {
 	for _, idx := range eligibleForActivation {
 		v, err := st.ValidatorAtIndex(idx)
 		if err != nil {
-			return err
+			return fmt.Errorf("get validator %d eligible for activation: %w", idx, err)
 		}
 		v.ActivationEpoch = activationEpoch
 		if err := st.UpdateValidatorAtIndex(idx, v); err != nil {

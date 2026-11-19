@@ -8,8 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
-	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -66,21 +64,11 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 	var err error
 
 	bb := block.Body()
-	var exitInfo *v.ExitInfo
-	hasSlashings := len(bb.ProposerSlashings()) > 0 || len(bb.AttesterSlashings()) > 0
-	hasExits := len(bb.VoluntaryExits()) > 0
-	if hasSlashings || hasExits {
-		// ExitInformation is expensive to compute, only do it if we need it.
-		exitInfo = v.ExitInformation(st)
-		if err := helpers.UpdateTotalActiveBalanceCache(ctx, st, exitInfo.TotalActiveBalance); err != nil {
-			return nil, errors.Wrap(err, "could not update total active balance cache")
-		}
-	}
-	st, err = blocks.ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), exitInfo)
+	st, err = blocks.ProcessProposerSlashings(ctx, st, bb.ProposerSlashings(), nil /* post-Electra */)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessProposerSlashingsFailed, err.Error())
 	}
-	st, err = blocks.ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), exitInfo)
+	st, err = blocks.ProcessAttesterSlashings(ctx, st, bb.AttesterSlashings(), nil /* post-Electra */)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttesterSlashingsFailed, err.Error())
 	}
@@ -91,7 +79,7 @@ func gloasOperations(ctx context.Context, st state.BeaconState, block interfaces
 	if _, err := electra.ProcessDeposits(ctx, st, bb.Deposits()); err != nil {
 		return nil, errors.Wrap(ErrProcessDepositsFailed, err.Error())
 	}
-	st, err = blocks.ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
+	st, err = blocks.ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), nil /* post-Electra */)
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessVoluntaryExitsFailed, err.Error())
 	}

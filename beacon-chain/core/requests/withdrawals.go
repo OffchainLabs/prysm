@@ -3,6 +3,7 @@ package requests
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
@@ -13,7 +14,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
@@ -94,15 +94,6 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 	if len(wrs) == 0 {
 		return st, nil
 	}
-	// It is correct to compute exitInfo once for all withdrawals in the block, as the ExitInfo pointer is
-	// updated within InitiateValidatorExit which is the only function that uses it.
-	var exitInfo *validators.ExitInfo
-	if st.Version() < version.Electra {
-		exitInfo = validators.ExitInformation(st)
-	} else {
-		// After Electra, the function InitiateValidatorExit ignores the exitInfo passed to it and recomputes it anyway.
-		exitInfo = &validators.ExitInfo{}
-	}
 	for _, wr := range wrs {
 		if wr == nil {
 			return nil, errors.New("nil execution layer withdrawal request")
@@ -111,7 +102,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		isFullExitRequest := amount == params.BeaconConfig().FullExitRequestAmount
 		// If partial withdrawal queue is full, only full exits are processed
 		if n, err := st.NumPendingPartialWithdrawals(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get pending partial withdrawal count: %w", err)
 		} else if n == params.BeaconConfig().PendingPartialWithdrawalsLimit && !isFullExitRequest {
 			// if the PendingPartialWithdrawalsLimit is met, the user would have paid for a partial withdrawal that's not included
 			log.Debug("Skipping execution layer withdrawal request, PendingPartialWithdrawalsLimit reached")
@@ -125,7 +116,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		}
 		validator, err := st.ValidatorAtIndexReadOnly(vIdx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get validator %d: %w", vIdx, err)
 		}
 		// Verify withdrawal credentials
 		hasCorrectCredential := validator.HasExecutionWithdrawalCredentials()
@@ -154,16 +145,15 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 
 		pendingBalanceToWithdraw, err := st.PendingBalanceToWithdraw(vIdx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get pending balance to withdraw of validator %d: %w", vIdx, err)
 		}
 		if isFullExitRequest {
 			// Only exit validator if it has no pending withdrawals in the queue
 			if pendingBalanceToWithdraw == 0 {
 				var err error
-				// exitInfo is updated within InitiateValidatorExit
-				st, err = validators.InitiateValidatorExit(ctx, st, vIdx, exitInfo)
+				st, err = validators.InitiateValidatorExit(ctx, st, vIdx, nil /* post-Electra */)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("initiate exit of validator %d: %w", vIdx, err)
 				}
 			}
 			continue
@@ -172,7 +162,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 		hasSufficientEffectiveBalance := validator.EffectiveBalance() >= params.BeaconConfig().MinActivationBalance
 		vBal, err := st.BalanceAtIndex(vIdx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get balance of validator %d: %w", vIdx, err)
 		}
 		hasExcessBalance := vBal > params.BeaconConfig().MinActivationBalance+pendingBalanceToWithdraw
 
@@ -188,7 +178,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 			toWithdraw := min(vBal-params.BeaconConfig().MinActivationBalance-pendingBalanceToWithdraw, amount)
 			exitQueueEpoch, err := st.ExitEpochAndUpdateChurn(ctx, primitives.Gwei(toWithdraw))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("compute exit queue epoch of validator %d: %w", vIdx, err)
 			}
 			// safe add the uint64 to avoid overflow
 			withdrawableEpoch, err := exitQueueEpoch.SafeAddEpoch(params.BeaconConfig().MinValidatorWithdrawabilityDelay)
@@ -200,7 +190,7 @@ func ProcessWithdrawalRequests(ctx context.Context, st state.BeaconState, wrs []
 				Amount:            toWithdraw,
 				WithdrawableEpoch: withdrawableEpoch,
 			}); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("append pending partial withdrawal of validator %d: %w", vIdx, err)
 			}
 		}
 	}
