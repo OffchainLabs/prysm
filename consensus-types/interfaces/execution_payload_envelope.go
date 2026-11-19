@@ -10,6 +10,7 @@ import (
 type ROSignedExecutionPayloadEnvelope interface {
 	Envelope() (ROExecutionPayloadEnvelope, error)
 	Signature() [field_params.BLSSignatureLength]byte
+	XMSSSignature() []byte
 	SigningRoot([]byte) ([32]byte, error)
 	IsNil() bool
 	Proto() proto.Message
@@ -19,6 +20,7 @@ type ROSignedExecutionPayloadEnvelope interface {
 // full and blinded execution payload envelopes.
 type ROBlindedExecutionPayloadEnvelope interface {
 	ExecutionRequests() *enginev1.ExecutionRequestsGloas
+	ExecutionRequestsPQ() *enginev1.ExecutionRequestsPQ
 	BuilderIndex() primitives.BuilderIndex
 	BeaconBlockRoot() [field_params.RootLength]byte
 	ParentBeaconBlockRoot() [field_params.RootLength]byte
