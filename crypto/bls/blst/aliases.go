@@ -10,3 +10,8 @@ type blstSignature = blst.P2Affine
 type blstAggregateSignature = blst.P2Aggregate
 type blstAggregatePublicKey = blst.P1Aggregate
 type blstPoint = blst.P1
+
+// blstP1AffinesAdd sums affine G1 points with one batched cgo call on the calling goroutine.
+func blstP1AffinesAdd(points []*blstPublicKey) *blstPoint {
+	return blst.P1AffinesAdd(points)
+}

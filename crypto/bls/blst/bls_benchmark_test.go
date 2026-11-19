@@ -3,6 +3,7 @@
 package blst_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/crypto/bls/blst"
@@ -57,5 +58,44 @@ func BenchmarkSecretKey_Marshal(b *testing.B) {
 	for b.Loop() {
 		_, err := blst.SecretKeyFromBytes(d)
 		_ = err
+	}
+}
+
+func BenchmarkAggregatePublicKeys(b *testing.B) {
+	for _, n := range []int{64, 128, 512, 2048, 16_384, 32_768} {
+		raw := make([][]byte, n)
+		for i := range raw {
+			sk, err := blst.RandKey()
+			require.NoError(b, err)
+			raw[i] = sk.PublicKey().Marshal()
+		}
+
+		// Fill the pubkey cache, as on a live node.
+		_, err := blst.AggregatePublicKeys(raw)
+		require.NoError(b, err)
+
+		b.Run(fmt.Sprintf("%d", n), func(b *testing.B) {
+			for b.Loop() {
+				_, err := blst.AggregatePublicKeys(raw)
+				require.NoError(b, err)
+			}
+		})
+	}
+}
+
+func BenchmarkAggregateMultiplePubkeys(b *testing.B) {
+	for _, n := range []int{64, 128, 512, 2048, 16_384, 32_768} {
+		pks := make([]common.PublicKey, n)
+		for i := range pks {
+			sk, err := blst.RandKey()
+			require.NoError(b, err)
+			pks[i] = sk.PublicKey()
+		}
+
+		b.Run(fmt.Sprintf("%d", n), func(b *testing.B) {
+			for b.Loop() {
+				blst.AggregateMultiplePubkeys(pks)
+			}
+		})
 	}
 }
