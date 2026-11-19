@@ -93,6 +93,11 @@ func InitializeDataMaps() {
 				&ethpb.SignedBeaconBlockGloas{Block: &ethpb.BeaconBlockGloas{Body: &ethpb.BeaconBlockBodyGloas{}}},
 			)
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
+			return blocks.NewSignedBeaconBlock(
+				&ethpb.SignedBeaconBlockPQ{Block: &ethpb.BeaconBlockPQ{Body: &ethpb.BeaconBlockBodyPQ{}}},
+			)
+		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (interfaces.ReadOnlySignedBeaconBlock, error) {
 			return blocks.NewSignedBeaconBlock(
 				&ethpb.SignedBeaconBlockHeze{Block: &ethpb.BeaconBlockHeze{Body: &ethpb.BeaconBlockBodyHeze{}}},
@@ -126,6 +131,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (metadata.Metadata, error) {
 			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (metadata.Metadata, error) {
+			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
+		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (metadata.Metadata, error) {
 			return wrapper.WrappedMetadataV2(&ethpb.MetaDataV2{}), nil
 		},
@@ -156,6 +164,9 @@ func InitializeDataMaps() {
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (ethpb.Att, error) {
 			return &ethpb.SingleAttestation{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (ethpb.Att, error) {
+			return &ethpb.SingleAttestationPQ{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (ethpb.Att, error) {
 			return &ethpb.SingleAttestation{}, nil
@@ -188,6 +199,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
 			return &ethpb.SignedAggregateAttestationAndProofGloas{}, nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
+			return &ethpb.SignedAggregateAttestationAndProofPQ{}, nil
+		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (ethpb.SignedAggregateAttAndProof, error) {
 			return &ethpb.SignedAggregateAttestationAndProofGloas{}, nil
 		},
@@ -219,6 +233,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (ethpb.AttSlashing, error) {
 			return &ethpb.AttesterSlashingElectra{}, nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (ethpb.AttSlashing, error) {
+			return &ethpb.AttesterSlashingPQ{}, nil
+		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (ethpb.AttSlashing, error) {
 			return &ethpb.AttesterSlashingElectra{}, nil
 		},
@@ -245,6 +262,9 @@ func InitializeDataMaps() {
 			return lightclientConsensusTypes.NewEmptyOptimisticUpdateDeneb(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
+			return lightclientConsensusTypes.NewEmptyOptimisticUpdateGloas(), nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
 			return lightclientConsensusTypes.NewEmptyOptimisticUpdateGloas(), nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (interfaces.LightClientOptimisticUpdate, error) {
@@ -275,6 +295,9 @@ func InitializeDataMaps() {
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
 			return lightclientConsensusTypes.NewEmptyFinalityUpdateGloas(), nil
 		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
+			return lightclientConsensusTypes.NewEmptyFinalityUpdateGloas(), nil
+		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (interfaces.LightClientFinalityUpdate, error) {
 			return lightclientConsensusTypes.NewEmptyFinalityUpdateGloas(), nil
 		},
@@ -285,6 +308,9 @@ func InitializeDataMaps() {
 			return &ethpb.DataColumnSidecar{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().GloasForkVersion): func() (ssz.Unmarshaler, error) {
+			return &ethpb.DataColumnSidecarGloas{}, nil
+		},
+		bytesutil.ToBytes4(params.BeaconConfig().PQForkVersion): func() (ssz.Unmarshaler, error) {
 			return &ethpb.DataColumnSidecarGloas{}, nil
 		},
 		bytesutil.ToBytes4(params.BeaconConfig().HezeForkVersion): func() (ssz.Unmarshaler, error) {
