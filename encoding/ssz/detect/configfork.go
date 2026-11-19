@@ -90,6 +90,8 @@ func FromForkVersion(cv [fieldparams.VersionLength]byte) (*VersionedUnmarshaler,
 		fork = version.Fulu
 	case bytesutil.ToBytes4(cfg.GloasForkVersion):
 		fork = version.Gloas
+	case bytesutil.ToBytes4(cfg.PQForkVersion):
+		fork = version.PQ
 	case bytesutil.ToBytes4(cfg.HezeForkVersion):
 		fork = version.Heze
 	default:
@@ -177,6 +179,18 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconState(marshaled []byte) (s state.
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
 		}
+	case version.PQ:
+		st := &ethpb.BeaconStatePQ{}
+
+		err = st.UnmarshalSSZ(marshaled)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal state, detected fork=%s", forkName)
+		}
+
+		s, err = state_native.NewUnsafe(st)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to init state trie from state, detected fork=%s", forkName)
+		}
 	case version.Gloas:
 		st := &ethpb.BeaconStateGloas{}
 
@@ -253,6 +267,8 @@ func (cf *VersionedUnmarshaler) UnmarshalBeaconBlock(marshaled []byte) (interfac
 		blk = &ethpb.SignedBeaconBlockElectra{}
 	case version.Fulu:
 		blk = &ethpb.SignedBeaconBlockFulu{}
+	case version.PQ:
+		blk = &ethpb.SignedBeaconBlockPQ{}
 	case version.Gloas:
 		blk = &ethpb.SignedBeaconBlockGloas{}
 	case version.Heze:
@@ -296,6 +312,8 @@ func (cf *VersionedUnmarshaler) UnmarshalBlindedBeaconBlock(marshaled []byte) (i
 		blk = &ethpb.SignedBlindedBeaconBlockElectra{}
 	case version.Fulu:
 		blk = &ethpb.SignedBlindedBeaconBlockFulu{}
+	case version.PQ:
+		blk = &ethpb.SignedBeaconBlockPQ{}
 	case version.Gloas:
 		blk = &ethpb.SignedBeaconBlockGloas{}
 	case version.Heze:

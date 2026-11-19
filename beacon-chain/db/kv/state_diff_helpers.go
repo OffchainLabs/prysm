@@ -53,6 +53,7 @@ var (
 		version.Fulu:      fuluKey,
 		version.Gloas:     gloasKey,
 		version.Heze:      hezeKey,
+		version.PQ:        pqKey,
 	}
 )
 
@@ -443,6 +444,12 @@ func decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
 			return nil, fmt.Errorf("unmarshal Heze state: %w", err)
 		}
 		return statenative.NewUnsafe(&hezeState)
+	case hasPQKey(enc):
+		var pqState ethpb.BeaconStatePQ
+		if err := pqState.UnmarshalSSZ(enc[len(pqKey):]); err != nil {
+			return nil, fmt.Errorf("unmarshal PQ state: %w", err)
+		}
+		return statenative.NewUnsafe(&pqState)
 	case hasGloasKey(enc):
 		var gloasState ethpb.BeaconStateGloas
 		if err := gloasState.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {

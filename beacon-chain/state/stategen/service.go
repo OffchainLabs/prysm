@@ -19,6 +19,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -175,6 +176,10 @@ func (s *State) Resume(ctx context.Context, fState state.BeaconState) (state.Bea
 }
 
 func populatePubkeyCache(ctx context.Context, st state.ReadOnlyBeaconState) {
+	// XMSS keys need no decompression, so there is nothing to cache.
+	if st.Version() == version.PQ {
+		return
+	}
 	epoch := slots.ToEpoch(st.Slot())
 
 	go populatePubkeyCacheOnce.Do(func() {

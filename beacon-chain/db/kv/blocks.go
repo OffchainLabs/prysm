@@ -1208,6 +1208,11 @@ func unmarshalBlock(_ context.Context, enc []byte) (interfaces.ReadOnlySignedBea
 		if err := rawBlock.UnmarshalSSZ(enc[len(gloasKey):]); err != nil {
 			return nil, errors.Wrap(err, "could not unmarshal Gloas block")
 		}
+	case hasPQKey(enc):
+		rawBlock = &ethpb.SignedBeaconBlockPQ{}
+		if err := rawBlock.UnmarshalSSZ(enc[len(pqKey):]); err != nil {
+			return nil, errors.Wrap(err, "could not unmarshal PQ block")
+		}
 	case hasHezeKey(enc):
 		rawBlock = &ethpb.SignedBeaconBlockHeze{}
 		if err := rawBlock.UnmarshalSSZ(enc[len(hezeKey):]); err != nil {
@@ -1245,6 +1250,10 @@ func keyForBlock(blk interfaces.ReadOnlySignedBeaconBlock) ([]byte, error) {
 
 	if v >= version.Heze {
 		return hezeKey, nil
+	}
+
+	if v == version.PQ {
+		return pqKey, nil
 	}
 
 	if v >= version.Gloas {

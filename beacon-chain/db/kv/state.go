@@ -283,6 +283,10 @@ func (s *Store) saveStatesEfficientInternal(ctx context.Context, tx *bolt.Tx, bl
 			if err := s.processGloas(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return fmt.Errorf("save Gloas state: %w", err)
 			}
+		case *ethpb.BeaconStatePQ:
+			if err := s.processPQ(rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
+				return fmt.Errorf("save PQ state: %w", err)
+			}
 		case *ethpb.BeaconStateHeze:
 			if err := s.processHeze(ctx, rawType, rt[:], bucket, valIdxBkt, validatorKeys[i]); err != nil {
 				return fmt.Errorf("save Heze state: %w", err)
@@ -630,6 +634,12 @@ func (s *Store) unmarshalState(_ context.Context, enc []byte, validatorEntries [
 		}
 		if ok {
 			container.Validators = validatorEntries
+		}
+		return statenative.NewUnsafe(container)
+	case hasPQKey(enc):
+		container := &ethpb.BeaconStatePQ{}
+		if err := container.UnmarshalSSZ(enc[len(pqKey):]); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal encoding for PQ")
 		}
 		return statenative.NewUnsafe(container)
 	case hasGloasKey(enc):
