@@ -9,11 +9,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/epoch/precompute"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	v "github.com/OffchainLabs/prysm/v7/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -199,12 +201,21 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err != nil {
 		return err
 	}
-	_, err = electra.ProcessSyncCommitteeUpdates(ctx, state)
-	if err != nil {
-		return err
+	if state.Version() != version.PQ {
+		_, err = electra.ProcessSyncCommitteeUpdates(ctx, state)
+		if err != nil {
+			return err
+		}
 	}
 	if err := gloas.ProcessProposerLookahead(ctx, state); err != nil {
 		return err
 	}
-	return gloas.ProcessPTCWindow(ctx, state)
+	if err := gloas.ProcessPTCWindow(ctx, state); err != nil {
+		return err
+	}
+	if state.Version() != version.PQ {
+		return nil
+	}
+	// The preregistration sweep is skipped while preregistration requests are rejected.
+	return pq.ProcessAggregationCommitteeWindow(ctx, state)
 }
