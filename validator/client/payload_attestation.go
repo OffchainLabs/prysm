@@ -23,6 +23,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	payloadAttestationRetryWindow   = 500 * time.Millisecond
+	payloadAttestationRetryInterval = 50 * time.Millisecond
+)
+
 // Result labels for validatorPayloadAttestationSubmissionTotal.
 const (
 	payloadAttestationSuccess            = "success"
@@ -34,33 +39,43 @@ const (
 	payloadAttestationRecovered = "recovered"
 )
 
-// payloadAttestationDataWithRetry requests the payload attestation data for slot, asking
-// once more at the payload attestation deadline when the first request fails before it.
-// It reports whether a second request was made.
+// payloadAttestationDataWithRetry requests the payload attestation data for slot and,
+// if that fails, polls again from the payload attestation deadline for a short window.
+// It reports whether a retry was made.
 func (v *validator) payloadAttestationDataWithRetry(ctx context.Context, slot primitives.Slot) (*ethpb.PayloadAttestationData, bool, error) {
-	component := params.BeaconConfig().PayloadAttestationDueBPS
-	// Sampled before the request so a response crossing the deadline still retries.
-	askedBeforeDeadline := v.beforeSlotComponent(slot, component)
-
 	data, err := v.validatorClient.PayloadAttestationData(ctx, slot)
 	if err == nil {
 		return data, false, nil
 	}
-	if !askedBeforeDeadline {
-		return nil, false, err
-	}
 
 	log.WithField("slot", slot).WithError(err).
-		Debug("Payload attestation data not final yet, asking again at the deadline")
+		Debug("Payload attestation data not final yet, polling from the deadline")
 
-	v.waitUntilSlotComponent(ctx, slot, component)
+	v.waitUntilSlotComponent(ctx, slot, params.BeaconConfig().PayloadAttestationDueBPS)
 	// waitUntilSlotComponent returns silently on cancellation, so check before retrying.
 	if ctx.Err() != nil {
 		return nil, true, errors.Wrap(err, "context canceled while waiting for the payload attestation deadline")
 	}
-
-	data, err = v.validatorClient.PayloadAttestationData(ctx, slot)
-	return data, true, err
+	// The beacon node's clock may trail ours, so keep asking briefly past the deadline.
+	retryCtx, cancel := context.WithTimeout(ctx, payloadAttestationRetryWindow)
+	defer cancel()
+	for {
+		data, retryErr := v.validatorClient.PayloadAttestationData(retryCtx, slot)
+		if retryErr == nil {
+			return data, true, nil
+		}
+		if retryCtx.Err() == nil {
+			err = retryErr
+		}
+		select {
+		case <-retryCtx.Done():
+			if ctx.Err() != nil {
+				return nil, true, errors.Wrap(err, "context canceled while retrying payload attestation data")
+			}
+			return nil, true, err
+		case <-time.After(payloadAttestationRetryInterval):
+		}
+	}
 }
 
 // payloadAttestationRetryOutcome labels the result of a retried request.

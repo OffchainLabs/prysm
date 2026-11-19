@@ -39,7 +39,8 @@ func TestSubmitPayloadAttestation_PayloadAttestationDataFailure(t *testing.T) {
 
 			m.validatorClient.EXPECT().
 				PayloadAttestationData(gomock.Any(), gomock.Any()).
-				Return(nil, errors.New("request failed"))
+				Return(nil, errors.New("request failed")).
+				MinTimes(1)
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
@@ -67,7 +68,8 @@ func TestSubmitPayloadAttestation_NoHeadBlockForSlot(t *testing.T) {
 			)
 			m.validatorClient.EXPECT().
 				PayloadAttestationData(gomock.Any(), gomock.Any()).
-				Return(nil, unavailable)
+				Return(nil, unavailable).
+				MinTimes(1)
 
 			var pubKey [fieldparams.BLSPubkeyLength]byte
 			copy(pubKey[:], validatorKey.PublicKey().Marshal())
@@ -214,8 +216,8 @@ func TestPayloadAttestationDataWithRetry_ResponseCrossesDeadline(t *testing.T) {
 	require.DeepEqual(t, want, got)
 }
 
-// After the deadline there is nothing to wait for, so the request is not repeated.
-func TestSubmitPayloadAttestation_NoRetryAfterDeadline(t *testing.T) {
+// A beacon node whose clock trails ours still serves the vote after our deadline.
+func TestSubmitPayloadAttestation_RetriesAfterDeadline(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	cfg := params.BeaconConfig().Copy()
 	cfg.GloasForkEpoch = 0
@@ -225,21 +227,38 @@ func TestSubmitPayloadAttestation_NoRetryAfterDeadline(t *testing.T) {
 	// setup leaves genesisTime at the zero value, so the deadline is long past.
 	validator, m, validatorKey, finish := setup(t, false)
 	defer finish()
+	validator.duties = &dutyStore{}
+	var duties dutyStoreData
+	duties.setFromContainer(&ethpb.ValidatorDutiesContainer{CurrentEpochDuties: []*ethpb.ValidatorDuty{
+		{PublicKey: validatorKey.PublicKey().Marshal(), ValidatorIndex: 7},
+	}})
+	validator.duties.write(duties)
 
+	gomock.InOrder(
+		m.validatorClient.EXPECT().
+			PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
+			Return(nil, unavailableErr()).
+			Times(2),
+		m.validatorClient.EXPECT().
+			PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
+			Return(&ethpb.PayloadAttestationData{BeaconBlockRoot: make([]byte, 32), Slot: 1}, nil),
+	)
 	m.validatorClient.EXPECT().
-		PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
-		Return(nil, unavailableErr()).
-		Times(1)
+		DomainData(gomock.Any(), gomock.Any()).
+		Return(&ethpb.DomainResponse{SignatureDomain: make([]byte, 32)}, nil)
+	m.validatorClient.EXPECT().
+		SubmitPayloadAttestation(gomock.Any(), gomock.AssignableToTypeOf(&ethpb.PayloadAttestationMessage{})).
+		Return(&emptypb.Empty{}, nil)
 
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
 	validator.SubmitPayloadAttestation(t.Context(), 1, pubKey)
 
-	require.LogsContain(t, hook, "Skipping payload attestation: data unavailable")
-	require.LogsDoNotContain(t, hook, "Could not request payload attestation data")
+	require.LogsContain(t, hook, "Submitted new payload attestation")
+	require.LogsDoNotContain(t, hook, "Skipping payload attestation")
 }
 
-// A node still withholding at the deadline skips the slot after a second attempt.
+// A node still withholding through the retry window skips the slot.
 func TestSubmitPayloadAttestation_RetryStillUnavailable(t *testing.T) {
 	hook := logTest.NewGlobal()
 	validator, m, validatorKey, finish := setup(t, false)
@@ -250,7 +269,7 @@ func TestSubmitPayloadAttestation_RetryStillUnavailable(t *testing.T) {
 	m.validatorClient.EXPECT().
 		PayloadAttestationData(gomock.Any(), primitives.Slot(1)).
 		Return(nil, unavailableErr()).
-		Times(2)
+		MinTimes(2)
 
 	var pubKey [fieldparams.BLSPubkeyLength]byte
 	copy(pubKey[:], validatorKey.PublicKey().Marshal())
