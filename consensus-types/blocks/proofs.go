@@ -27,6 +27,9 @@ const (
 	beaconBlockBodyFieldCount           = 13
 )
 
+// hezeBlockBodyActiveFields is active_fields(width=13, gaps=(1, 6)): eth1_data and deposits are removed (EIP-8015).
+var hezeBlockBodyActiveFields = []bool{true, false, true, true, true, true, false, true, true, true, true, true, true}
+
 type progressiveContainerType uint8
 
 const (
@@ -72,13 +75,15 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 	}
 	copy(fieldRoots[0], root[:])
 
-	// eth1_data
-	eth1 := blockBody.Eth1Data()
-	root, err = eth1.HashTreeRoot()
-	if err != nil {
-		return nil, err
+	// eth1_data is removed in Heze (EIP-8015) and stays a zero leaf.
+	if blockBody.version < version.Heze {
+		eth1 := blockBody.Eth1Data()
+		root, err = eth1.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		copy(fieldRoots[1], root[:])
 	}
-	copy(fieldRoots[1], root[:])
 
 	// graffiti
 	root = blockBody.Graffiti()
@@ -117,13 +122,15 @@ func ComputeBlockBodyFieldRoots(ctx context.Context, blockBody *BeaconBlockBody)
 	}
 	copy(fieldRoots[5], root[:])
 
-	// Deposits
-	dep := blockBody.Deposits()
-	root, err = blockBodyListRoot(blockBody.version, dep, params.BeaconConfig().MaxDeposits)
-	if err != nil {
-		return nil, err
+	// Deposits are removed in Heze (EIP-8015) and stay a zero leaf.
+	if blockBody.version < version.Heze {
+		dep := blockBody.Deposits()
+		root, err = blockBodyListRoot(blockBody.version, dep, params.BeaconConfig().MaxDeposits)
+		if err != nil {
+			return nil, err
+		}
+		copy(fieldRoots[6], root[:])
 	}
-	copy(fieldRoots[6], root[:])
 
 	// Voluntary Exits
 	ve := blockBody.VoluntaryExits()
@@ -450,6 +457,9 @@ func progressiveContainerActiveFields(v int, container progressiveContainerType)
 		}
 		return af, nil
 	case beaconBlockBodyProgressiveContainer:
+		if v >= version.Heze {
+			return hezeBlockBodyActiveFields, nil
+		}
 		af := make([]bool, beaconBlockBodyFieldCount)
 		for i := range af {
 			af[i] = true

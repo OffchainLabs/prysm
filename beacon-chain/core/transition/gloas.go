@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -167,9 +168,12 @@ func processEpochGloas(ctx context.Context, state state.BeaconState) error {
 	if err := electra.ProcessSlashings(ctx, state); err != nil {
 		return err
 	}
-	state, err = electra.ProcessEth1DataReset(state)
-	if err != nil {
-		return err
+	// Heze removes process_eth1_data_reset from process_epoch (EIP-8015).
+	if state.Version() < version.Heze {
+		state, err = electra.ProcessEth1DataReset(state)
+		if err != nil {
+			return err
+		}
 	}
 	if err = electra.ProcessPendingDeposits(ctx, state, primitives.Gwei(bp.ActiveCurrentEpoch)); err != nil {
 		return err

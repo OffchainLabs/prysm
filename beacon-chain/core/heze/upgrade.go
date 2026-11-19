@@ -16,6 +16,10 @@ func UpgradeToHeze(beaconState state.BeaconState) (state.BeaconState, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "could not convert state to Gloas protobuf")
 	}
+	// Check that the old deposit mechanism has been disabled (EIP-8015).
+	if pre.Eth1DepositIndex != pre.DepositRequestsStartIndex {
+		return nil, errors.Errorf("eth1 deposit index %d does not equal deposit requests start index %d", pre.Eth1DepositIndex, pre.DepositRequestsStartIndex)
+	}
 	bid := pre.LatestExecutionPayloadBid
 	if bid == nil {
 		return nil, errors.New("nil latest execution payload bid")
@@ -34,9 +38,6 @@ func UpgradeToHeze(beaconState state.BeaconState) (state.BeaconState, error) {
 		BlockRoots:                    pre.BlockRoots,
 		StateRoots:                    pre.StateRoots,
 		HistoricalRoots:               pre.HistoricalRoots,
-		Eth1Data:                      pre.Eth1Data,
-		Eth1DataVotes:                 pre.Eth1DataVotes,
-		Eth1DepositIndex:              pre.Eth1DepositIndex,
 		Validators:                    pre.Validators,
 		Balances:                      pre.Balances,
 		RandaoMixes:                   pre.RandaoMixes,
@@ -54,7 +55,6 @@ func UpgradeToHeze(beaconState state.BeaconState) (state.BeaconState, error) {
 		NextWithdrawalIndex:           pre.NextWithdrawalIndex,
 		NextWithdrawalValidatorIndex:  pre.NextWithdrawalValidatorIndex,
 		HistoricalSummaries:           pre.HistoricalSummaries,
-		DepositRequestsStartIndex:     pre.DepositRequestsStartIndex,
 		DepositBalanceToConsume:       pre.DepositBalanceToConsume,
 		ExitBalanceToConsume:          pre.ExitBalanceToConsume,
 		EarliestExitEpoch:             pre.EarliestExitEpoch,

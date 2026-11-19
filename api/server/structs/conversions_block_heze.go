@@ -44,12 +44,10 @@ func BeaconBlockHezeFromConsensus(b *eth.BeaconBlockHeze) (*BeaconBlockHeze, err
 		StateRoot:     hexutil.Encode(b.StateRoot),
 		Body: &BeaconBlockBodyHeze{
 			RandaoReveal:              hexutil.Encode(b.Body.RandaoReveal),
-			Eth1Data:                  Eth1DataFromConsensus(b.Body.Eth1Data),
 			Graffiti:                  hexutil.Encode(b.Body.Graffiti),
 			ProposerSlashings:         ProposerSlashingsFromConsensus(b.Body.ProposerSlashings),
 			AttesterSlashings:         AttesterSlashingsGloasFromConsensus(b.Body.AttesterSlashings),
 			Attestations:              AttsGloasFromConsensus(b.Body.Attestations),
-			Deposits:                  DepositsFromConsensus(b.Body.Deposits),
 			VoluntaryExits:            SignedExitsFromConsensus(b.Body.VoluntaryExits),
 			SyncAggregate:             SyncAggregateFromConsensus(b.Body.SyncAggregate),
 			BLSToExecutionChanges:     SignedBLSChangesFromConsensus(b.Body.BlsToExecutionChanges),
@@ -161,9 +159,6 @@ func (b *BeaconBlockHeze) ToConsensus() (*eth.BeaconBlockHeze, error) {
 	if b.Body == nil {
 		return nil, server.NewDecodeError(errNilValue, "Body")
 	}
-	if b.Body.Eth1Data == nil {
-		return nil, server.NewDecodeError(errNilValue, "Body.Eth1Data")
-	}
 	if b.Body.SyncAggregate == nil {
 		return nil, server.NewDecodeError(errNilValue, "Body.SyncAggregate")
 	}
@@ -204,9 +199,6 @@ func (b *BeaconBlockBodyHeze) ToConsensus() (*eth.BeaconBlockBodyHeze, error) {
 	if b == nil {
 		return nil, errNilValue
 	}
-	if b.Eth1Data == nil {
-		return nil, server.NewDecodeError(errNilValue, "Eth1Data")
-	}
 	if b.SyncAggregate == nil {
 		return nil, server.NewDecodeError(errNilValue, "SyncAggregate")
 	}
@@ -217,18 +209,6 @@ func (b *BeaconBlockBodyHeze) ToConsensus() (*eth.BeaconBlockBodyHeze, error) {
 	randaoReveal, err := bytesutil.DecodeHexWithLength(b.RandaoReveal, fieldparams.BLSSignatureLength)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "RandaoReveal")
-	}
-	depositRoot, err := bytesutil.DecodeHexWithLength(b.Eth1Data.DepositRoot, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Eth1Data.DepositRoot")
-	}
-	depositCount, err := strconv.ParseUint(b.Eth1Data.DepositCount, 10, 64)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Eth1Data.DepositCount")
-	}
-	blockHash, err := bytesutil.DecodeHexWithLength(b.Eth1Data.BlockHash, fieldparams.RootLength)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Eth1Data.BlockHash")
 	}
 	graffiti, err := bytesutil.DecodeHexWithLength(b.Graffiti, fieldparams.RootLength)
 	if err != nil {
@@ -245,10 +225,6 @@ func (b *BeaconBlockBodyHeze) ToConsensus() (*eth.BeaconBlockBodyHeze, error) {
 	atts, err := AttsGloasToConsensus(b.Attestations)
 	if err != nil {
 		return nil, server.NewDecodeError(err, "Attestations")
-	}
-	deposits, err := DepositsToConsensus(b.Deposits)
-	if err != nil {
-		return nil, server.NewDecodeError(err, "Deposits")
 	}
 	exits, err := SignedExitsToConsensus(b.VoluntaryExits)
 	if err != nil {
@@ -283,17 +259,11 @@ func (b *BeaconBlockBodyHeze) ToConsensus() (*eth.BeaconBlockBodyHeze, error) {
 	}
 
 	return &eth.BeaconBlockBodyHeze{
-		RandaoReveal: randaoReveal,
-		Eth1Data: &eth.Eth1Data{
-			DepositRoot:  depositRoot,
-			DepositCount: depositCount,
-			BlockHash:    blockHash,
-		},
+		RandaoReveal:      randaoReveal,
 		Graffiti:          graffiti,
 		ProposerSlashings: proposerSlashings,
 		AttesterSlashings: attesterSlashings,
 		Attestations:      atts,
-		Deposits:          deposits,
 		VoluntaryExits:    exits,
 		SyncAggregate: &eth.SyncAggregate{
 			SyncCommitteeBits:      syncCommitteeBits,

@@ -564,7 +564,10 @@ func testToContainer[T statenative.Container](t *testing.T, input T) {
 	field := func(c T, name string) reflect.Value { return reflect.ValueOf(c).Elem().FieldByName(name) }
 	field(input, "Fork").Set(reflect.ValueOf(&ethpb.Fork{Epoch: 1}))
 	field(input, "LatestBlockHeader").Set(reflect.ValueOf(&ethpb.BeaconBlockHeader{Slot: 1}))
-	field(input, "Eth1Data").Set(reflect.ValueOf(&ethpb.Eth1Data{DepositCount: 1}))
+	hasEth1Data := field(input, "Eth1Data").IsValid()
+	if hasEth1Data {
+		field(input, "Eth1Data").Set(reflect.ValueOf(&ethpb.Eth1Data{DepositCount: 1}))
+	}
 	field(input, "Validators").Set(reflect.ValueOf([]*ethpb.Validator{{EffectiveBalance: 1}}))
 	field(input, "Balances").Set(reflect.ValueOf([]uint64{1}))
 	st, err := statenative.New(input)
@@ -574,13 +577,17 @@ func testToContainer[T statenative.Container](t *testing.T, input T) {
 	require.NoError(t, err)
 	field(c, "Fork").Interface().(*ethpb.Fork).Epoch = 99
 	field(c, "LatestBlockHeader").Interface().(*ethpb.BeaconBlockHeader).Slot = 99
-	field(c, "Eth1Data").Interface().(*ethpb.Eth1Data).DepositCount = 99
+	if hasEth1Data {
+		field(c, "Eth1Data").Interface().(*ethpb.Eth1Data).DepositCount = 99
+	}
 	field(c, "Validators").Interface().([]*ethpb.Validator)[0].EffectiveBalance = 99
 	field(c, "Balances").Interface().([]uint64)[0] = 99
 
 	require.Equal(t, primitives.Epoch(1), st.Fork().Epoch)
 	require.Equal(t, primitives.Slot(1), st.LatestBlockHeader().Slot)
-	require.Equal(t, uint64(1), st.Eth1Data().DepositCount)
+	if hasEth1Data {
+		require.Equal(t, uint64(1), st.Eth1Data().DepositCount)
+	}
 	v, err := st.ValidatorAtIndexReadOnly(0)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), v.EffectiveBalance())
