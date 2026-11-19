@@ -334,3 +334,74 @@ func TestDutyStore_replaceNextDuties_revisionGuard(t *testing.T) {
 	}
 	assert.Equal(t, true, ds.snapshot().missingNext() == 0)
 }
+
+func TestDutyStore_mergeDuties(t *testing.T) {
+	pkA := pubkey{0xa}
+	pkB := pubkey{0xb}
+	root := []byte{0x1, 0x2}
+
+	seed := func() *dutyStore {
+		ds := &dutyStore{}
+		var d dutyStoreData
+		d.setFromContainer(&ethpb.ValidatorDutiesContainer{
+			PrevDependentRoot:  root,
+			CurrDependentRoot:  root,
+			CurrentEpochDuties: []*ethpb.ValidatorDuty{{PublicKey: pkA[:], ValidatorIndex: 7, AttesterSlot: 100}},
+			NextEpochDuties:    []*ethpb.ValidatorDuty{{PublicKey: pkA[:], ValidatorIndex: 7, AttesterSlot: 150}},
+		})
+		d.epoch = 5
+		d.indices = []primitives.ValidatorIndex{7}
+		ds.write(d)
+		return ds
+	}
+	keepAll := func(pubkey) bool { return true }
+
+	t.Run("inserts new keys and preserves existing state", func(t *testing.T) {
+		ds := seed()
+		current := []*ethpb.ValidatorDuty{{PublicKey: pkB[:], ValidatorIndex: 9, AttesterSlot: 110, ProposerSlots: []primitives.Slot{112}}}
+		next := []*ethpb.ValidatorDuty{{PublicKey: pkB[:], ValidatorIndex: 9, AttesterSlot: 160, IsSyncCommittee: true}}
+		indices := []primitives.ValidatorIndex{7, 9}
+
+		assert.Equal(t, true, ds.mergeDuties(ds.snapshot().revision, current, next, indices, missingNextSync, keepAll))
+
+		snap := ds.snapshot()
+		assert.Equal(t, 2, snap.currentDutyCount())
+		assert.Equal(t, 2, snap.nextDutyCount())
+		gotA, ok := snap.currentDuty(pkA)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, primitives.Slot(100), gotA.AttesterSlot)
+		gotB, ok := snap.currentDuty(pkB)
+		assert.Equal(t, true, ok)
+		assert.Equal(t, primitives.Slot(110), gotB.AttesterSlot)
+		assert.DeepEqual(t, []primitives.Slot{112}, snap.proposerSlots(9))
+		assert.Equal(t, true, snap.isNextSyncCommittee(9))
+		assert.Equal(t, primitives.Epoch(5), snap.epoch())
+		assert.DeepEqual(t, indices, snap.indices())
+		assert.Equal(t, missingNextSync, snap.missingNext())
+		assert.DeepEqual(t, root, snap.prevDependentRoot())
+		assert.DeepEqual(t, root, snap.currDependentRoot())
+	})
+
+	t.Run("prunes keys failing keep", func(t *testing.T) {
+		ds := seed()
+		assert.Equal(t, true, ds.mergeDuties(ds.snapshot().revision, nil, nil, nil, 0, func(pk pubkey) bool { return pk != pkA }))
+		snap := ds.snapshot()
+		assert.Equal(t, 0, snap.currentDutyCount())
+		assert.Equal(t, 0, snap.nextDutyCount())
+		assert.Equal(t, true, snap.isInitialized())
+	})
+
+	t.Run("stale revision is dropped", func(t *testing.T) {
+		ds := seed()
+		staleRev := ds.snapshot().revision - 1
+		current := []*ethpb.ValidatorDuty{{PublicKey: pkB[:], ValidatorIndex: 9}}
+		assert.Equal(t, false, ds.mergeDuties(staleRev, current, nil, nil, 0, keepAll))
+		assert.Equal(t, 1, ds.snapshot().currentDutyCount())
+	})
+
+	t.Run("uninitialized store is a no-op", func(t *testing.T) {
+		ds := &dutyStore{}
+		assert.Equal(t, false, ds.mergeDuties(0, nil, nil, nil, 0, keepAll))
+		assert.Equal(t, false, ds.isInitialized())
+	})
+}

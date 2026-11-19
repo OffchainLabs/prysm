@@ -424,6 +424,37 @@ func (ds *dutyStore) write(data dutyStoreData) {
 	ds.revision++
 }
 
+// mergeDuties inserts fetched rows for newly eligible keys and drops rows for
+// keys failing keep, leaving all other state intact. Applies only at wantRevision.
+func (ds *dutyStore) mergeDuties(wantRevision uint64, current, next []*ethpb.ValidatorDuty, indices []primitives.ValidatorIndex, missing missingNextDuties, keep func(pubkey) bool) bool {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	if !ds.data.initialized || ds.revision != wantRevision {
+		return false
+	}
+	container := ds.data.toContainer()
+	container.CurrentEpochDuties = append(keepDuties(container.CurrentEpochDuties, keep), current...)
+	container.NextEpochDuties = append(keepDuties(container.NextEpochDuties, keep), next...)
+	epoch := ds.data.epoch
+	ds.data.setFromContainer(container)
+	ds.data.epoch = epoch
+	ds.data.indices = indices
+	ds.data.missingNext = missing
+	ds.revision++
+	return true
+}
+
+// keepDuties filters duties to those whose pubkey passes keep.
+func keepDuties(duties []*ethpb.ValidatorDuty, keep func(pubkey) bool) []*ethpb.ValidatorDuty {
+	out := make([]*ethpb.ValidatorDuty, 0, len(duties))
+	for _, d := range duties {
+		if d != nil && keep(bytesutil.ToBytes48(d.PublicKey)) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 // replaceNextDuties swaps in next-epoch duties and the missing mask, keeping
 // current-epoch duties/epoch/indices. A non-nil currDepRoot refreshes the current
 // dependent root; nil keeps it. Applies (and reports true) only if the store is
