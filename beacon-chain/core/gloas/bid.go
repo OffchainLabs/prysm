@@ -127,9 +127,10 @@ func ProcessExecutionPayloadBid(st state.BeaconState, block interfaces.ReadOnlyB
 		}
 
 		if st.Version() == version.PQ {
-			return errors.New("XMSS builder bid verification is not wired yet")
-		}
-		if err := ValidatePayloadBidSignature(st, signedBid); err != nil {
+			if err := pq.VerifyBuilderBidSignature(st, signedBid, block.Body().XMSSBidSignature()); err != nil {
+				return errors.Wrap(err, "bid signature validation failed")
+			}
+		} else if err := ValidatePayloadBidSignature(st, signedBid); err != nil {
 			return errors.Wrap(err, "bid signature validation failed")
 		}
 	}
