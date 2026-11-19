@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "aggregation_committee.go",
+        "attestation.go",
         "randao.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq",

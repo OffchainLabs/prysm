@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
 )
 
@@ -336,7 +337,11 @@ func AttestationParticipationFlagIndices(beaconState state.ReadOnlyBeaconState, 
 		return nil, err
 	}
 	matchedSrcTgtHead = matchedSrcTgtHead && matchingPayload
-	if matchedSrcTgtHead && delay == cfg.MinAttestationInclusionDelay {
+	minInclusionDelay := cfg.MinAttestationInclusionDelay
+	if beaconState.Version() == version.PQ {
+		minInclusionDelay = cfg.MinAttestationInclusionDelayPQ
+	}
+	if matchedSrcTgtHead && delay == minInclusionDelay {
 		participatedFlags[headFlagIndex] = true
 	}
 	return participatedFlags, nil
