@@ -145,7 +145,7 @@ func (s *Service) computePayloadWithdrawals(ctx context.Context, st state.Beacon
 	return result.Withdrawals, nil
 }
 
-// This is a Gloas version of getPayloadAttribute that avoids all the clutter that was originally due to the proposer Index.
+// This is a post-Gloas version of getPayloadAttribute that avoids all the clutter that was originally due to the proposer Index.
 // It is guaranteed to be called for the current slot + 1 and the head state to have been advanced to at least the current epoch.
 func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot, headRoot []byte) payloadattribute.Attributer {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
@@ -185,20 +185,10 @@ func (s *Service) getLatePayloadAttribute(ctx context.Context, st state.ReadOnly
 	feeRecipient := val.FeeRecipientOrDefault()
 	parentGasLimit := helpers.ParentTargetGasLimit(st)
 
-	attr, err := payloadattribute.New(&enginev1.PayloadAttributesV4{
-		Timestamp:             uint64(t.Unix()),
-		PrevRandao:            prevRando,
-		SuggestedFeeRecipient: feeRecipient[:],
-		Withdrawals:           withdrawals,
-		ParentBeaconBlockRoot: headRoot,
-		SlotNumber:            uint64(slot),
-		TargetGasLimit:        val.GasLimitOr(parentGasLimit),
-	})
-	if err != nil {
-		log.WithError(err).Error("Could not get payload attribute")
-		return emptyAttri
+	if st.Version() >= version.Heze {
+		return payloadAttributesHeze(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOr(parentGasLimit))
 	}
-	return attr
+	return payloadAttributesGloas(uint64(t.Unix()), prevRando, feeRecipient[:], headRoot, withdrawals, slot, val.GasLimitOr(parentGasLimit))
 }
 
 // latePayloadTasks sends an FCU when no payload arrived for the current slot's block.

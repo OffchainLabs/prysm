@@ -89,6 +89,7 @@ go_test(
         "deposit_test.go",
         "engine_client_fuzz_test.go",
         "engine_client_test.go",
+        "engine_jsonrpc_heze_test.go",
         "execution_block_test.go",
         "execution_chain_test.go",
         "graffiti_info_test.go",

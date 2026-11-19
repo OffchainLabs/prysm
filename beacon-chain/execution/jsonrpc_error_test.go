@@ -102,6 +102,11 @@ func Test_handleRPCError(t *testing.T) {
 			given:            &customError{code: -38003},
 		},
 		{
+			name:             "ErrUnsupportedFork",
+			expectedContains: ErrUnsupportedFork.Error(),
+			given:            &customError{code: -38005},
+		},
+		{
 			name:             "ErrServer unexpected no data",
 			expectedContains: "got an unexpected error",
 			given:            &customError{code: -32000},

@@ -830,6 +830,11 @@ func GloasEnabled() bool {
 	return BeaconConfig().GloasForkEpoch < math.MaxUint64
 }
 
+// HezeEnabled centralizes the check to determine if code paths that are specific to Heze should be allowed to execute.
+func HezeEnabled() bool {
+	return BeaconConfig().HezeForkEpoch < math.MaxUint64
+}
+
 // WithinDAPeriod checks if the block epoch is within the data availability retention period.
 func WithinDAPeriod(block, current primitives.Epoch) bool {
 	if block >= BeaconConfig().FuluForkEpoch {
