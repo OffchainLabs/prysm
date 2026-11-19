@@ -158,6 +158,53 @@ func TestValidateAttesterSlashing_ValidOldSlashing(t *testing.T) {
 	assert.Equal(t, true, valid, "Incorrect Validation")
 }
 
+func TestValidateAttesterSlashing_SlashedCheckedBeforeSignature(t *testing.T) {
+	tests := []struct {
+		name    string
+		indices []uint64
+		res     pubsub.ValidationResult
+		err     string
+	}{
+		{name: "previously slashed validators are ignored without verifying the signature", indices: []uint64{0, 1}, res: pubsub.ValidationIgnore, err: "validators were previously slashed"},
+		{name: "out of range validator index is rejected", indices: []uint64{0, 1, 100}, res: pubsub.ValidationReject, err: "out of bounds"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := p2ptest.NewTestP2P(t)
+			slashing, s := setupValidAttesterSlashing(t)
+			vals := s.Validators()
+			for _, v := range vals {
+				v.Slashed = true
+			}
+			require.NoError(t, s.SetValidators(vals))
+			slashing.Attestation_1.AttestingIndices = tt.indices
+			slashing.Attestation_2.AttestingIndices = tt.indices
+			slashing.Attestation_1.Signature = bls.NewAggregateSignature().Marshal()
+			chain := &mock.ChainService{State: s, Genesis: time.Now()}
+			r := &Service{
+				cfg: &config{
+					p2p:               p,
+					chain:             chain,
+					clock:             startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+					initialSync:       &mockSync.Sync{IsSyncing: false},
+					operationNotifier: chain.OperationNotifier(),
+				},
+				seenAttesterSlashingCache: make(map[uint64]bool),
+				subHandler:                newSubTopicHandler(),
+			}
+
+			buf := new(bytes.Buffer)
+			_, err := p.Encoding().EncodeGossip(buf, slashing)
+			require.NoError(t, err)
+			topic := r.addDigestToTopic(p2p.GossipTypeMapping[reflect.TypeFor[*ethpb.AttesterSlashing]()], r.currentForkDigest())
+			msg := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+			res, err := r.validateAttesterSlashing(t.Context(), "foobar", msg)
+			assert.ErrorContains(t, tt.err, err)
+			assert.Equal(t, tt.res, res)
+		})
+	}
+}
+
 func TestValidateAttesterSlashing_InvalidSlashing_WithdrawableEpoch(t *testing.T) {
 	p := p2ptest.NewTestP2P(t)
 	ctx := t.Context()
