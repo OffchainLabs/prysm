@@ -28,7 +28,7 @@ func (vs *Server) buildBlockPQ(ctx context.Context, sBlk interfaces.SignedBeacon
 	}
 	sBlk.SetEth1Data(eth1Data)
 	sBlk.SetParentExecutionRequestsPQ(&enginev1.ExecutionRequestsPQ{})
-	atts, proof, err := pqpool.Pack(ctx, head, vs.PQAttPool.All())
+	atts, proof, err := pqpool.Pack(ctx, head, vs.PQAttPool.All(), vs.PQAttPool.Aggregates())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not pack attestations: %v", err)
 	}
