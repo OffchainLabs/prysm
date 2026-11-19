@@ -212,6 +212,13 @@ func decodeBlindedEnvelope(enc []byte) (*ethpb.SignedBlindedExecutionPayloadEnve
 	if err != nil {
 		return nil, errors.Wrap(err, "could not snappy decode envelope")
 	}
+	if hasPQKey(dec) {
+		pq, err := decodeBlindedEnvelopePQ(dec)
+		if err != nil {
+			return nil, err
+		}
+		return blindedEnvelopeFromPQ(pq), nil
+	}
 	blinded := &ethpb.SignedBlindedExecutionPayloadEnvelope{}
 	if err := blinded.UnmarshalSSZ(dec); err != nil {
 		return nil, errors.Wrap(err, "could not unmarshal blinded envelope")
