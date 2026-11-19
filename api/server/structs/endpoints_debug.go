@@ -58,6 +58,10 @@ type ForkChoiceNodeExtraData struct {
 }
 
 type GetForkChoiceDumpV2Response struct {
+	Data *ForkChoiceDumpV2 `json:"data"`
+}
+
+type ForkChoiceDumpV2 struct {
 	JustifiedCheckpoint *Checkpoint              `json:"justified_checkpoint"`
 	FinalizedCheckpoint *Checkpoint              `json:"finalized_checkpoint"`
 	ForkChoiceNodes     []*ForkChoiceNodeV2      `json:"fork_choice_nodes"`
@@ -65,31 +69,30 @@ type GetForkChoiceDumpV2Response struct {
 }
 
 type ForkChoiceNodeV2 struct {
-	PayloadStatus      string                     `json:"payload_status"`
-	Slot               string                     `json:"slot"`
-	BlockRoot          string                     `json:"block_root"`
-	ParentRoot         string                     `json:"parent_root"`
-	Weight             string                     `json:"weight"`
-	Validity           string                     `json:"validity"`
-	ExecutionBlockHash string                     `json:"execution_block_hash"`
-	ExtraData          *ForkChoiceNodeV2ExtraData `json:"extra_data"`
+	Slot                            string                     `json:"slot"`
+	BlockRoot                       string                     `json:"block_root"`
+	PayloadStatus                   string                     `json:"payload_status"`
+	ParentRoot                      string                     `json:"parent_root"`
+	ParentPayloadStatus             *string                    `json:"parent_payload_status"`
+	JustifiedCheckpoint             *Checkpoint                `json:"justified_checkpoint"`
+	FinalizedCheckpoint             *Checkpoint                `json:"finalized_checkpoint"`
+	Weight                          string                     `json:"weight"`
+	Validity                        string                     `json:"validity"`
+	ExecutionBlockHash              string                     `json:"execution_block_hash"`
+	PayloadAttesterCount            string                     `json:"payload_attester_count"`
+	PayloadAvailabilityYesCount     string                     `json:"payload_availability_yes_count"`
+	PayloadDataAvailabilityYesCount string                     `json:"payload_data_availability_yes_count"`
+	ExtraData                       *ForkChoiceNodeV2ExtraData `json:"extra_data"`
 }
 
 type ForkChoiceNodeV2ExtraData struct {
-	Balance             string `json:"balance"`
-	ExecutionOptimistic bool   `json:"execution_optimistic"`
-	TimeStamp           string `json:"timestamp"`
-
-	Target                          string `json:"target,omitempty"`
-	JustifiedEpoch                  string `json:"justified_epoch,omitempty"`
-	FinalizedEpoch                  string `json:"finalized_epoch,omitempty"`
-	UnrealizedJustifiedEpoch        string `json:"unrealized_justified_epoch,omitempty"`
-	UnrealizedFinalizedEpoch        string `json:"unrealized_finalized_epoch,omitempty"`
-	PayloadAttesterCount            string `json:"payload_attester_count,omitempty"`
-	PayloadAvailabilityYesCount     string `json:"payload_availability_yes_count,omitempty"`
-	PayloadDataAvailabilityYesCount string `json:"payload_data_availability_yes_count,omitempty"`
-
-	GasLimit string `json:"gas_limit,omitempty"`
+	Balance                  string `json:"balance"`
+	ExecutionOptimistic      bool   `json:"execution_optimistic"`
+	TimeStamp                string `json:"timestamp"`
+	Target                   string `json:"target,omitempty"`
+	UnrealizedJustifiedEpoch string `json:"unrealized_justified_epoch,omitempty"`
+	UnrealizedFinalizedEpoch string `json:"unrealized_finalized_epoch,omitempty"`
+	GasLimit                 string `json:"gas_limit,omitempty"`
 }
 
 type GetDebugDataColumnSidecarsResponse struct {
