@@ -417,7 +417,7 @@ Gloas replaces `executionPayloadHeader` with two state fields — `latestBlockHa
 
 ##### Cross-fork diffs involving Gloas
 
-When the source state is pre-Gloas and the target is Gloas, `updateToVersion` calls `gloas.UpgradeToGloas` which performs the full fork upgrade including `OnboardBuildersFromPendingDeposits`. The diff helpers guard source-side Gloas getter calls with `source.Version() >= version.Gloas`, treating a pre-Gloas source as having empty builders and empty builder pending withdrawals.
+When the source state is pre-Gloas and the target is Gloas, `updateToVersion` calls `gloas.UpgradeToGloas` which performs the full fork upgrade including `OnboardBuildersFromPendingDeposits`. The diff helpers guard source-side Gloas getter calls with `source.Version() >= version.Gloas`, treating a pre-Gloas source as having empty builders and empty builder pending withdrawals. Onboarding can create builders from the anchor's pending deposits that the target never had, for example when the chain processed a builder deposit as a validator deposit before the fork. Because the diff assumes an empty source registry, apply drops the builders that onboarding created before it applies the builder diffs.
 
 #### Applying a diff
 
