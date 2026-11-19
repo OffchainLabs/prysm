@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/flags"
@@ -186,27 +187,50 @@ func configureBuilderHeaderTimeout(cliCtx *cli.Context) error {
 	return nil
 }
 
-func configureBuilderBidTimeout(cliCtx *cli.Context) error {
-	if !cliCtx.IsSet(flags.BuilderBidTimeout.Name) {
+func configureBuilderBidSchedule(cliCtx *cli.Context) error {
+	timeoutSet := cliCtx.IsSet(flags.BuilderBidTimeout.Name)
+	delaySet := cliCtx.IsSet(flags.BuilderBidDelay.Name)
+	requestsSet := cliCtx.IsSet(flags.BuilderBidRequests.Name)
+	if !timeoutSet && !delaySet && !requestsSet {
 		return nil
 	}
 
-	timeout := cliCtx.Duration(flags.BuilderBidTimeout.Name)
-	if timeout <= 0 {
-		return fmt.Errorf("--%s must be greater than 0, got %s", flags.BuilderBidTimeout.Name, timeout)
+	c := params.BeaconConfig().Copy()
+	if timeoutSet {
+		c.BuilderBidTimeout = cliCtx.Duration(flags.BuilderBidTimeout.Name)
+	}
+	if delaySet {
+		c.BuilderBidDelay = cliCtx.Duration(flags.BuilderBidDelay.Name)
+	}
+	if requestsSet {
+		c.BuilderBidRequests = cliCtx.Uint64(flags.BuilderBidRequests.Name)
 	}
 
-	c := params.BeaconConfig().Copy()
-	c.BuilderBidTimeout = timeout
+	if c.BuilderBidTimeout <= 0 {
+		return fmt.Errorf("--%s must be greater than 0, got %s", flags.BuilderBidTimeout.Name, c.BuilderBidTimeout)
+	}
+	if c.BuilderBidDelay < 0 {
+		return fmt.Errorf("--%s must not be negative, got %s", flags.BuilderBidDelay.Name, c.BuilderBidDelay)
+	}
+	if c.BuilderBidRequests == 0 {
+		return fmt.Errorf("--%s must be greater than 0", flags.BuilderBidRequests.Name)
+	}
+	if c.BuilderBidRequests > uint64(params.BuilderBidWindow/c.BuilderBidTimeout) ||
+		c.BuilderBidDelay+time.Duration(c.BuilderBidRequests)*c.BuilderBidTimeout > params.BuilderBidWindow {
+		return fmt.Errorf("--%s (%s) + --%s (%d) * --%s (%s) must not exceed %s",
+			flags.BuilderBidDelay.Name, c.BuilderBidDelay, flags.BuilderBidRequests.Name, c.BuilderBidRequests,
+			flags.BuilderBidTimeout.Name, c.BuilderBidTimeout, params.BuilderBidWindow)
+	}
 
 	if err := params.SetActive(c); err != nil {
 		return fmt.Errorf("set active: %w", err)
 	}
 
 	log.WithFields(logrus.Fields{
-		"timeout": timeout,
-		"default": params.BuilderBidTolerance,
-	}).Warning("Overriding the builder API execution payload bid timeout. A too high value may cause the node to miss blocks. Only effective from the Gloas fork onward. Use with caution")
+		"timeout":  c.BuilderBidTimeout,
+		"delay":    c.BuilderBidDelay,
+		"requests": c.BuilderBidRequests,
+	}).Warning("Overriding the builder API execution payload bid schedule. A too late schedule may cause the node to miss blocks. Only effective from the Gloas fork onward. Use with caution")
 
 	return nil
 }

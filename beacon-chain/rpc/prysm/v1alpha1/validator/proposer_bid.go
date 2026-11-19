@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/builder"
@@ -143,8 +144,9 @@ func wrapSelfBuildBid(v int, bid *ethpb.ExecutionPayloadBid) (interfaces.ROSigne
 
 // winningBuilderBid pairs the best builder-API bid with the entry whose limits it was selected under.
 type winningBuilderBid struct {
-	bid   *ethpb.SignedExecutionPayloadBid
-	entry *ethpb.BuilderEntry
+	bid     *ethpb.SignedExecutionPayloadBid
+	entry   *ethpb.BuilderEntry
+	boosted primitives.Gwei
 }
 
 // Returns a nil bid when the local self-build wins, bids compete by boosted
@@ -317,8 +319,8 @@ func (p *pendingBuilderBid) abort() {
 	<-p.done
 }
 
-// requestBuilderBid starts the builder-API bid request in the background so BuilderBidTimeout
-// runs alongside the local EL round trip instead of after it.
+// requestBuilderBid starts the builder-API bid requests in the background so they run alongside
+// the local EL round trip instead of after it, keeping the highest bid across rounds.
 func (vs *Server) requestBuilderBid(
 	ctx context.Context,
 	blk interfaces.ReadOnlyBeaconBlock,
@@ -340,9 +342,72 @@ func (vs *Server) requestBuilderBid(
 			log.WithError(err).Error("Could not build builder bid request")
 			return
 		}
-		p.win = vs.getBuilderExecutionPayloadBid(ctx, head, q)
+		slotStart, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
+		if err != nil {
+			log.WithError(err).Error("Could not compute slot start for builder bid requests")
+			return
+		}
+		cfg := params.BeaconConfig()
+		for _, r := range builderBidRounds(slotStart, time.Now(), cfg.BuilderBidDelay, cfg.BuilderBidTimeout, cfg.BuilderBidRequests) {
+			if !waitUntil(ctx, r.start) {
+				return
+			}
+			roundCtx, roundCancel := context.WithDeadline(ctx, r.deadline)
+			win := vs.getBuilderExecutionPayloadBid(roundCtx, head, q)
+			roundCancel()
+			if win != nil && (p.win == nil || win.boosted > p.win.boosted) {
+				p.win = win
+			}
+		}
+		if p.win == nil && ctx.Err() == nil {
+			builderGetPayloadMissCount.Inc()
+		}
 	}()
 	return p
+}
+
+type bidRound struct {
+	start    time.Time
+	deadline time.Time
+}
+
+// builderBidRounds schedules round i at slotStart+delay+i*timeout, never before now or the previous
+// round's deadline, and cuts every round off at slotStart+BuilderBidWindow.
+func builderBidRounds(slotStart, now time.Time, delay, timeout time.Duration, n uint64) []bidRound {
+	cutoff := slotStart.Add(params.BuilderBidWindow)
+	rounds := make([]bidRound, 0, n)
+	earliest := now
+	for i := range n {
+		start := slotStart.Add(delay + time.Duration(i)*timeout)
+		if start.Before(earliest) {
+			start = earliest
+		}
+		if !start.Before(cutoff) {
+			break
+		}
+		deadline := start.Add(timeout)
+		if deadline.After(cutoff) {
+			deadline = cutoff
+		}
+		rounds = append(rounds, bidRound{start: start, deadline: deadline})
+		earliest = deadline
+	}
+	return rounds
+}
+
+func waitUntil(ctx context.Context, t time.Time) bool {
+	d := time.Until(t)
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.BeaconState, q *builderBidQuery) *winningBuilderBid {
@@ -354,23 +419,16 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 	if len(entries) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, params.BeaconConfig().BuilderBidTimeout)
-	defer cancel()
-
 	bids, err := vs.BlockBuilder.GetExecutionPayloadBid(ctx, q.slot, q.parentHash, q.parentRoot, q.pubkey, entries)
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return nil
 	}
 	if err != nil {
-		builderGetPayloadMissCount.Inc()
 		log.WithError(err).Error("Could not get builder execution payload bid")
 		return nil
 	}
 
-	var (
-		best        *winningBuilderBid
-		bestBoosted primitives.Gwei
-	)
+	var best *winningBuilderBid
 	bidLog := make([]string, 0, len(bids))
 	replayed := replayedSignatures(bids)
 	for _, pb := range bids {
@@ -399,8 +457,8 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		boosted := boostedBidValue(effective, pb.Entry.BuilderBoostFactor)
 		bidLog = append(bidLog, fmt.Sprintf("%s(builder=%d value=%d payment=%d effective=%d boosted=%d)",
 			logs.MaskCredentialsLogging(url), pb.Bid.Message.BuilderIndex, pb.Bid.Message.Value, pb.Bid.Message.ExecutionPayment, effective, boosted))
-		if best == nil || boosted > bestBoosted {
-			best, bestBoosted = &winningBuilderBid{bid: pb.Bid, entry: pb.Entry}, boosted
+		if best == nil || boosted > best.boosted {
+			best = &winningBuilderBid{bid: pb.Bid, entry: pb.Entry, boosted: boosted}
 		}
 	}
 
@@ -408,10 +466,6 @@ func (vs *Server) getBuilderExecutionPayloadBid(ctx context.Context, head state.
 		log.WithField("slot", q.slot).Debugf("Builder bids: [%s]", strings.Join(bidLog, " | "))
 	}
 
-	if best == nil {
-		builderGetPayloadMissCount.Inc()
-		return nil
-	}
 	return best
 }
 
