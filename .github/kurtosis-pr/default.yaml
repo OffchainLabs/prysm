@@ -1,0 +1,11 @@
+# ethereum-package args for a /kurtosis comment without a yaml block.
+participants:
+  - el_type: geth
+    cl_type: prysm
+    cl_image: {{head}}
+    vc_image: {{head}}
+    count: 2
+network_params:
+  preset: mainnet
+  seconds_per_slot: 6
+additional_services: []
