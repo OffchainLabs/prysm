@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 
+	"github.com/OffchainLabs/methodical-ssz/ssz"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
@@ -185,10 +186,14 @@ func WriteLightClientFinalityUpdateChunk(stream libp2pcore.Stream, tor blockchai
 // WriteExecutionPayloadEnvelopeChunk writes execution payload envelope chunk object to stream.
 // response_chunk  ::= <result> | <context-bytes> | <encoding-dependent-header> | <encoded-payload>
 func WriteExecutionPayloadEnvelopeChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, envelope *ethpb.SignedExecutionPayloadEnvelope) error {
+	return writeEnvelopeChunk(stream, encoding, primitives.Slot(envelope.Message.Payload.SlotNumber), envelope)
+}
+
+func writeEnvelopeChunk(stream libp2pcore.Stream, encoding encoder.NetworkEncoding, slot primitives.Slot, envelope ssz.Marshaler) error {
 	if _, err := stream.Write([]byte{responseCodeSuccess}); err != nil {
 		return err
 	}
-	ctxBytes := params.ForkDigest(slots.ToEpoch(primitives.Slot(envelope.Message.Payload.SlotNumber)))
+	ctxBytes := params.ForkDigest(slots.ToEpoch(slot))
 	if err := writeContextToStream(ctxBytes[:], stream); err != nil {
 		return err
 	}

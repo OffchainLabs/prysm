@@ -519,10 +519,12 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 	}
 
 	for _, env := range envelopes {
-		if env == nil || env.Message == nil {
+		// The pending queue holds Gloas envelopes only.
+		gloasEnv, ok := env.Proto().(*ethpb.SignedExecutionPayloadEnvelope)
+		if !ok {
 			continue
 		}
-		s.queuePendingPayloadEnvelopeFromRootRequest(env)
+		s.queuePendingPayloadEnvelopeFromRootRequest(gloasEnv)
 	}
 }
 

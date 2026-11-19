@@ -135,13 +135,8 @@ func (s *Service) fetchPayloadEnvelope(root [32]byte) {
 		if len(envelopes) == 0 {
 			continue
 		}
-		wrapped, err := consensusblocks.WrappedROSignedExecutionPayloadEnvelope(envelopes[0])
-		if err != nil {
-			log.WithError(err).Debug("Could not wrap requested payload envelope")
-			continue
-		}
 		ctx, cancel := context.WithTimeout(s.ctx, params.BeaconConfig().SlotDuration())
-		err = s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, wrapped)
+		err = s.cfg.chain.ReceiveExecutionPayloadEnvelope(ctx, envelopes[0])
 		cancel()
 		if err != nil {
 			if blockchain.IsInvalidBlock(err) {

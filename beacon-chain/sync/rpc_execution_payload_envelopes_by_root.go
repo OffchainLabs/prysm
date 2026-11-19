@@ -135,18 +135,23 @@ func (s *Service) executionPayloadEnvelopesByRootRPCHandler(ctx context.Context,
 				log.WithField("root", fmt.Sprintf("%#x", req.root)).Debug("Missing reconstructed payload after successful batch call")
 				continue
 			}
-			envelope := &ethpb.SignedExecutionPayloadEnvelope{
-				Message: &ethpb.ExecutionPayloadEnvelope{
-					Payload:               payload,
-					ExecutionRequests:     req.env.Message.ExecutionRequests,
-					BuilderIndex:          req.env.Message.BuilderIndex,
-					BeaconBlockRoot:       req.env.Message.BeaconBlockRoot,
-					ParentBeaconBlockRoot: req.env.Message.ParentBeaconBlockRoot,
-				},
-				Signature: req.env.Signature,
-			}
 			SetStreamWriteDeadline(stream, defaultWriteDuration)
-			if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.p2p.Encoding(), envelope); chunkErr != nil {
+			var chunkErr error
+			if isPQSlot(req.env.Message.Slot) {
+				chunkErr = s.writeExecutionPayloadEnvelopePQChunk(ctx, stream, req.root, payload)
+			} else {
+				chunkErr = WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.p2p.Encoding(), &ethpb.SignedExecutionPayloadEnvelope{
+					Message: &ethpb.ExecutionPayloadEnvelope{
+						Payload:               payload,
+						ExecutionRequests:     req.env.Message.ExecutionRequests,
+						BuilderIndex:          req.env.Message.BuilderIndex,
+						BeaconBlockRoot:       req.env.Message.BeaconBlockRoot,
+						ParentBeaconBlockRoot: req.env.Message.ParentBeaconBlockRoot,
+					},
+					Signature: req.env.Signature,
+				})
+			}
+			if chunkErr != nil {
 				log.WithError(chunkErr).Debug("Could not send a chunked response")
 				recordResult(executionPayloadEnvelopeRPCResultError)
 				s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
