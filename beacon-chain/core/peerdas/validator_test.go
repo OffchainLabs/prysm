@@ -1,6 +1,7 @@
 package peerdas_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -58,6 +59,28 @@ func TestValidatorsCustodyRequirement(t *testing.T) {
 			require.Equal(t, tc.expected, actual)
 		})
 	}
+
+	t.Run("indices not in the state are ignored", func(t *testing.T) {
+		const count = 100
+
+		validators := make([]*ethpb.Validator, 0, count)
+		validatorsIndex := make(map[primitives.ValidatorIndex]bool)
+		for i := range count {
+			validators = append(validators, &ethpb.Validator{EffectiveBalance: balance})
+			validatorsIndex[primitives.ValidatorIndex(i)] = true
+		}
+
+		// Indices beyond the registry must not contribute nor fail the computation.
+		validatorsIndex[count] = true
+		validatorsIndex[math.MaxUint64] = true
+
+		beaconState, err := state_native.New(&ethpb.BeaconStateFulu{Validators: validators})
+		require.NoError(t, err)
+
+		actual, err := peerdas.ValidatorsCustodyRequirement(beaconState, validatorsIndex)
+		require.NoError(t, err)
+		require.Equal(t, uint64(count), actual)
+	})
 }
 
 func TestDataColumnSidecars(t *testing.T) {
