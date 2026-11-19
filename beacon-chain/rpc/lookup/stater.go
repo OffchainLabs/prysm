@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -317,12 +318,15 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		}
 	}
 
+	start := time.Now()
 	// An archive node holds a state at every state-diff tree boundary. Serve those directly: addressing the
 	// tree by slot also reaches boundaries whose slot had no block, which no root can identify.
 	if st, ok := p.stateFromDiffTree(ctx, target); ok {
+		stateBySlotMilliseconds.WithLabelValues(pathDiffTree).Observe(time.Since(start).Seconds() * 1000)
 		return st, nil
 	}
 
+	start = time.Now()
 	st, err := p.ReplayerBuilder.ReplayerForSlot(target).ReplayBlocks(ctx)
 	if err != nil {
 		if errors.Is(err, stategen.ErrNoDataForSlot) {
@@ -331,6 +335,7 @@ func (p *BeaconDbStater) StateBySlot(ctx context.Context, target primitives.Slot
 		msg := fmt.Sprintf("error while replaying history to slot=%d", target)
 		return nil, errors.Wrap(err, msg)
 	}
+	stateBySlotMilliseconds.WithLabelValues(pathReplay).Observe(time.Since(start).Seconds() * 1000)
 	return st, nil
 }
 
@@ -341,14 +346,29 @@ func (p *BeaconDbStater) stateFromDiffTree(ctx context.Context, target primitive
 		return nil, false
 	}
 	_, lvl, err := p.BeaconDB.SlotInDiffTree(target)
-	if err != nil || lvl < 0 {
+	if err != nil {
+		if errors.Is(err, db.ErrSlotBeforeOffset) {
+			stateFromDiffTreeMiss.WithLabelValues(missSlotBeforeOffset).Inc()
+		} else {
+			stateFromDiffTreeMiss.WithLabelValues(missError).Inc()
+		}
+		return nil, false
+	}
+	if lvl < 0 {
+		stateFromDiffTreeMiss.WithLabelValues(missNotBoundary).Inc()
 		return nil, false
 	}
 	st, err := p.BeaconDB.StateBySlotFromDiffTree(ctx, target)
 	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			stateFromDiffTreeMiss.WithLabelValues(missNotFound).Inc()
+			return nil, false
+		}
+		stateFromDiffTreeMiss.WithLabelValues(missError).Inc()
 		return nil, false
 	}
 	if st == nil || st.IsNil() {
+		stateFromDiffTreeMiss.WithLabelValues(missNilState).Inc()
 		return nil, false
 	}
 	return st, true

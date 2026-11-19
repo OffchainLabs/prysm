@@ -16,6 +16,9 @@ var ErrNotFound = kv.ErrNotFound
 // ErrNotFoundState wraps ErrNotFound for an error specific to a state not being found in the database.
 var ErrNotFoundState = kv.ErrNotFoundState
 
+// ErrSlotBeforeOffset indicates that a slot precedes the state-diff tree root offset.
+var ErrSlotBeforeOffset = kv.ErrSlotBeforeOffset
+
 // ErrNotFoundOriginBlockRoot wraps ErrNotFound for an error specific to the origin block root.
 var ErrNotFoundOriginBlockRoot = kv.ErrNotFoundOriginBlockRoot
 

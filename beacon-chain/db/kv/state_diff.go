@@ -21,7 +21,7 @@ const (
 	balancesSuffix  = "_b"
 )
 
-var errSnapshotNotFound = errors.New("full snapshot not found")
+var errSnapshotNotFound = errors.Wrap(ErrNotFound, "full snapshot not found")
 
 /*
 	We use a level-based approach to save state diffs. Each level corresponds to an exponent of 2 (exponents[lvl]).
