@@ -38,21 +38,26 @@ func VerifyXMSS(pubkey []byte, leafIndex uint32, message [32]byte, sig []byte) e
 	return nil
 }
 
+// Spec: compute_xmss_leaf_index, for messages signed at a leaf of their slot
+func VerifySlotMessage(pubkey []byte, message signingprotection.SlotMessage, slot primitives.Slot, root [32]byte, domain, sig []byte) error {
+	signingRoot, err := signing.ComputeSigningRootForRoot(root, domain)
+	if err != nil {
+		return err
+	}
+	leafIndex, err := xmsssigner.SlotLeafIndex(slot, message)
+	if err != nil {
+		return err
+	}
+	return VerifyXMSS(pubkey, leafIndex, signingRoot, sig)
+}
+
 func verifyProposerSignature(st state.ReadOnlyBeaconState, proposer primitives.ValidatorIndex, slot primitives.Slot, root [32]byte, sig []byte) error {
 	domain, err := signing.Domain(st.Fork(), slots.ToEpoch(slot), params.BeaconConfig().DomainBeaconProposer, st.GenesisValidatorsRoot())
 	if err != nil {
 		return err
 	}
-	signingRoot, err := signing.ComputeSigningRootForRoot(root, domain)
-	if err != nil {
-		return err
-	}
-	leafIndex, err := xmsssigner.SlotLeafIndex(slot, signingprotection.Block)
-	if err != nil {
-		return err
-	}
 	pubkey := st.PubkeyAtIndex(proposer)
-	return VerifyXMSS(pubkey[:], leafIndex, signingRoot, sig)
+	return VerifySlotMessage(pubkey[:], signingprotection.Block, slot, root, domain, sig)
 }
 
 // Spec: verify_block_signature
