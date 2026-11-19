@@ -669,8 +669,13 @@ func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySigne
 func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header interfaces.ExecutionData, block blocks.ROBlock) (bool, error) {
 	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, block)
 	if err != nil {
+		// The engine's latest valid hash refers to the payload's own ancestry, as in the batch path.
+		payload, pErr := block.Block().Body().Execution()
+		if pErr != nil {
+			return false, err
+		}
 		s.cfg.ForkChoiceStore.Lock()
-		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot(), [32]byte(header.BlockHash()))
+		err = s.handleInvalidExecutionError(ctx, err, block.Root(), block.Block().ParentRoot(), bytesutil.ToBytes32(payload.ParentHash()))
 		s.cfg.ForkChoiceStore.Unlock()
 		return false, err
 	}
