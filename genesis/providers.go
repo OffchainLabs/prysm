@@ -3,7 +3,10 @@ package genesis
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/api/client"
 	"github.com/OffchainLabs/prysm/v7/api/client/beacon"
@@ -11,6 +14,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/detect"
 	"github.com/pkg/errors"
 )
+
+// DownloadTimeout bounds a genesis state download so that a stalled server cannot hang startup.
+const DownloadTimeout = 2 * time.Minute
 
 // Provider is a type that can provide the genesis state for the initialization of the genesis package.
 // Examples are getting the state from a beacon node API, reading it from a file, or from the legacy database.
@@ -20,6 +26,7 @@ type Provider interface {
 
 var _ Provider = &FileProvider{}
 var _ Provider = &APIProvider{}
+var _ Provider = &URLProvider{}
 
 // APIProvider provides a genesis state using the given beacon node API url.
 type APIProvider struct {
@@ -74,4 +81,43 @@ func existsAndIsFile(path string) error {
 		return fmt.Errorf("%s is a directory, please specify full path to file", path)
 	}
 	return nil
+}
+
+// URLProvider provides the genesis state by downloading an ssz-encoded beacon state.
+type URLProvider struct {
+	url     string
+	timeout time.Duration
+}
+
+// NewURLProvider creates a Provider which downloads the genesis state from the given url.
+func NewURLProvider(url string, timeout time.Duration) *URLProvider {
+	return &URLProvider{url: url, timeout: timeout}
+}
+
+// Genesis satisfies the Provider interface by downloading the ssz-encoded genesis state and unmarshaling it.
+func (u *URLProvider) Genesis(ctx context.Context) (state.BeaconState, error) {
+	ctx, cancel := context.WithTimeout(ctx, u.timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download genesis state from %s: %w", u.url, err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.WithError(err).Debug("Could not close response body")
+		}
+	}()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download genesis state from %s: unexpected status %s", u.url, resp.Status)
+	}
+	sb, err := io.ReadAll(io.LimitReader(resp.Body, client.MaxBodySizeState))
+	if err != nil {
+		return nil, fmt.Errorf("read genesis state from %s: %w", u.url, err)
+	}
+	return detect.UnmarshalState(sb)
 }
