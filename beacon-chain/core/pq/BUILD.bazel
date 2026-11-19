@@ -2,7 +2,10 @@ load("@prysm//tools/go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["aggregation_committee.go"],
+    srcs = [
+        "aggregation_committee.go",
+        "randao.go",
+    ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq",
     visibility = ["//visibility:public"],
     deps = [
