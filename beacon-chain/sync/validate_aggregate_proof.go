@@ -128,8 +128,19 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 
 	// Verify the block being voted on is in the beacon chain.
 	// If not, store this attestation in the map of pending attestations.
-	if !s.hasBlockAndState(ctx, bytesutil.ToBytes32(data.BeaconBlockRoot)) {
+	if blockRoot := bytesutil.ToBytes32(data.BeaconBlockRoot); !s.hasBlockAndState(ctx, blockRoot) {
+		if !s.shouldVerifyForUnknownBlock(blockRoot, data.Target) {
+			s.savePendingAggregate(pid, m)
+			return pubsub.ValidationIgnore, nil
+		}
+		res, err := s.validateAggregatedAttWithTargetState(ctx, m)
+		if res == pubsub.ValidationReject {
+			return res, err
+		}
 		s.savePendingAggregate(pid, m)
+		if res == pubsub.ValidationAccept {
+			s.requestBlockForPendingAtt(pid, blockRoot)
+		}
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -153,9 +164,7 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	ctx, span := trace.StartSpan(ctx, "sync.validateAggregatedAtt")
 	defer span.End()
 
-	aggregateAndProof := signed.AggregateAttestationAndProof()
-	aggregatorIndex := aggregateAndProof.GetAggregatorIndex()
-	aggregate := aggregateAndProof.AggregateVal()
+	aggregate := signed.AggregateAttestationAndProof().AggregateVal()
 	data := aggregate.GetData()
 
 	// Verify attestation target root is consistent with the head root.
@@ -173,6 +182,20 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 		tracing.AnnotateError(span, blockchain.ErrNotDescendantOfFinalized)
 		return pubsub.ValidationIgnore, blockchain.ErrNotDescendantOfFinalized
 	}
+
+	return s.validateAggregatedAttWithTargetState(ctx, signed)
+}
+
+// validateAggregatedAttWithTargetState runs the aggregate checks that only depend on the target checkpoint state,
+// including all signatures. It does not require the attested block to be known.
+func (s *Service) validateAggregatedAttWithTargetState(ctx context.Context, signed ethpb.SignedAggregateAttAndProof) (pubsub.ValidationResult, error) {
+	ctx, span := trace.StartSpan(ctx, "sync.validateAggregatedAttWithTargetState")
+	defer span.End()
+
+	aggregateAndProof := signed.AggregateAttestationAndProof()
+	aggregatorIndex := aggregateAndProof.GetAggregatorIndex()
+	aggregate := aggregateAndProof.AggregateVal()
+	data := aggregate.GetData()
 
 	bs, err := s.cfg.chain.AttestationTargetState(ctx, data.Target)
 	if err != nil {
