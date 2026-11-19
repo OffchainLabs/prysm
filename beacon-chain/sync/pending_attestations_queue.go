@@ -289,6 +289,11 @@ func (s *Service) processAttestationBucket(ctx context.Context, bucket *attestat
 			continue
 		}
 
+		if singlePQ, ok := att.(*ethpb.SingleAttestationPQ); ok {
+			s.processPendingAttestationPQ(ctx, singlePQ, preState)
+			continue
+		}
+
 		var conv ethpb.Att
 		if att.Version() >= version.Electra {
 			single, ok := att.(*ethpb.SingleAttestation)
@@ -449,7 +454,11 @@ func (s *Service) processAggregate(ctx context.Context, aggregate ethpb.SignedAg
 	}
 
 	att := aggregate.AggregateAttestationAndProof().AggregateVal()
-	if err := s.saveAttestation(att); err != nil {
+	if signedPQ, ok := aggregate.(*ethpb.SignedAggregateAttestationAndProofPQ); ok {
+		if _, err := s.cfg.pqAttPool.SaveAggregate(signedPQ.Message.Aggregate, signedPQ.Message.Proof); err != nil {
+			return errors.Wrap(err, "save attestation")
+		}
+	} else if err := s.saveAttestation(att); err != nil {
 		return errors.Wrap(err, "save attestation")
 	}
 

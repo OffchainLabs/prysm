@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
@@ -103,7 +104,16 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationReject, errors.New("bad block referenced in attestation data")
 	}
 
-	if features.Get().EnableExperimentalAttestationPool {
+	if pqAggregate, ok := aggregate.(*ethpb.AttestationPQ); ok {
+		seen, err := s.cfg.pqAttPool.HasAggregate(pqAggregate)
+		if err != nil {
+			tracing.AnnotateError(span, err)
+			return pubsub.ValidationIgnore, err
+		}
+		if seen {
+			return pubsub.ValidationIgnore, nil
+		}
+	} else if features.Get().EnableExperimentalAttestationPool {
 		// It is possible that some aggregate in the pool already covers all bits
 		// of this aggregate, in which case we can ignore it.
 		isRedundant, err := s.cfg.attestationCache.AggregateIsRedundant(aggregate)
@@ -205,6 +215,14 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 		wrappedErr := errors.Wrapf(err, "could not validate index in committee")
 		tracing.AnnotateError(span, wrappedErr)
 		return result, wrappedErr
+	}
+
+	if signedPQ, ok := signed.(*ethpb.SignedAggregateAttestationAndProofPQ); ok {
+		if err := pq.VerifyAggregateAndProof(ctx, bs, signedPQ); err != nil {
+			tracing.AnnotateError(span, err)
+			return pubsub.ValidationReject, err
+		}
+		return pubsub.ValidationAccept, nil
 	}
 
 	// Verify selection proof reflects to the right validator.

@@ -24,6 +24,11 @@ func (s *Service) beaconAggregateProofSubscriber(_ context.Context, msg proto.Me
 		return errors.New("nil aggregate")
 	}
 
+	if signedPQ, ok := a.(*ethpb.SignedAggregateAttestationAndProofPQ); ok {
+		_, err := s.cfg.pqAttPool.SaveAggregate(signedPQ.Message.Aggregate, signedPQ.Message.Proof)
+		return err
+	}
+
 	if features.Get().EnableExperimentalAttestationPool {
 		return s.cfg.attestationCache.Add(aggregate)
 	} else {
