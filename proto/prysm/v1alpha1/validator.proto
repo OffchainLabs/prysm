@@ -295,6 +295,21 @@ service BeaconNodeValidator {
     };
   }
 
+  rpc GetExecutionPayloadEnvelopePQ(ExecutionPayloadEnvelopeRequest)
+      returns (ExecutionPayloadEnvelopePQ) {
+    option (google.api.http) = {
+      get : "/eth/v1alpha1/validator/execution_payload_envelope_pq/{slot}"
+    };
+  }
+
+  rpc PublishExecutionPayloadEnvelopePQ(SignedExecutionPayloadEnvelopePQ)
+      returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post : "/eth/v1alpha1/validator/execution_payload_envelope_pq"
+      body : "*"
+    };
+  }
+
   rpc GetAggregateAndProofPQ(AggregateAndProofPQRequest)
       returns (AggregateAttestationAndProofPQ) {
     option (google.api.http) = {
