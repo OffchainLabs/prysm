@@ -13,7 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
-	logrus "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -197,14 +197,12 @@ func (s *Store) saveHdiff(lvl int, anchor, st state.ReadOnlyBeaconState) error {
 	cacheMs := msSince(cacheStart)
 	stateDiffSavePhaseTime.WithLabelValues(label, "cache").Observe(cacheMs)
 	stateDiffSaveTime.WithLabelValues(label).Observe(msSince(start))
-	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
-		log.WithFields(logrus.Fields{
-			"slot": slot, "treeLevel": lvl, "kind": "diff", "totalBytes": total,
-			"stateBytes": len(diff.StateDiff), "validatorBytes": len(diff.ValidatorDiffs),
-			"balancesBytes": len(diff.BalancesDiff), "computeMs": computeMs,
-			"writeMs": writeMs, "cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
-		}).Debug("Saved state-diff tree entry")
-	}
+	log.WithFields(logrus.Fields{
+		"slot": slot, "treeLevel": lvl, "kind": "diff", "totalBytes": total,
+		"stateBytes": len(diff.StateDiff), "validatorBytes": len(diff.ValidatorDiffs),
+		"balancesBytes": len(diff.BalancesDiff), "computeMs": computeMs,
+		"writeMs": writeMs, "cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
+	}).Debug("Saved state-diff tree entry")
 
 	return nil
 }
@@ -254,13 +252,11 @@ func (s *Store) saveFullSnapshot(st state.ReadOnlyBeaconState) error {
 	cacheMs := msSince(cacheStart)
 	stateDiffSavePhaseTime.WithLabelValues(label, "cache").Observe(cacheMs)
 	stateDiffSaveTime.WithLabelValues(label).Observe(msSince(start))
-	if log.Logger.IsLevelEnabled(logrus.DebugLevel) {
-		log.WithFields(logrus.Fields{
-			"slot": slot, "treeLevel": 0, "kind": "snapshot", "totalBytes": total,
-			"snapshotBytes": len(compressed), "computeMs": encodeMs, "writeMs": writeMs,
-			"cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
-		}).Debug("Saved state-diff tree entry")
-	}
+	log.WithFields(logrus.Fields{
+		"slot": slot, "treeLevel": 0, "kind": "snapshot", "totalBytes": total,
+		"snapshotBytes": len(compressed), "computeMs": encodeMs, "writeMs": writeMs,
+		"cacheMs": cacheMs, "overwrite": overwrite, "sameBytes": same,
+	}).Debug("Saved state-diff tree entry")
 
 	return nil
 }
