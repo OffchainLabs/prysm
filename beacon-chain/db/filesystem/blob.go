@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/io/file"
 	"github.com/OffchainLabs/prysm/v7/runtime/logging"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
@@ -64,6 +65,15 @@ func WithFs(fs afero.Fs) BlobStorageOption {
 	}
 }
 
+// WithGenesisTime overrides the genesis time used to compute the current epoch in WarmCache.
+// Used in tests to control which blobs fall within the retention window.
+func WithGenesisTime(t time.Time) BlobStorageOption {
+	return func(b *BlobStorage) error {
+		b.genesisTime = t
+		return nil
+	}
+}
+
 // WithLayout enables the user to specify which layout scheme to use, dictating how blob files are stored on disk.
 func WithLayout(name string) BlobStorageOption {
 	return func(b *BlobStorage) error {
@@ -103,6 +113,7 @@ func NewBlobStorage(opts ...BlobStorageOption) (*BlobStorage, error) {
 		return nil, err
 	}
 	b.layout = layout
+	b.pruner = pruner
 	return b, nil
 }
 
@@ -115,6 +126,8 @@ type BlobStorage struct {
 	fs              afero.Fs
 	layout          fsLayout
 	cache           *blobStorageSummaryCache
+	pruner          *blobPruner
+	genesisTime     time.Time
 }
 
 // WarmCache runs the prune routine with an expiration of slot of 0, so nothing will be pruned, but the pruner's cache
@@ -134,6 +147,20 @@ func (bs *BlobStorage) WarmCache() {
 		log.WithError(err).Error("Error encountered while migrating blob storage")
 	}
 	log.WithField("elapsed", time.Since(start)).Info("Blob filesystem cache warm-up complete")
+
+	// After the Fulu fork, no new blobs are ever saved, so the save-driven pruning path
+	// is never triggered. Run a single prune here, after the cache is warm, to clean up
+	// any blobs that have aged past the retention period.
+	// Use the current network epoch so that all pre-Fulu blobs — including those from
+	// the final ~18 days before Fulu — are pruned. Only trigger when blobs exist on disk
+	// to avoid a spurious pruning goroutine on initially-empty storage.
+	if !bs.cache.isEmpty() {
+		genesisTime := bs.genesisTime
+		if genesisTime.IsZero() {
+			genesisTime = time.Unix(int64(params.BeaconConfig().MinGenesisTime), 0)
+		}
+		bs.pruner.notify(slots.EpochsSinceGenesis(genesisTime), bs.layout)
+	}
 }
 
 // If any blob storage directories are found for layouts besides the configured layout, migrate them.
