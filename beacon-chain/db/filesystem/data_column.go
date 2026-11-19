@@ -478,6 +478,11 @@ func (dcs *DataColumnStorage) Get(root [fieldparams.RootLength]byte, indices []u
 	dcs.pruneMu.RLock()
 	defer dcs.pruneMu.RUnlock()
 
+	// Exit before creating a file mutex for a root with nothing stored.
+	if _, ok := dcs.cache.get(root); !ok {
+		return nil, nil
+	}
+
 	fileMu, _ := dcs.fileMutexChan(root)
 	fileMu.RLock()
 	defer fileMu.RUnlock()

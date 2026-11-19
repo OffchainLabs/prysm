@@ -325,6 +325,7 @@ func TestGetDataColumnSidecars(t *testing.T) {
 		verifiedRODataColumnSidecars, err := dataColumnStorage.Get([fieldparams.RootLength]byte{1}, []uint64{12, 13, 14})
 		require.NoError(t, err)
 		require.Equal(t, 0, len(verifiedRODataColumnSidecars))
+		require.Equal(t, 0, len(dataColumnStorage.muChans))
 	})
 
 	t.Run("indices not found", func(t *testing.T) {
