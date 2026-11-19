@@ -20,7 +20,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *Service) isValidDependentRoot(root [32]byte, epoch primitives.Epoch) bool {
+func (s *Service) isValidDependentRoot(root [32]byte, epoch primitives.Epoch) [][32]byte {
+	var matching [][32]byte
 	tips, _ := s.cfg.chain.ChainHeads()
 	for _, tip := range tips {
 		if tip == root {
@@ -28,10 +29,10 @@ func (s *Service) isValidDependentRoot(root [32]byte, epoch primitives.Epoch) bo
 		}
 		depRoot, err := s.cfg.chain.DependentRootForEpoch(tip, epoch)
 		if err == nil && depRoot == root {
-			return true
+			matching = append(matching, tip)
 		}
 	}
-	return false
+	return matching
 }
 
 func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, pid peer.ID, msg *pubsub.Message) (pubsub.ValidationResult, error) {
@@ -122,7 +123,6 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	}
 
 	var st state.ReadOnlyBeaconState
-	stateRoot := headRoot
 	if headDependentRoot == dependentRoot {
 		st, err = s.cfg.chain.HeadStateReadOnly(ctx)
 		if err != nil {
@@ -130,15 +130,23 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		}
 	} else {
 		// [IGNORE] is_valid_dependent_root(store, preferences.dependent_root, lookahead_epoch).
-		if !s.isValidDependentRoot(dependentRoot, dependentEpoch) {
+		tips := s.isValidDependentRoot(dependentRoot, dependentEpoch)
+		if len(tips) == 0 {
 			return pubsub.ValidationIgnore, errors.Errorf("dependent_root %#x is not a possible dependent block", dependentRoot)
 		}
-		// Off the head branch the lookahead comes from the dependent block's own state, never from a regeneration.
-		st = s.cfg.stateGen.StateByRootIfCachedNoCopy(dependentRoot)
-		if st == nil {
-			return pubsub.ValidationIgnore, errors.Errorf("state for dependent_root %#x is not cached", dependentRoot)
+		for _, tip := range tips {
+			cached := s.cfg.stateGen.StateByRootIfCachedNoCopy(tip)
+			if cached == nil {
+				continue
+			}
+			if e := slots.ToEpoch(cached.Slot()); e >= dependentEpoch && e <= proposalEpoch {
+				st = cached
+				break
+			}
 		}
-		stateRoot = dependentRoot[:]
+		if st == nil {
+			return pubsub.ValidationIgnore, errors.Errorf("no cached state descending from dependent_root %#x", dependentRoot)
+		}
 	}
 	stateEpoch := slots.ToEpoch(st.Slot())
 	if proposalEpoch > stateEpoch.AddEpoch(2) {
@@ -147,25 +155,16 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 
 	// [REJECT] signed_proposer_preferences.signature is valid with respect to the
 	// validator's public key.
-	//
-	// The signature needs only the validator's public key and the genesis
-	// validators root, neither of which changes when slots are advanced, so it
-	// is checked against the un-advanced state. A forged message is rejected
-	// here before it can trigger the epoch transition below, and it is never
-	// cached, so this is the only place that bounds the work it can cause.
 	if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
-	// Sole permitted slot advance: up to the lookahead epoch boundary, which bounds
-	// the work a single message can cause. Only a message with a valid signature
-	// reaches this point.
 	if proposalEpoch == stateEpoch.AddEpoch(2) {
 		boundarySlot, err := slots.EpochStart(dependentEpoch)
 		if err != nil {
 			return pubsub.ValidationIgnore, errors.Wrap(err, "compute boundary slot")
 		}
-		st, err = transition.ProcessSlotsIfNeeded(ctx, st, stateRoot, boundarySlot)
+		st, err = transition.ProcessSlotsIfNeeded(ctx, st, headRoot, boundarySlot)
 		if err != nil {
 			return pubsub.ValidationIgnore, errors.Wrap(err, "advance state to boundary")
 		}

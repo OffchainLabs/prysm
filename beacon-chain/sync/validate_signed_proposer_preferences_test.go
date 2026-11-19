@@ -213,15 +213,18 @@ func TestValidateSignedProposerPreferencesGossip_DependentBlockAfterShufflingSlo
 
 func TestValidateSignedProposerPreferencesGossip_DependentRootOnOtherBranch(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		hasChild   bool
-		cached     bool
-		wantResult pubsub.ValidationResult
-		wantError  string
+		name           string
+		hasChild       bool
+		cacheDependent bool
+		cacheChild     bool
+		childSlot      primitives.Slot
+		wantResult     pubsub.ValidationResult
+		wantError      string
 	}{
-		{name: "non-head leaf", cached: true, wantResult: pubsub.ValidationIgnore, wantError: "not a possible dependent block"},
-		{name: "child across boundary without cached state", hasChild: true, wantResult: pubsub.ValidationIgnore, wantError: "is not cached"},
-		{name: "child across boundary with cached state", hasChild: true, cached: true, wantResult: pubsub.ValidationAccept},
+		{name: "non-head leaf", cacheDependent: true, wantResult: pubsub.ValidationIgnore, wantError: "not a possible dependent block"},
+		{name: "only dependent state cached", hasChild: true, cacheDependent: true, wantResult: pubsub.ValidationIgnore, wantError: "no cached state"},
+		{name: "child state past proposal epoch", hasChild: true, cacheChild: true, childSlot: 64, wantResult: pubsub.ValidationIgnore, wantError: "no cached state"},
+		{name: "child state cached", hasChild: true, cacheChild: true, wantResult: pubsub.ValidationAccept},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := t.Context()
@@ -238,8 +241,13 @@ func TestValidateSignedProposerPreferencesGossip_DependentRootOnOtherBranch(t *t
 				}
 				return [32]byte{0xbb}, nil
 			}
-			if tc.cached {
+			if tc.cacheDependent {
 				require.NoError(t, s.cfg.stateGen.SaveState(ctx, dependentRoot, chainService.State))
+			}
+			if tc.cacheChild {
+				childState := chainService.State.Copy()
+				require.NoError(t, childState.SetSlot(tc.childSlot))
+				require.NoError(t, s.cfg.stateGen.SaveState(ctx, tips[1], childState))
 			}
 
 			result, err := s.validateSignedProposerPreferencesGossip(ctx, "", msg)
