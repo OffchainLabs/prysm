@@ -45,7 +45,7 @@ func (concatenation) Prove(statements []Statement, signatures [][][]byte) ([]byt
 			return nil, errors.Errorf("statement %d has %d pubkeys but %d signatures", i, len(statements[i].Pubkeys), len(sigs))
 		}
 		for _, sig := range sigs {
-			if len(sig) != xmssSignatureLength {
+			if len(sig) != XMSSSignatureLength {
 				return nil, errors.Errorf("signature has length %d", len(sig))
 			}
 			proof = append(proof, sig...)
@@ -66,13 +66,13 @@ func (concatenation) Verify(statements []Statement, proof []byte) error {
 	offset := 0
 	for _, s := range statements {
 		for _, pubkey := range s.Pubkeys {
-			if len(proof)-offset < xmssSignatureLength {
+			if len(proof)-offset < XMSSSignatureLength {
 				return errors.Wrap(ErrInvalidAttestationProof, "proof is too short")
 			}
-			if err := VerifyXMSS(pubkey, s.LeafIndex, s.Message, proof[offset:offset+xmssSignatureLength]); err != nil {
+			if err := VerifyXMSS(pubkey, s.LeafIndex, s.Message, proof[offset:offset+XMSSSignatureLength]); err != nil {
 				return errors.Wrap(ErrInvalidAttestationProof, err.Error())
 			}
-			offset += xmssSignatureLength
+			offset += XMSSSignatureLength
 		}
 	}
 	if offset != len(proof) {
