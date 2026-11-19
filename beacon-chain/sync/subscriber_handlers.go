@@ -33,6 +33,7 @@ func (s *Service) attesterSlashingSubscriber(ctx context.Context, msg proto.Mess
 	aSlashing1IsNil := aSlashing == nil || aSlashing.FirstAttestation() == nil || aSlashing.FirstAttestation().GetAttestingIndices() == nil
 	aSlashing2IsNil := aSlashing == nil || aSlashing.SecondAttestation() == nil || aSlashing.SecondAttestation().GetAttestingIndices() == nil
 	if !aSlashing1IsNil && !aSlashing2IsNil {
+		s.setAttesterSlashingIndicesSeen(aSlashing.FirstAttestation().GetAttestingIndices(), aSlashing.SecondAttestation().GetAttestingIndices())
 		headState, err := s.cfg.chain.HeadState(ctx)
 		if err != nil {
 			return err
@@ -40,7 +41,6 @@ func (s *Service) attesterSlashingSubscriber(ctx context.Context, msg proto.Mess
 		if err := s.cfg.slashingPool.InsertAttesterSlashing(ctx, headState, aSlashing); err != nil {
 			return errors.Wrap(err, "could not insert attester slashing into pool")
 		}
-		s.setAttesterSlashingIndicesSeen(aSlashing.FirstAttestation().GetAttestingIndices(), aSlashing.SecondAttestation().GetAttestingIndices())
 	}
 	return nil
 }
