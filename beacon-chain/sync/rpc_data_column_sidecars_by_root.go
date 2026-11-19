@@ -138,8 +138,8 @@ func (s *Service) dataColumnSidecarByRootRPCHandler(ctx context.Context, msg any
 			continue
 		}
 
-		// Retrieve the requested sidecars from the store.
-		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(root, columns)
+		// Retrieve the requested sidecars from the store, once per distinct index.
+		verifiedRODataColumns, err := s.cfg.dataColumnStorage.Get(root, slice.SetUint64(columns))
 		if err != nil {
 			s.writeErrorResponseToStream(responseCodeServerError, types.ErrGeneric.Error(), stream)
 			return errors.Wrap(err, "get data column sidecars")
