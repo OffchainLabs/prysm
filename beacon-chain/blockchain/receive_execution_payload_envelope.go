@@ -331,7 +331,7 @@ func (s *Service) notifyNewEnvelopeFromBlock(ctx context.Context, b blocks.ROBlo
 	for i, c := range commitments {
 		versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
+	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), engineExecutionRequests(envelope), envelope.Slot())
 }
 
 // The returned boolean indicates whether the payload was valid or if it was accepted as syncing (optimistic).
@@ -355,7 +355,7 @@ func (s *Service) notifyNewEnvelope(ctx context.Context, st state.BeaconState, e
 			versionedHashes[i] = primitives.ConvertKzgCommitmentToVersionedHash(c)
 		}
 	}
-	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), envelope.ExecutionRequests(), envelope.Slot())
+	return s.callNewPayload(ctx, payload, versionedHashes, common.Hash(envelope.ParentBeaconBlockRoot()), engineExecutionRequests(envelope), envelope.Slot())
 }
 
 func (s *Service) validateExecutionOnEnvelope(ctx context.Context, st state.BeaconState, envelope interfaces.ROExecutionPayloadEnvelope) (bool, error) {
@@ -381,6 +381,9 @@ func (s *Service) savePostPayload(ctx context.Context, signed interfaces.ROSigne
 	ctx, span := trace.StartSpan(ctx, "blockChain.savePostPayload")
 	defer span.End()
 
+	if pqEnv, ok := signed.Proto().(*ethpb.SignedExecutionPayloadEnvelopePQ); ok {
+		return s.cfg.BeaconDB.SaveExecutionPayloadEnvelopePQ(ctx, pqEnv)
+	}
 	protoEnv, ok := signed.Proto().(*ethpb.SignedExecutionPayloadEnvelope)
 	if !ok {
 		return errors.New("could not type assert signed envelope to proto")
