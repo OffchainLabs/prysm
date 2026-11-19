@@ -5,12 +5,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 )
@@ -136,7 +138,12 @@ func validatePayloadConsistency(ctx context.Context, st state.BeaconState, envel
 	}
 
 	// Verify execution_requests_root matches the bid commitment.
-	executionRequestsRoot, err := envelope.ExecutionRequests().HashTreeRoot()
+	var executionRequestsRoot [32]byte
+	if st.Version() == version.PQ {
+		executionRequestsRoot, err = envelope.ExecutionRequestsPQ().HashTreeRoot()
+	} else {
+		executionRequestsRoot, err = envelope.ExecutionRequests().HashTreeRoot()
+	}
 	if err != nil {
 		return errors.Wrap(err, "could not compute execution requests root")
 	}
@@ -201,6 +208,13 @@ func ExecutionPayloadEnvelopeSignatureBatch(
 	st state.BeaconState,
 	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
 ) (*bls.SignatureBatch, error) {
+	// XMSS has no batch verification, so the check runs here and the batch stays empty.
+	if st.Version() == version.PQ {
+		if err := pq.VerifyEnvelopeSignature(st, signedEnvelope); err != nil {
+			return nil, err
+		}
+		return bls.NewSet(), nil
+	}
 	envelope, err := signedEnvelope.Envelope()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get envelope: %w", err)
@@ -256,6 +270,9 @@ func ExecutionPayloadEnvelopeSignatureBatch(
 //	    return bls.Verify(pubkey, signing_root, signed_envelope.signature)
 //	</spec>
 func verifyExecutionPayloadEnvelopeSignature(st state.BeaconState, signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) error {
+	if st.Version() == version.PQ {
+		return pq.VerifyEnvelopeSignature(st, signedEnvelope)
+	}
 	envelope, err := signedEnvelope.Envelope()
 	if err != nil {
 		return fmt.Errorf("failed to get envelope: %w", err)

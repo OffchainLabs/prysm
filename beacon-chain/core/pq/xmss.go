@@ -108,3 +108,39 @@ func VerifyBuilderBidSignature(st state.ReadOnlyBeaconState, signedBid interface
 	}
 	return VerifyXMSS(pubkey[:], leafIndex, signingRoot, sig)
 }
+
+// Spec: verify_execution_payload_envelope_signature
+func VerifyEnvelopeSignature(st state.ReadOnlyBeaconState, signed interfaces.ROSignedExecutionPayloadEnvelope) error {
+	envelope, err := signed.Envelope()
+	if err != nil {
+		return err
+	}
+	header := st.LatestBlockHeader()
+	var pubkey []byte
+	if envelope.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {
+		pk := st.PubkeyAtIndex(header.ProposerIndex)
+		pubkey = pk[:]
+	} else {
+		pk, err := st.BuilderPubkey(envelope.BuilderIndex())
+		if err != nil {
+			return err
+		}
+		pubkey = pk[:]
+	}
+	domain, err := signing.Domain(st.Fork(), slots.ToEpoch(st.Slot()), params.BeaconConfig().DomainBeaconBuilder, st.GenesisValidatorsRoot())
+	if err != nil {
+		return err
+	}
+	signingRoot, err := signed.SigningRoot(domain)
+	if err != nil {
+		return err
+	}
+	leafIndex, err := xmsssigner.SlotLeafIndex(header.Slot, signingprotection.ExecutionPayloadEnvelope)
+	if err != nil {
+		return err
+	}
+	if err := VerifyXMSS(pubkey, leafIndex, signingRoot, signed.XMSSSignature()); err != nil {
+		return errors.Wrap(err, "envelope signature")
+	}
+	return nil
+}
