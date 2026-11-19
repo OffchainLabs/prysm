@@ -10,7 +10,6 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/validator/db/common"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const failedAttLocalProtectionErr = "attempted to make slashable attestation, rejected by local slashing protection"
@@ -102,8 +101,6 @@ func (s *Store) SlashableAttestationCheck(
 	indexedAtt ethpb.IndexedAtt,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
 	signingRoot32 [32]byte,
-	_ bool,
-	_ *prometheus.CounterVec,
 ) error {
 	ctx, span := trace.StartSpan(ctx, "validator.postAttSignUpdate")
 	defer span.End()
