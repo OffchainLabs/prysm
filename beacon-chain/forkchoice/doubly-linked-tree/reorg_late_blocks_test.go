@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
@@ -183,6 +184,60 @@ func TestForkChoice_GetProposerHead(t *testing.T) {
 	})
 }
 
+// Regression test: the parent-weight check must activate at the late tick
+// (slot duration minus the proposer reorg cutoff), not at a hardcoded 10s that
+// short-slot configs never reach within the slot.
+func TestForkChoice_ShouldOverrideFCU_ThresholdScalesWithSlotDuration(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.SecondsPerSlot = 6
+	cfg.SlotDurationMilliseconds = 6000
+	params.OverrideBeaconConfig(cfg)
+	f := setup(0, 0)
+	numValidators := uint64(640)
+	f.justifiedBalances = make([]uint64, numValidators)
+	for i := range f.justifiedBalances {
+		f.justifiedBalances[i] = uint64(10)
+		f.store.committeeWeight += uint64(10)
+	}
+	f.store.committeeWeight /= uint64(params.BeaconConfig().SlotsPerEpoch)
+	ctx := t.Context()
+	driftGenesisTime(f, 1, 0)
+	st, blk, err := prepareForkchoiceState(ctx, 1, [32]byte{'a'}, [32]byte{}, [32]byte{'A'}, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+
+	// A late head from the current slot with a weak LMD vote and a weak parent:
+	// per spec no reorg should be attempted, so FCU must not be overridden once
+	// attestations have been counted.
+	driftGenesisTime(f, 2, 4*time.Second)
+	st, blk, err = prepareForkchoiceState(ctx, 2, [32]byte{'b'}, [32]byte{'a'}, [32]byte{'B'}, 0, 0)
+	require.NoError(t, err)
+	require.NoError(t, f.InsertNode(ctx, st, blk))
+	headRoot, err := f.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, blk.Root(), headRoot)
+
+	// Before the late tick (5s into a 6s slot) the weight comparison is not yet
+	// available and the conservative answer is to override.
+	require.Equal(t, true, f.ShouldOverrideFCU())
+
+	// After the late tick the weak parent must abort the override. With the old
+	// hardcoded 10s threshold this point was unreachable on 6s slots.
+	driftGenesisTime(f, 2, 5*time.Second+200*time.Millisecond)
+	require.Equal(t, false, f.ShouldOverrideFCU())
+
+	// With no usable late tick, a strong parent must not cause us to prepare a reorg.
+	f.store.headNode.parent.node.weight = 2 * f.store.committeeWeight
+	driftGenesisTime(f, 2, 4*time.Second)
+	for _, bps := range []primitives.BP{0, params.BasisPoints, params.BasisPoints + 1} {
+		invalid := cfg.Copy()
+		invalid.ProposerReorgCutoffBPS = bps
+		params.OverrideBeaconConfig(invalid)
+		require.Equal(t, false, f.ShouldOverrideFCU())
+	}
+}
+
 // Regression test: a weak, late head whose next slot lands on an epoch boundary
 // must still be reorgeable. Reorgs used to be skipped on epoch boundaries.
 func TestForkChoice_ShouldOverrideFCU_EpochBoundary(t *testing.T) {
@@ -311,4 +366,13 @@ func TestForkChoice_GetProposerHead_ReorgCutoffScalesWithSlotDuration(t *testing
 
 	f.store.genesisTime = time.Now().Add(-3*params.BeaconConfig().SlotDuration() - 1500*time.Millisecond)
 	require.Equal(t, childRoot, f.GetProposerHead())
+
+	// An unusable cutoff disables proposer reorgs even when the late head is weak.
+	f.store.genesisTime = time.Now().Add(-3*params.BeaconConfig().SlotDuration() - 500*time.Millisecond)
+	for _, bps := range []primitives.BP{0, params.BasisPoints, params.BasisPoints + 1} {
+		invalid := cfg.Copy()
+		invalid.ProposerReorgCutoffBPS = bps
+		params.OverrideBeaconConfig(invalid)
+		require.Equal(t, childRoot, f.GetProposerHead())
+	}
 }
