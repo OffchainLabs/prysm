@@ -6,6 +6,7 @@ import (
 	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -14,6 +15,10 @@ import (
 // SetSignature sets the signature of the signed beacon block.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetSignature(sig []byte) {
+	if b.version == version.PQ {
+		b.xmssSignature = bytesutil.SafeCopyBytes(sig)
+		return
+	}
 	copy(b.signature[:], sig)
 }
 
@@ -44,6 +49,10 @@ func (b *SignedBeaconBlock) SetStateRoot(root []byte) {
 // SetRandaoReveal sets the randao reveal in the block body.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetRandaoReveal(r []byte) {
+	if b.version == version.PQ {
+		b.block.body.vrfProof = bytesutil.SafeCopyBytes(r)
+		return
+	}
 	copy(b.block.body.randaoReveal[:], r)
 }
 
@@ -68,6 +77,18 @@ func (b *SignedBeaconBlock) SetProposerSlashings(p []*eth.ProposerSlashing) {
 // SetAttesterSlashings sets the attester slashings in the block.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) error {
+	if b.version == version.PQ {
+		blockSlashings := make([]*eth.AttesterSlashingPQ, 0, len(slashings))
+		for _, slashing := range slashings {
+			s, ok := slashing.(*eth.AttesterSlashingPQ)
+			if !ok {
+				return fmt.Errorf("slashing of type %T is not *eth.AttesterSlashingPQ", slashing)
+			}
+			blockSlashings = append(blockSlashings, s)
+		}
+		b.block.body.attesterSlashingsPQ = blockSlashings
+		return nil
+	}
 	if b.version >= version.Gloas {
 		blockSlashings := make([]*eth.AttesterSlashingGloas, 0, len(slashings))
 		for _, slashing := range slashings {
@@ -105,6 +126,18 @@ func (b *SignedBeaconBlock) SetAttesterSlashings(slashings []eth.AttSlashing) er
 // SetAttestations sets the attestations in the block.
 // This function is not thread safe, it is only used during block creation.
 func (b *SignedBeaconBlock) SetAttestations(atts []eth.Att) error {
+	if b.version == version.PQ {
+		blockAtts := make([]*eth.AttestationPQ, 0, len(atts))
+		for _, att := range atts {
+			a, ok := att.(*eth.AttestationPQ)
+			if !ok {
+				return fmt.Errorf("attestation of type %T is not *eth.AttestationPQ", att)
+			}
+			blockAtts = append(blockAtts, a)
+		}
+		b.block.body.attestationsPQ = blockAtts
+		return nil
+	}
 	if b.version >= version.Gloas {
 		blockAtts := make([]*eth.AttestationGloas, 0, len(atts))
 		for _, att := range atts {

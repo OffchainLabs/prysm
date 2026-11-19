@@ -86,6 +86,8 @@ func NewSignedBeaconBlock(i any) (interfaces.SignedBeaconBlock, error) {
 		return initSignedBlockFromProtoGloas(b.Gloas)
 	case *eth.SignedBeaconBlockPQ:
 		return initSignedBlockFromProtoPQ(b)
+	case *eth.GenericSignedBeaconBlock_Pq:
+		return initSignedBlockFromProtoPQ(b.Pq)
 	case *eth.SignedBeaconBlockGloas:
 		return initSignedBlockFromProtoGloas(b)
 	case *eth.GenericSignedBeaconBlock_Heze:
@@ -152,6 +154,8 @@ func NewBeaconBlock(i any) (interfaces.ReadOnlyBeaconBlock, error) {
 		return initBlockFromProtoGloas(b.Gloas)
 	case *eth.BeaconBlockPQ:
 		return initBlockFromProtoPQ(b)
+	case *eth.GenericBeaconBlock_Pq:
+		return initBlockFromProtoPQ(b.Pq)
 	case *eth.BeaconBlockGloas:
 		return initBlockFromProtoGloas(b)
 	case *eth.GenericBeaconBlock_Heze:
