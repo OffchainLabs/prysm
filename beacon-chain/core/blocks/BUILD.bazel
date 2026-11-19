@@ -9,6 +9,7 @@ go_library(
         "eth1_data.go",
         "exit.go",
         "genesis.go",
+        "genesis_pq.go",
         "header.go",
         "log.go",
         "payload.go",

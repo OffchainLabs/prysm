@@ -34,6 +34,7 @@ go_library(
         "state_diff_helpers.go",
         "state_diff_prune.go",
         "state_hot_snapshots.go",
+        "state_pq.go",
         "state_summary.go",
         "state_summary_cache.go",
         "testing_helpers.go",

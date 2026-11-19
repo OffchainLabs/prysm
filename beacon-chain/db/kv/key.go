@@ -95,6 +95,13 @@ func hasGloasKey(enc []byte) bool {
 	return bytes.Equal(enc[:len(gloasKey)], gloasKey)
 }
 
+func hasPQKey(enc []byte) bool {
+	if len(pqKey) >= len(enc) {
+		return false
+	}
+	return bytes.Equal(enc[:len(pqKey)], pqKey)
+}
+
 func hasHezeKey(enc []byte) bool {
 	if len(hezeKey) >= len(enc) {
 		return false

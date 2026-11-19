@@ -33,7 +33,7 @@ func logStateTransitionData(b interfaces.ReadOnlyBeaconBlock) error {
 	if len(b.Body().VoluntaryExits()) > 0 {
 		log = log.WithField("voluntaryExits", len(b.Body().VoluntaryExits()))
 	}
-	if b.Version() >= version.Altair {
+	if b.Version() >= version.Altair && b.Version() != version.PQ {
 		agg, err := b.Body().SyncAggregate()
 		if err != nil {
 			return err

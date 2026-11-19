@@ -199,6 +199,8 @@ func NewGenesisBlockForState(ctx context.Context, st state.BeaconState) (interfa
 			Block:     gloasGenesisBlock(root, gs.LatestExecutionPayloadBid),
 			Signature: params.BeaconConfig().EmptySignature[:],
 		})
+	case *ethpb.BeaconStatePQ:
+		return blocks.NewSignedBeaconBlock(pqGenesisBlock(root, ps.(*ethpb.BeaconStatePQ).LatestExecutionPayloadBid))
 	case *ethpb.BeaconStateHeze:
 		return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockHeze{
 			Block:     hezeGenesisBlock(root, ps.(*ethpb.BeaconStateHeze).LatestExecutionPayloadBid),
