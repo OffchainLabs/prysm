@@ -388,8 +388,21 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 	}
 
 	for _, pd := range pendingDeposits {
-		validSig := allSignaturesVerified
+		// An earlier deposit in the batch may have created the validator, making this a top-up.
+		pubkey := bytesutil.ToBytes48(pd.PublicKey)
+		if index, exists := state.ValidatorIndexByPubkey(pubkey); exists {
+			if err := helpers.IncreaseBalance(state, index, pd.Amount); err != nil {
+				return errors.Wrap(err, "could not increase balance")
+			}
+			continue
+		}
 
+		// Do not create validators with BLS withdrawal credentials. [New in Heze:EIP8365]
+		if state.Version() >= version.Heze && hasBLSWithdrawalPrefix(pd.WithdrawalCredentials) {
+			continue
+		}
+
+		validSig := allSignaturesVerified
 		if !allSignaturesVerified {
 			validSig, err = helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 				PublicKey:             bytesutil.SafeCopyBytes(pd.PublicKey),
@@ -401,13 +414,7 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 				return errors.Wrap(err, "individual deposit signature verification failed")
 			}
 		}
-
-		pubkey := bytesutil.ToBytes48(pd.PublicKey)
-		if index, exists := state.ValidatorIndexByPubkey(pubkey); exists {
-			if err := helpers.IncreaseBalance(state, index, pd.Amount); err != nil {
-				return errors.Wrap(err, "could not increase balance")
-			}
-		} else if validSig {
+		if validSig {
 			if err := AddValidatorToRegistry(state, pd.PublicKey, pd.WithdrawalCredentials, pd.Amount); err != nil {
 				return errors.Wrap(err, "failed to add validator to registry")
 			}
@@ -429,6 +436,10 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 //	"""
 //	validator_pubkeys = [v.pubkey for v in state.validators]
 //	if deposit.pubkey not in validator_pubkeys:
+//	    # [New in Heze:EIP8365]
+//	    # Do not create validators with BLS withdrawal credentials
+//	    if deposit.withdrawal_credentials[:1] == BLS_WITHDRAWAL_PREFIX:
+//	        return
 //	    # Verify the deposit signature (proof of possession) which is not checked by the deposit contract
 //	    if is_valid_deposit_signature(
 //	        deposit.pubkey,
@@ -446,6 +457,10 @@ func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *eth
 	defer span.End()
 	index, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(deposit.PublicKey))
 	if !ok {
+		// Do not create validators with BLS withdrawal credentials. [New in Heze:EIP8365]
+		if st.Version() >= version.Heze && hasBLSWithdrawalPrefix(deposit.WithdrawalCredentials) {
+			return nil
+		}
 		verified, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 			PublicKey:             bytesutil.SafeCopyBytes(deposit.PublicKey),
 			WithdrawalCredentials: bytesutil.SafeCopyBytes(deposit.WithdrawalCredentials),
@@ -464,6 +479,12 @@ func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *eth
 		return nil
 	}
 	return helpers.IncreaseBalance(st, index, deposit.Amount)
+}
+
+// hasBLSWithdrawalPrefix reports whether the withdrawal credentials carry the BLS
+// (0x00) withdrawal prefix.
+func hasBLSWithdrawalPrefix(withdrawalCredentials []byte) bool {
+	return len(withdrawalCredentials) > 0 && withdrawalCredentials[0] == params.BeaconConfig().BLSWithdrawalPrefixByte
 }
 
 // AddValidatorToRegistry updates the beacon state with validator information

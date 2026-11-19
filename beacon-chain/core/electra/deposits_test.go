@@ -668,3 +668,106 @@ func TestApplyPendingDeposit_InvalidSignature(t *testing.T) {
 	// no topup either
 	require.Equal(t, 0, len(st.Balances()))
 }
+
+// hezeStateWithActiveBalanceETH is stateWithActiveBalanceETH for a Heze state, where EIP-8365 applies.
+func hezeStateWithActiveBalanceETH(t *testing.T, balETH uint64) state.BeaconState {
+	base := stateWithActiveBalanceETH(t, balETH)
+	st, err := util.NewBeaconStateHeze(func(s *eth.BeaconStateHeze) error {
+		s.Slot = base.Slot()
+		s.Validators = base.Validators()
+		s.Balances = base.Balances()
+		return nil
+	})
+	require.NoError(t, err)
+	return st
+}
+
+func TestApplyPendingDeposit_EIP8365(t *testing.T) {
+	var blsCreds [32]byte
+	blsCreds[0] = params.BeaconConfig().BLSWithdrawalPrefixByte
+
+	t.Run("new validator with BLS credentials is not created", func(t *testing.T) {
+		st := hezeStateWithActiveBalanceETH(t, 0)
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		// The signature is valid, so the deposit can only be skipped by the EIP-8365 check.
+		dep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, blsCreds, 0)
+		require.NoError(t, electra.ApplyPendingDeposit(t.Context(), st, dep))
+		require.Equal(t, 0, len(st.Validators()))
+		require.Equal(t, 0, len(st.Balances()))
+	})
+
+	t.Run("top-up to existing validator with BLS credentials is applied", func(t *testing.T) {
+		excessBalance := uint64(100)
+		st := hezeStateWithActiveBalanceETH(t, 32)
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		validators := st.Validators()
+		validators[0].PublicKey = sk.PublicKey().Marshal()
+		validators[0].WithdrawalCredentials = blsCreds[:]
+		require.NoError(t, st.SetValidators(validators))
+		dep := stateTesting.GeneratePendingDeposit(t, sk, excessBalance, blsCreds, 0)
+		require.NoError(t, electra.ApplyPendingDeposit(t.Context(), st, dep))
+		b, err := st.BalanceAtIndex(0)
+		require.NoError(t, err)
+		require.Equal(t, params.BeaconConfig().MinActivationBalance+excessBalance, b)
+	})
+
+	t.Run("new validator with BLS credentials is created before Heze", func(t *testing.T) {
+		st := stateWithActiveBalanceETH(t, 0)
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		dep := stateTesting.GeneratePendingDeposit(t, sk, params.BeaconConfig().MinActivationBalance, blsCreds, 0)
+		require.NoError(t, electra.ApplyPendingDeposit(t.Context(), st, dep))
+		require.Equal(t, 1, len(st.Validators()))
+	})
+}
+
+func TestProcessPendingDeposits_EIP8365(t *testing.T) {
+	var blsCreds, execCreds [32]byte
+	blsCreds[0] = params.BeaconConfig().BLSWithdrawalPrefixByte
+	execCreds[0] = params.BeaconConfig().ETH1AddressWithdrawalPrefixByte
+	minActivationBalance := params.BeaconConfig().MinActivationBalance
+
+	process := func(t *testing.T, st state.BeaconState, deps ...*eth.PendingDeposit) {
+		require.NoError(t, st.SetPendingDeposits(deps))
+		tab, err := helpers.TotalActiveBalance(t.Context(), st)
+		require.NoError(t, err)
+		require.NoError(t, electra.ProcessPendingDeposits(t.Context(), st, primitives.Gwei(tab)))
+		// Every deposit leaves the queue, including the skipped ones.
+		remaining, err := st.PendingDeposits()
+		require.NoError(t, err)
+		require.Equal(t, 0, len(remaining))
+	}
+
+	t.Run("new validator with BLS credentials is not created", func(t *testing.T) {
+		st := hezeStateWithActiveBalanceETH(t, 0)
+		blsKey, err := bls.RandKey()
+		require.NoError(t, err)
+		execKey, err := bls.RandKey()
+		require.NoError(t, err)
+		process(t, st,
+			stateTesting.GeneratePendingDeposit(t, blsKey, minActivationBalance, blsCreds, 0),
+			stateTesting.GeneratePendingDeposit(t, execKey, minActivationBalance, execCreds, 0),
+		)
+		// Only the validator with execution credentials is created.
+		require.Equal(t, 1, len(st.Validators()))
+		require.DeepEqual(t, execKey.PublicKey().Marshal(), st.Validators()[0].PublicKey)
+	})
+
+	t.Run("BLS credential top-up to a validator created earlier in the epoch is applied", func(t *testing.T) {
+		st := hezeStateWithActiveBalanceETH(t, 0)
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		topUpAmount := uint64(1_000_000_000)
+		process(t, st,
+			stateTesting.GeneratePendingDeposit(t, sk, minActivationBalance, execCreds, 0),
+			stateTesting.GeneratePendingDeposit(t, sk, topUpAmount, blsCreds, 0),
+		)
+		// The first deposit creates the validator, so the second is a top-up rather than a new validator.
+		require.Equal(t, 1, len(st.Validators()))
+		b, err := st.BalanceAtIndex(0)
+		require.NoError(t, err)
+		require.Equal(t, minActivationBalance+topUpAmount, b)
+	})
+}
