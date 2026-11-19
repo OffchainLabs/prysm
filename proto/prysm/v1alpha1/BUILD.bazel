@@ -197,6 +197,8 @@ go_library(
         "sync_committee_minimal.go",  # keep
         "payload_attestation_mainnet.go",
         "payload_attestation_minimal.go",  # keep
+        "pq_committee_bits_mainnet.go",
+        "pq_committee_bits_minimal.go",  # keep
         ":methodical_altair", # keep
         ":methodical_bellatrix", # keep
         ":methodical_capella", # keep
