@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -15,7 +16,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/OffchainLabs/prysm/v7/validator/db/signingprotection"
 	"github.com/pkg/errors"
 )
 
@@ -119,6 +122,12 @@ func VerifyBlockSignatureUsingCurrentFork(beaconState state.ReadOnlyBeaconState,
 		return err
 	}
 	proposerPubKey := proposer.PublicKey
+	if blk.Version() == version.PQ {
+		if err := pq.VerifySlotMessage(proposerPubKey, signingprotection.Block, blk.Block().Slot(), blkRoot, domain, blk.XMSSSignature()); err != nil {
+			return ErrInvalidSignature
+		}
+		return nil
+	}
 	sig := blk.Signature()
 	if err := signing.VerifyBlockSigningRoot(proposerPubKey, sig[:], domain, func() ([32]byte, error) {
 		return blkRoot, nil

@@ -587,6 +587,10 @@ func getBlockFields(b interfaces.ReadOnlySignedBeaconBlock) logrus.Fields {
 // the head block. If the blocks are from the same slot and proposer but have different signatures,
 // it creates and broadcasts a proposer slashing object after verification.
 func (s *Service) detectAndBroadcastEquivocation(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, receivedTime time.Time) error {
+	// Proposer slashings are not built on PQ yet.
+	if blk.Version() == version.PQ {
+		return nil
+	}
 	slot := blk.Block().Slot()
 	proposerIndex := blk.Block().ProposerIndex()
 
