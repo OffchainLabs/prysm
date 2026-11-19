@@ -15,7 +15,7 @@ import (
 // List pretty-prints accounts in the wallet.
 func (acm *CLIManager) List(ctx context.Context) error {
 	if acm.listValidatorIndices {
-		client, _, err := acm.prepareBeaconClients(ctx)
+		client, _, err := acm.PrepareBeaconClients(ctx)
 		if err != nil {
 			return err
 		}
