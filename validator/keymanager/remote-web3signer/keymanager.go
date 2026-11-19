@@ -79,7 +79,7 @@ func NewKeymanager(ctx context.Context, cfg *SetupConfig) (*Keymanager, error) {
 	ctx, span := trace.StartSpan(ctx, "remote-keymanager.NewKeymanager")
 	defer span.End()
 	if cfg.BaseEndpoint == "" || !bytesutil.IsValidRoot(cfg.GenesisValidatorsRoot) {
-		return nil, fmt.Errorf("invalid setup config, one or more configs are empty: BaseEndpoint: %v, GenesisValidatorsRoot: %#x", cfg.BaseEndpoint, cfg.GenesisValidatorsRoot)
+		return nil, fmt.Errorf("invalid setup config, one or more configs are empty: BaseEndpoint: %v, GenesisValidatorsRoot: %#x", api.RedactEndpoint(cfg.BaseEndpoint), cfg.GenesisValidatorsRoot)
 	}
 	client, err := internal.NewApiClient(cfg.BaseEndpoint)
 	if err != nil {

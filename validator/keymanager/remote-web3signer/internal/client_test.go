@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/testing/require"
@@ -101,14 +102,29 @@ func TestClient_Sign_ErrorStatus(t *testing.T) {
 				assert.NoError(t, err)
 			}))
 			defer srv.Close()
-			cl, err := internal.NewApiClient(srv.URL)
+			// Basic-auth credentials in the signer URL must not end up in the returned error.
+			u, err := url.Parse(srv.URL)
+			require.NoError(t, err)
+			u.User = url.UserPassword("alice", "s3cret-pa55word")
+			cl, err := internal.NewApiClient(u.String())
 			require.NoError(t, err)
 
 			resp, err := cl.Sign(t.Context(), "0xa2b5aaad9c6efefe7bb9b1243a043404f3362937cfb6b31833929833173f476630ea2cfeb0d9ddf15f97ca8685948820", bytes.Repeat([]byte("a"), 644))
 			require.ErrorContains(t, tt.wantErr, err)
 			require.IsNil(t, resp)
+			require.Equal(t, false, strings.Contains(err.Error(), "s3cret-pa55word"), "error leaks the signer URL password: %v", err)
+			if tt.status != http.StatusNotFound {
+				require.ErrorContains(t, "http://alice:xxxxx@"+u.Host, err)
+			}
 		})
 	}
+}
+
+func TestNewApiClient_InvalidURLDoesNotLeakCredentials(t *testing.T) {
+	// A '%' that is not a valid escape makes url.ParseRequestURI fail and quote the raw URL.
+	_, err := internal.NewApiClient("http://alice:s3cret%zz@localhost:8545")
+	require.ErrorContains(t, "invalid format, unable to parse url", err)
+	require.Equal(t, false, strings.Contains(err.Error(), "s3cret"), "error leaks the signer URL password: %v", err)
 }
 
 // failingBody is a response body whose reads fail and which records whether it was closed.
