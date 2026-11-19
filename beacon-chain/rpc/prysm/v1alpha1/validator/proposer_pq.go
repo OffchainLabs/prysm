@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -14,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Self-build only, without attestations or a payload envelope until those are ported.
+// Self-build only, without a payload envelope until that is ported.
 func (vs *Server) buildBlockPQ(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState, parentFull bool) (*ethpb.GenericBeaconBlock, error) {
 	if parentFull {
 		return nil, status.Error(codes.Internal, "Payload envelopes are not supported on PQ yet")
@@ -27,6 +28,14 @@ func (vs *Server) buildBlockPQ(ctx context.Context, sBlk interfaces.SignedBeacon
 	}
 	sBlk.SetEth1Data(eth1Data)
 	sBlk.SetParentExecutionRequestsPQ(&enginev1.ExecutionRequestsPQ{})
+	atts, proof, err := pqpool.Pack(ctx, head, vs.PQAttPool.All())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not pack attestations: %v", err)
+	}
+	if err := sBlk.SetAttestations(atts); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not set attestations: %v", err)
+	}
+	sBlk.SetAttestationProof(proof)
 
 	local, err := vs.getLocalPayload(ctx, sBlk.Block(), head, parentFull)
 	if err != nil {

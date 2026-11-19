@@ -21,6 +21,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
 	lightClient "github.com/OffchainLabs/prysm/v7/beacon-chain/light-client"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
@@ -103,6 +104,7 @@ type Config struct {
 	AttestationCache                 *cache.AttestationCache
 	AttestationDataCache             *cache.AttestationDataCache
 	AttestationsPool                 attestations.Pool
+	PQAttestationPool                *pqpool.Pool
 	PayloadAttestationPool           payloadattestation.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
 	SlashingsPool                    slashings.PoolManager
@@ -234,6 +236,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		Ctx:                              s.ctx,
 		AttestationCache:                 s.cfg.AttestationCache,
 		AttPool:                          s.cfg.AttestationsPool,
+		PQAttPool:                        s.cfg.PQAttestationPool,
 		ExitPool:                         s.cfg.ExitPool,
 		HeadFetcher:                      s.cfg.HeadFetcher,
 		ForkFetcher:                      s.cfg.ForkFetcher,

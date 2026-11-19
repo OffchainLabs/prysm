@@ -38,6 +38,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/monitor"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node/registration"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/blstoexec"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/payloadattestation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/slashings"
@@ -99,6 +100,7 @@ type BeaconNode struct {
 	attestationDataCache      *cache.AttestationDataCache
 	attestationPool           attestations.Pool
 	payloadAttestationPool    payloadattestation.PoolManager
+	pqAttestationPool         *pqpool.Pool
 	exitPool                  voluntaryexits.PoolManager
 	slashingsPool             slashings.PoolManager
 	syncCommitteePool         synccommittee.Pool
@@ -171,6 +173,7 @@ func New(cliCtx *cli.Context, cancel context.CancelFunc, optFuncs []func(*cli.Co
 		attestationDataCache:      cache.NewAttestationDataCache(),
 		attestationPool:           attestations.NewPool(),
 		payloadAttestationPool:    payloadattestation.NewPool(),
+		pqAttestationPool:         pqpool.New(),
 		exitPool:                  voluntaryexits.NewPool(),
 		slashingsPool:             slashings.NewPool(),
 		syncCommitteePool:         synccommittee.NewPool(),
@@ -800,6 +803,7 @@ func (b *BeaconNode) registerBlockchainService(fc forkchoice.ForkChoicer, gs *st
 		blockchain.WithExecutionEngineCaller(web3Service),
 		blockchain.WithAttestationCache(b.attestationCache),
 		blockchain.WithAttestationPool(b.attestationPool),
+		blockchain.WithPQAttestationPool(b.pqAttestationPool),
 		blockchain.WithExitPool(b.exitPool),
 		blockchain.WithSlashingPool(b.slashingsPool),
 		blockchain.WithBLSToExecPool(b.blsToExecPool),
@@ -899,6 +903,7 @@ func (b *BeaconNode) registerSyncService(initialSyncComplete chan struct{}, bFil
 		regularsync.WithOperationNotifier(b),
 		regularsync.WithAttestationCache(b.attestationCache),
 		regularsync.WithAttestationPool(b.attestationPool),
+		regularsync.WithPQAttestationPool(b.pqAttestationPool),
 		regularsync.WithExitPool(b.exitPool),
 		regularsync.WithSlashingPool(b.slashingsPool),
 		regularsync.WithSyncCommsPool(b.syncCommitteePool),
@@ -1054,6 +1059,7 @@ func (b *BeaconNode) registerRPCService(router *http.ServeMux) error {
 		AttestationCache:                 b.attestationCache,
 		AttestationDataCache:             b.attestationDataCache,
 		AttestationsPool:                 b.attestationPool,
+		PQAttestationPool:                b.pqAttestationPool,
 		PayloadAttestationPool:           b.payloadAttestationPool,
 		ExitPool:                         b.exitPool,
 		SlashingsPool:                    b.slashingsPool,
