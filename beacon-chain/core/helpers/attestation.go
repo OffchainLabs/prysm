@@ -110,11 +110,7 @@ func ComputeSubnetFromCommitteeAndSlot(activeValCount uint64, comIdx primitives.
 func ComputeSubnetForCommitteesPerSlot(committeesPerSlot uint64, comIdx primitives.CommitteeIndex, attSlot primitives.Slot) uint64 {
 	slotSinceStart := slots.SinceEpochStarts(attSlot)
 	commsSinceStart := uint64(slotSinceStart.Mul(committeesPerSlot))
-	subnetCount := params.BeaconConfig().AttestationSubnetCount
-	if slots.ToEpoch(attSlot) >= params.BeaconConfig().PQForkEpoch {
-		subnetCount = params.BeaconConfig().AttestationSubnetCountPQ
-	}
-	return (commsSinceStart + uint64(comIdx)) % subnetCount
+	return (commsSinceStart + uint64(comIdx)) % params.BeaconConfig().AttestationSubnetCountAtEpoch(slots.ToEpoch(attSlot))
 }
 
 // ValidateAttestationTime Validates that the incoming attestation is in the desired time range.

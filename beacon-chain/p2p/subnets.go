@@ -514,8 +514,9 @@ func computeSubscribedSubnets(nodeID enode.ID, epoch primitives.Epoch) ([]uint64
 	cfg := params.BeaconConfig()
 
 	if flags.Get().SubscribeToAllSubnets {
-		subnets := make([]uint64, 0, cfg.AttestationSubnetCount)
-		for i := range cfg.AttestationSubnetCount {
+		count := cfg.AttestationSubnetCountAtEpoch(epoch)
+		subnets := make([]uint64, 0, count)
+		for i := range count {
 			subnets = append(subnets, i)
 		}
 		return subnets, nil
@@ -547,27 +548,29 @@ func computeSubscribedSubnets(nodeID enode.ID, epoch primitives.Epoch) ([]uint64
 //	)
 //	return SubnetID((permutated_prefix + index) % ATTESTATION_SUBNET_COUNT)
 func computeSubscribedSubnet(nodeID enode.ID, epoch primitives.Epoch, index uint64) (uint64, error) {
-	nodeOffset, nodeIdPrefix := computeOffsetAndPrefix(nodeID)
+	cfg := params.BeaconConfig()
+	prefixBits := cfg.AttestationSubnetPrefixBitsAtEpoch(epoch)
+	nodeOffset, nodeIdPrefix := computeOffsetAndPrefix(nodeID, prefixBits)
 	seedInput := (nodeOffset + uint64(epoch)) / params.BeaconConfig().EpochsPerSubnetSubscription
 	permSeed := hash.Hash(bytesutil.Bytes8(seedInput))
-	permutatedPrefix, err := helpers.ComputeShuffledIndex(primitives.ValidatorIndex(nodeIdPrefix), 1<<params.BeaconConfig().AttestationSubnetPrefixBits, permSeed, true)
+	permutatedPrefix, err := helpers.ComputeShuffledIndex(primitives.ValidatorIndex(nodeIdPrefix), 1<<prefixBits, permSeed, true)
 	if err != nil {
 		return 0, err
 	}
-	subnet := (uint64(permutatedPrefix) + index) % params.BeaconConfig().AttestationSubnetCount
+	subnet := (uint64(permutatedPrefix) + index) % cfg.AttestationSubnetCountAtEpoch(epoch)
 	return subnet, nil
 }
 
 func computeSubscriptionExpirationTime(nodeID enode.ID, epoch primitives.Epoch) time.Duration {
-	nodeOffset, _ := computeOffsetAndPrefix(nodeID)
+	nodeOffset, _ := computeOffsetAndPrefix(nodeID, params.BeaconConfig().AttestationSubnetPrefixBitsAtEpoch(epoch))
 	pastEpochs := (nodeOffset + uint64(epoch)) % params.BeaconConfig().EpochsPerSubnetSubscription
 	remEpochs := params.BeaconConfig().EpochsPerSubnetSubscription - pastEpochs
 	return params.EpochsDuration(primitives.Epoch(remEpochs), params.BeaconConfig())
 }
 
-func computeOffsetAndPrefix(nodeID enode.ID) (uint64, uint64) {
+func computeOffsetAndPrefix(nodeID enode.ID, prefixBits uint64) (uint64, uint64) {
 	num := uint256.NewInt(0).SetBytes(nodeID.Bytes())
-	remBits := params.BeaconConfig().NodeIdBits - params.BeaconConfig().AttestationSubnetPrefixBits
+	remBits := params.BeaconConfig().NodeIdBits - prefixBits
 	// Number of bits left will be representable by a uint64 value.
 	nodeIdPrefix := num.Rsh(num, uint(remBits)).Uint64()
 	// Reinitialize big int.
