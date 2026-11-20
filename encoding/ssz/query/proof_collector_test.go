@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ssz "github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -391,23 +390,6 @@ func TestProofCollector_MixinLengthAndCollect(t *testing.T) {
 	expectedBuf := append(storedLeaf[:], storedSibling[:]...)
 	expectedRoot := sha256.Sum256(expectedBuf)
 	require.Equal(t, expectedRoot, root)
-}
-
-func BenchmarkOptimizedValidatorRoots(b *testing.B) {
-	validators := make([]*ethpb.Validator, 1000)
-	for i := range validators {
-		validators[i] = makeTestValidator(i)
-	}
-
-	compactValidators := stateutil.CompactValidatorsFromProto(validators)
-
-	b.ResetTimer()
-	for b.Loop() {
-		_, err := stateutil.OptimizedValidatorRoots(compactValidators)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
 }
 
 func BenchmarkProofCollectorMerkleize(b *testing.B) {

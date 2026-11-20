@@ -46,7 +46,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//beacon-chain/state/stateutil:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//encoding/ssz:go_default_library",
