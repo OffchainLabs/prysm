@@ -8,6 +8,7 @@ go_library(
         "attestation.go",
         "bid.go",
         "proof.go",
+        "ptc.go",
         "randao.go",
         "xmss.go",
     ],

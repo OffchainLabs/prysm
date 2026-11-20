@@ -45,8 +45,11 @@ func (s *Service) processPayloadAttestationMessage(ctx context.Context, a *eth.P
 	if err != nil {
 		return err
 	}
-	if err := s.cfg.payloadAttestationPool.InsertPayloadAttestation(a, indices); err != nil {
-		return err
+	// PQ blocks carry no payload attestations, so the pool is skipped.
+	if !isPQSlot(a.Data.Slot) {
+		if err := s.cfg.payloadAttestationPool.InsertPayloadAttestation(a, indices); err != nil {
+			return err
+		}
 	}
 
 	return s.cfg.chain.ReceivePayloadAttestationMessage(ctx, a)

@@ -75,6 +75,7 @@ go_library(
         "validate_light_client.go",
         "validate_partial_header.go",
         "validate_payload_attestation.go",
+        "validate_payload_attestation_pq.go",
         "validate_proposer_slashing.go",
         "validate_signed_proposer_preferences.go",
         "validate_sync_committee_message.go",

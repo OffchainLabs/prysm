@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
@@ -54,9 +55,15 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 		return pubsub.ValidationReject, err
 	}
 
+	var pqPreferences *ethpb.SignedProposerPreferencesPQ
 	signedPreferences, ok := m.(*ethpb.SignedProposerPreferences)
 	if !ok {
-		return pubsub.ValidationReject, errWrongMessage
+		pqPreferences, ok = m.(*ethpb.SignedProposerPreferencesPQ)
+		if !ok {
+			return pubsub.ValidationReject, errWrongMessage
+		}
+		// The shared checks and the cache read only the message, so a BLS shaped copy carries it.
+		signedPreferences = &ethpb.SignedProposerPreferences{Message: pqPreferences.Message, Signature: make([]byte, fieldparams.BLSSignatureLength)}
 	}
 	if signedPreferences.Message == nil {
 		return pubsub.ValidationReject, errNilMessage
@@ -153,7 +160,11 @@ func (s *Service) validateSignedProposerPreferencesGossip(ctx context.Context, p
 	// is checked against the un-advanced state. A forged message is rejected
 	// here before it can trigger the epoch transition below, and it is never
 	// cached, so this is the only place that bounds the work it can cause.
-	if err := v.VerifySignature(st); err != nil {
+	if pqPreferences != nil {
+		if err := pq.VerifyProposerPreferences(st, pqPreferences); err != nil {
+			return pubsub.ValidationReject, err
+		}
+	} else if err := v.VerifySignature(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
 
