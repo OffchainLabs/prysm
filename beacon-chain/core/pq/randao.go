@@ -16,7 +16,7 @@ const (
 
 var ErrInvalidVRFProof = errors.New("invalid VRF proof")
 
-// Spec: is_valid_vrf_proof
+// Spec: is_valid_vrf_proof at 2f43bc0f9, Keccak tree with the leaf revealed, as the devnet genesis tool builds it
 func VerifyVRFProof(st state.ReadOnlyBeaconState, proposer primitives.ValidatorIndex, slot primitives.Slot, proof []byte) error {
 	if len(proof) != vrfProofLength {
 		return errors.Wrapf(ErrInvalidVRFProof, "length %d", len(proof))
@@ -37,7 +37,7 @@ func VerifyVRFProof(st state.ReadOnlyBeaconState, proposer primitives.ValidatorI
 			copy(buf[:32], node[:])
 			copy(buf[32:], sibling)
 		}
-		node = hash.Hash(buf[:])
+		node = hash.Keccak256(buf[:])
 		index >>= 1
 	}
 	if node != root {
