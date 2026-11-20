@@ -35,7 +35,7 @@ func ensurePeerConnections(ctx context.Context, h host.Host, peers *peers.Status
 
 		// avoid invalid trusted peers
 		if err != nil || maddr == nil {
-			log.WithField("peer", trustedPeers).WithError(err).Error("Could not get peer address")
+			log.WithField("peer", trustedPeer).WithError(err).Error("Could not get peer address")
 			continue
 		}
 		peerInfo := &peer.AddrInfo{ID: trustedPeer}
@@ -50,7 +50,7 @@ func ensurePeerConnections(ctx context.Context, h host.Host, peers *peers.Status
 		c := h.Network().ConnsToPeer(p.ID)
 		if len(c) == 0 {
 			if err := connectWithTimeout(ctx, h, p); err != nil {
-				log.WithField("peer", p.ID).WithField("addrs", p.Addrs).WithError(err).Errorf("failed to reconnect to peer")
+				log.WithField("peer", p.ID).WithField("addrs", p.Addrs).WithError(err).Error("Failed to reconnect to peer")
 				continue
 			}
 		}
