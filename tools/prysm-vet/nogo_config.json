@@ -313,5 +313,19 @@
       ".*/.*_test\\.go": "Test logs can be less formal",
       "tools/analyzers/logcapitalization/testdata/.*": "Analyzer testdata has to break rules"
     }
+  },
+  "logpunctuation": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code",
+      "tools/analyzers/logpunctuation/testdata/.*": "Analyzer testdata has to break rules"
+    }
+  },
+  "logstyle": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code",
+      "tools/analyzers/logstyle/testdata/.*": "Analyzer testdata has to break rules"
+    }
   }
 }

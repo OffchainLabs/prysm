@@ -14,7 +14,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/tools/analyzers/ineffassign"
 	"github.com/OffchainLabs/prysm/v7/tools/analyzers/interfacechecker"
 	"github.com/OffchainLabs/prysm/v7/tools/analyzers/logcapitalization"
+	"github.com/OffchainLabs/prysm/v7/tools/analyzers/logpunctuation"
 	"github.com/OffchainLabs/prysm/v7/tools/analyzers/logruswitherror"
+	"github.com/OffchainLabs/prysm/v7/tools/analyzers/logstyle"
 	"github.com/OffchainLabs/prysm/v7/tools/analyzers/maligned"
 	modernizeany "github.com/OffchainLabs/prysm/v7/tools/analyzers/modernize/any"
 	"github.com/OffchainLabs/prysm/v7/tools/analyzers/modernize/appendclipped"
@@ -105,7 +107,9 @@ var prysmAnalyzers = []*analysis.Analyzer{
 	ineffassign.Analyzer,
 	interfacechecker.Analyzer,
 	logcapitalization.Analyzer,
+	logpunctuation.Analyzer,
 	logruswitherror.Analyzer,
+	logstyle.Analyzer,
 	maligned.Analyzer,
 	modernizeany.Analyzer,
 	appendclipped.Analyzer,
