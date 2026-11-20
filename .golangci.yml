@@ -4,11 +4,22 @@ run:
 linters:
   enable:
     - errcheck
+    - gocritic
     - ineffassign
     - govet
+    - revive
   disable:
     - staticcheck
     - unused
+  settings:
+    gocritic:
+      disable-all: true
+      enabled-checks:
+        - elseif
+    revive:
+      rules:
+        - name: indent-error-flow
+        - name: superfluous-else
   exclusions:
     generated: lax
     presets:
