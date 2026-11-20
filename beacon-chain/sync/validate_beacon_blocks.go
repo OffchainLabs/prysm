@@ -124,6 +124,26 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationIgnore, nil
 	}
 
+	// These checks are cheap and do not need the block root, so run them before hashing the block.
+	cp := s.cfg.chain.FinalizedCheckpt()
+	startSlot, err := slots.EpochStart(cp.Epoch)
+	if err != nil {
+		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block: could not calculate epoch start slot")
+		return pubsub.ValidationIgnore, nil
+	}
+	if startSlot >= blk.Block().Slot() {
+		err := fmt.Errorf("finalized slot %d greater or equal to block slot %d", startSlot, blk.Block().Slot())
+		log.WithFields(getBlockFields(blk)).Debug(err)
+		return pubsub.ValidationIgnore, err
+	}
+
+	parentRoot := blk.Block().ParentRoot()
+	if s.cfg.chain.ShouldIgnoreData(parentRoot, blk.Block().Slot()) {
+		log.WithFields(getBlockFields(blk)).Debug("Ignoring block with canonical parent before justified checkpoint")
+		ignoredPreJustifiedBlockCount.Inc()
+		return pubsub.ValidationIgnore, nil
+	}
+
 	blockRoot, err := blk.Block().HashTreeRoot()
 	if err != nil {
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block")
@@ -153,25 +173,6 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 	// Add metrics for block arrival time subtracts slot start time.
 	if err := captureArrivalTimeMetric(genesisTime, blk.Block().Slot()); err != nil {
 		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block: could not capture arrival time metric")
-		return pubsub.ValidationIgnore, nil
-	}
-
-	cp := s.cfg.chain.FinalizedCheckpt()
-	startSlot, err := slots.EpochStart(cp.Epoch)
-	if err != nil {
-		log.WithError(err).WithFields(getBlockFields(blk)).Debug("Ignored block: could not calculate epoch start slot")
-		return pubsub.ValidationIgnore, nil
-	}
-	if startSlot >= blk.Block().Slot() {
-		err := fmt.Errorf("finalized slot %d greater or equal to block slot %d", startSlot, blk.Block().Slot())
-		log.WithFields(getBlockFields(blk)).Debug(err)
-		return pubsub.ValidationIgnore, err
-	}
-
-	parentRoot := blk.Block().ParentRoot()
-	if s.cfg.chain.ShouldIgnoreData(parentRoot, blk.Block().Slot()) {
-		log.WithFields(getBlockFields(blk)).Debug("Ignoring block with canonical parent before justified checkpoint")
-		ignoredPreJustifiedBlockCount.Inc()
 		return pubsub.ValidationIgnore, nil
 	}
 

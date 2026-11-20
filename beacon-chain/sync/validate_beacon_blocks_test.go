@@ -1047,6 +1047,12 @@ func TestValidateBeaconBlockPubSub_FilterByFinalizedEpoch(t *testing.T) {
 	_ = err
 	assert.Equal(t, pubsub.ValidationIgnore, res)
 
+	// The finalized slot check now runs before the bad parent check, so this block is ignored, not rejected.
+	r.setBadBlock(t.Context(), parentRoot)
+	res, err = r.validateBeaconBlockPubSub(t.Context(), "", m)
+	assert.ErrorContains(t, "finalized slot", err)
+	assert.Equal(t, pubsub.ValidationIgnore, res)
+
 	hook.Reset()
 	b.Block.Slot = params.BeaconConfig().SlotsPerEpoch
 	buf = new(bytes.Buffer)
