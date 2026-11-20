@@ -5,9 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
+	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v7/validator/pqkeys"
 )
 
@@ -86,7 +88,9 @@ func TestValidator_LoadPQKeys(t *testing.T) {
 	t.Run("derives the keys", func(t *testing.T) {
 		pair := randKeypair(t)
 		km := &pqTestKeymanager{mockKeymanager: newMockKeymanager(t, pair)}
-		v := &validator{km: km, pqKeys: pqkeys.NewRegistry(t.Context(), nil)}
+		db := dbTest.SetupDB(t, t.TempDir(), nil, false)
+		require.NoError(t, db.SaveGenesisValidatorsRoot(t.Context(), make([]byte, fieldparams.RootLength)))
+		v := &validator{km: km, db: db, pqKeys: pqkeys.NewRegistry(t.Context(), nil)}
 
 		require.NoError(t, v.loadPQKeys(t.Context()))
 
@@ -96,6 +100,21 @@ func TestValidator_LoadPQKeys(t *testing.T) {
 		xmssKey, ok := v.pqKeys.XMSSPubkey(pair.pub)
 		require.Equal(t, true, ok)
 		require.DeepEqual(t, keys.XMSS.PublicKey().Bytes(), xmssKey[:])
+
+		// The XMSS signer can sign with the key.
+		require.DeepEqual(t, [][fieldparams.XMSSPubkeyLength]byte{xmssKey}, v.pqSigner.PublicKeys())
+
+		// Loading again does not add the key twice.
+		require.NoError(t, v.loadPQKeys(t.Context()))
+		require.Equal(t, 1, len(v.pqSigner.PublicKeys()))
+	})
+
+	t.Run("no genesis validators root", func(t *testing.T) {
+		km := &pqTestKeymanager{mockKeymanager: newMockKeymanager(t, randKeypair(t))}
+		v := &validator{km: km, db: dbTest.SetupDB(t, t.TempDir(), nil, false), pqKeys: pqkeys.NewRegistry(t.Context(), nil)}
+
+		err := v.loadPQKeys(t.Context())
+		require.ErrorContains(t, "genesis validators root", err)
 	})
 }
 

@@ -34,6 +34,9 @@ const (
 	payloadAttestationRecovered = "recovered"
 )
 
+// errPTCDomainData is returned when the domain of a payload attestation cannot be computed.
+var errPTCDomainData = errors.New("PTC attester domain data")
+
 // payloadAttestationDataWithRetry requests the payload attestation data for slot, asking
 // once more at the payload attestation deadline when the first request fails before it.
 // It reports whether a second request was made.
@@ -133,31 +136,14 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		return
 	}
 
-	d, err := v.domainData(ctx, slots.ToEpoch(slot), params.BeaconConfig().DomainPTCAttester[:])
+	sig, err := v.signPayloadAttestation(ctx, pubKey, data)
 	if err != nil {
 		validatorPayloadAttestationSubmissionTotal.WithLabelValues(payloadAttestationFailed).Inc()
-		log.WithError(err).Error("Could not get PTC attester domain data")
-		return
-	}
+		if errors.Is(err, errPTCDomainData) {
+			log.WithError(err).Error("Could not get PTC attester domain data")
+			return
+		}
 
-	r, err := signing.ComputeSigningRoot(data, d.SignatureDomain)
-	if err != nil {
-		validatorPayloadAttestationSubmissionTotal.WithLabelValues(payloadAttestationFailed).Inc()
-		log.WithError(err).Error("Could not compute payload attestation signing root")
-		return
-	}
-
-	sig, err := v.km.Sign(ctx, &validatorpb.SignRequest{
-		PublicKey:       pubKey[:],
-		SigningRoot:     r[:],
-		SignatureDomain: d.SignatureDomain,
-		Object: &validatorpb.SignRequest_PayloadAttestationData{
-			PayloadAttestationData: data,
-		},
-		SigningSlot: slot,
-	})
-	if err != nil {
-		validatorPayloadAttestationSubmissionTotal.WithLabelValues(payloadAttestationFailed).Inc()
 		log.WithError(err).Error("Could not sign payload attestation")
 		return
 	}
@@ -169,12 +155,7 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		return
 	}
 
-	msg := &ethpb.PayloadAttestationMessage{
-		ValidatorIndex: duty.ValidatorIndex,
-		Data:           data,
-		Signature:      sig.Marshal(),
-	}
-	if _, err := v.validatorClient.SubmitPayloadAttestation(ctx, msg); err != nil {
+	if err := v.submitPayloadAttestationMessage(ctx, duty.ValidatorIndex, data, sig); err != nil {
 		validatorPayloadAttestationSubmissionTotal.WithLabelValues(payloadAttestationFailed).Inc()
 		log.WithError(err).Error("Could not submit payload attestation")
 		return
@@ -195,4 +176,76 @@ func (v *validator) SubmitPayloadAttestation(ctx context.Context, slot primitive
 		"validatorIndex":     duty.ValidatorIndex,
 	}).Debug("Submitted new payload attestation")
 	v.saveSubmittedPayloadAtt(data, duty.ValidatorIndex)
+}
+
+// signPayloadAttestation signs `data`, the payload attestation data of the validator whose BLS public key is `pubKey`.
+// It signs with the XMSS key in the PQ fork, and with the BLS key otherwise.
+func (v *validator) signPayloadAttestation(ctx context.Context, pubKey [fieldparams.BLSPubkeyLength]byte, data *ethpb.PayloadAttestationData) ([]byte, error) {
+	if v.pqKeys != nil {
+		signature, err := v.signPayloadAttestationPQ(ctx, pubKey, data)
+		if err != nil {
+			return nil, fmt.Errorf("sign PQ payload attestation: %w", err)
+		}
+
+		return signature, nil
+	}
+
+	d, err := v.domainData(ctx, slots.ToEpoch(data.Slot), params.BeaconConfig().DomainPTCAttester[:])
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errPTCDomainData, err)
+	}
+
+	r, err := signing.ComputeSigningRoot(data, d.SignatureDomain)
+	if err != nil {
+		return nil, fmt.Errorf("payload attestation signing root: %w", err)
+	}
+
+	sig, err := v.km.Sign(ctx, &validatorpb.SignRequest{
+		PublicKey:       pubKey[:],
+		SigningRoot:     r[:],
+		SignatureDomain: d.SignatureDomain,
+		Object: &validatorpb.SignRequest_PayloadAttestationData{
+			PayloadAttestationData: data,
+		},
+		SigningSlot: data.Slot,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("sign payload attestation: %w", err)
+	}
+
+	return sig.Marshal(), nil
+}
+
+// submitPayloadAttestationMessage submits the payload attestation of the validator of index `index`, of `data`,
+// signed with `signature`.
+func (v *validator) submitPayloadAttestationMessage(
+	ctx context.Context,
+	index primitives.ValidatorIndex,
+	data *ethpb.PayloadAttestationData,
+	signature []byte,
+) error {
+	if v.pqKeys != nil {
+		client, ok := v.pqClient()
+		if !ok {
+			return errors.New("the validator client has no PQ beacon API client")
+		}
+
+		message := &ethpb.PayloadAttestationMessagePQ{ValidatorIndex: index, Data: data, Signature: signature}
+		if err := client.SubmitPayloadAttestationsPQ(ctx, []*ethpb.PayloadAttestationMessagePQ{message}); err != nil {
+			return fmt.Errorf("submit PQ payload attestation: %w", err)
+		}
+
+		return nil
+	}
+
+	msg := &ethpb.PayloadAttestationMessage{
+		ValidatorIndex: index,
+		Data:           data,
+		Signature:      signature,
+	}
+	if _, err := v.validatorClient.SubmitPayloadAttestation(ctx, msg); err != nil {
+		return fmt.Errorf("submit payload attestation: %w", err)
+	}
+
+	return nil
 }
