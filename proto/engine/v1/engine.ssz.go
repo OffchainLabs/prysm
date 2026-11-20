@@ -3897,6 +3897,675 @@ func (c *ExecutionRequestsGloas) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (er
 	return nil
 }
 
+func (c *ExecutionRequestsPQ) SizeSSZ() int {
+	size := 32
+	size += len(c.Deposits) * 192
+	size += len(c.Withdrawals) * 76
+	size += len(c.Consolidations) * 116
+	size += len(c.BuilderDeposits) * 184
+	size += len(c.BuilderExits) * 68
+	size += len(c.ValidatorPreregistrations) * 96
+	size += len(c.BuilderPreregistrations) * 64
+	size += len(c.VoluntaryExits) * 32
+	return size
+}
+
+func (c *ExecutionRequestsPQ) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *ExecutionRequestsPQ) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+	offset := 32
+
+	// Field 0: Deposits
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.Deposits) * 192
+
+	// Field 1: Withdrawals
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.Withdrawals) * 76
+
+	// Field 2: Consolidations
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.Consolidations) * 116
+
+	// Field 3: BuilderDeposits
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.BuilderDeposits) * 184
+
+	// Field 4: BuilderExits
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.BuilderExits) * 68
+
+	// Field 5: ValidatorPreregistrations
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.ValidatorPreregistrations) * 96
+
+	// Field 6: BuilderPreregistrations
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.BuilderPreregistrations) * 64
+
+	// Field 7: VoluntaryExits
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(c.VoluntaryExits) * 32
+
+	// Field 0: Deposits
+	for _, o := range c.Deposits {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("Deposits: %w", err)
+		}
+	}
+
+	// Field 1: Withdrawals
+	for _, o := range c.Withdrawals {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("Withdrawals: %w", err)
+		}
+	}
+
+	// Field 2: Consolidations
+	for _, o := range c.Consolidations {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("Consolidations: %w", err)
+		}
+	}
+
+	// Field 3: BuilderDeposits
+	for _, o := range c.BuilderDeposits {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("BuilderDeposits: %w", err)
+		}
+	}
+
+	// Field 4: BuilderExits
+	for _, o := range c.BuilderExits {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("BuilderExits: %w", err)
+		}
+	}
+
+	// Field 5: ValidatorPreregistrations
+	for _, o := range c.ValidatorPreregistrations {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("ValidatorPreregistrations: %w", err)
+		}
+	}
+
+	// Field 6: BuilderPreregistrations
+	for _, o := range c.BuilderPreregistrations {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("BuilderPreregistrations: %w", err)
+		}
+	}
+
+	// Field 7: VoluntaryExits
+	for _, o := range c.VoluntaryExits {
+		if dst, err = o.MarshalSSZTo(dst); err != nil {
+			return nil, fmt.Errorf("VoluntaryExits: %w", err)
+		}
+	}
+	return dst, err
+}
+
+func (c *ExecutionRequestsPQ) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 32 {
+		return ssz.ErrSize
+	}
+
+	sszVarOffset0 := ssz.ReadOffset(buf[0:4]) // c.Deposits
+	if sszVarOffset0 != 32 {
+		return ssz.ErrInvalidVariableOffset
+	}
+	if sszVarOffset0 > size {
+		return ssz.ErrOffset
+	}
+	sszVarOffset1 := ssz.ReadOffset(buf[4:8]) // c.Withdrawals
+	if sszVarOffset1 > size || sszVarOffset1 < sszVarOffset0 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset2 := ssz.ReadOffset(buf[8:12]) // c.Consolidations
+	if sszVarOffset2 > size || sszVarOffset2 < sszVarOffset1 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset3 := ssz.ReadOffset(buf[12:16]) // c.BuilderDeposits
+	if sszVarOffset3 > size || sszVarOffset3 < sszVarOffset2 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset4 := ssz.ReadOffset(buf[16:20]) // c.BuilderExits
+	if sszVarOffset4 > size || sszVarOffset4 < sszVarOffset3 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset5 := ssz.ReadOffset(buf[20:24]) // c.ValidatorPreregistrations
+	if sszVarOffset5 > size || sszVarOffset5 < sszVarOffset4 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset6 := ssz.ReadOffset(buf[24:28]) // c.BuilderPreregistrations
+	if sszVarOffset6 > size || sszVarOffset6 < sszVarOffset5 {
+		return ssz.ErrOffset
+	}
+	sszVarOffset7 := ssz.ReadOffset(buf[28:32]) // c.VoluntaryExits
+	if sszVarOffset7 > size || sszVarOffset7 < sszVarOffset6 {
+		return ssz.ErrOffset
+	}
+	sszSlice0 := buf[sszVarOffset0:sszVarOffset1] // c.Deposits
+	sszSlice1 := buf[sszVarOffset1:sszVarOffset2] // c.Withdrawals
+	sszSlice2 := buf[sszVarOffset2:sszVarOffset3] // c.Consolidations
+	sszSlice3 := buf[sszVarOffset3:sszVarOffset4] // c.BuilderDeposits
+	sszSlice4 := buf[sszVarOffset4:sszVarOffset5] // c.BuilderExits
+	sszSlice5 := buf[sszVarOffset5:sszVarOffset6] // c.ValidatorPreregistrations
+	sszSlice6 := buf[sszVarOffset6:sszVarOffset7] // c.BuilderPreregistrations
+	sszSlice7 := buf[sszVarOffset7:]              // c.VoluntaryExits
+
+	// Field 0: Deposits
+	{
+		if len(sszSlice0)%192 != 0 {
+			return fmt.Errorf("misaligned bytes: c.Deposits length is %d, which is not a multiple of 192: %w", len(sszSlice0), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice0) / 192
+		c.Deposits = make([]*DepositRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *DepositRequest
+			tmp = new(DepositRequest)
+			tmpSlice := sszSlice0[i*192 : (1+i)*192]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("Deposits: %w", err)
+			}
+			c.Deposits[i] = tmp
+		}
+	}
+
+	// Field 1: Withdrawals
+	{
+		if len(sszSlice1)%76 != 0 {
+			return fmt.Errorf("misaligned bytes: c.Withdrawals length is %d, which is not a multiple of 76: %w", len(sszSlice1), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice1) / 76
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.Withdrawals has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.Withdrawals = make([]*WithdrawalRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *WithdrawalRequest
+			tmp = new(WithdrawalRequest)
+			tmpSlice := sszSlice1[i*76 : (1+i)*76]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("Withdrawals: %w", err)
+			}
+			c.Withdrawals[i] = tmp
+		}
+	}
+
+	// Field 2: Consolidations
+	{
+		if len(sszSlice2)%116 != 0 {
+			return fmt.Errorf("misaligned bytes: c.Consolidations length is %d, which is not a multiple of 116: %w", len(sszSlice2), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice2) / 116
+		if numElem > 2 {
+			return fmt.Errorf("ssz-max exceeded: c.Consolidations has %d elements, ssz-max is 2: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.Consolidations = make([]*ConsolidationRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *ConsolidationRequest
+			tmp = new(ConsolidationRequest)
+			tmpSlice := sszSlice2[i*116 : (1+i)*116]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("Consolidations: %w", err)
+			}
+			c.Consolidations[i] = tmp
+		}
+	}
+
+	// Field 3: BuilderDeposits
+	{
+		if len(sszSlice3)%184 != 0 {
+			return fmt.Errorf("misaligned bytes: c.BuilderDeposits length is %d, which is not a multiple of 184: %w", len(sszSlice3), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice3) / 184
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderDeposits has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.BuilderDeposits = make([]*BuilderDepositRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *BuilderDepositRequest
+			tmp = new(BuilderDepositRequest)
+			tmpSlice := sszSlice3[i*184 : (1+i)*184]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("BuilderDeposits: %w", err)
+			}
+			c.BuilderDeposits[i] = tmp
+		}
+	}
+
+	// Field 4: BuilderExits
+	{
+		if len(sszSlice4)%68 != 0 {
+			return fmt.Errorf("misaligned bytes: c.BuilderExits length is %d, which is not a multiple of 68: %w", len(sszSlice4), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice4) / 68
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderExits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.BuilderExits = make([]*BuilderExitRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *BuilderExitRequest
+			tmp = new(BuilderExitRequest)
+			tmpSlice := sszSlice4[i*68 : (1+i)*68]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("BuilderExits: %w", err)
+			}
+			c.BuilderExits[i] = tmp
+		}
+	}
+
+	// Field 5: ValidatorPreregistrations
+	{
+		if len(sszSlice5)%96 != 0 {
+			return fmt.Errorf("misaligned bytes: c.ValidatorPreregistrations length is %d, which is not a multiple of 96: %w", len(sszSlice5), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice5) / 96
+		if numElem > 64 {
+			return fmt.Errorf("ssz-max exceeded: c.ValidatorPreregistrations has %d elements, ssz-max is 64: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.ValidatorPreregistrations = make([]*ValidatorPreregistrationRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *ValidatorPreregistrationRequest
+			tmp = new(ValidatorPreregistrationRequest)
+			tmpSlice := sszSlice5[i*96 : (1+i)*96]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("ValidatorPreregistrations: %w", err)
+			}
+			c.ValidatorPreregistrations[i] = tmp
+		}
+	}
+
+	// Field 6: BuilderPreregistrations
+	{
+		if len(sszSlice6)%64 != 0 {
+			return fmt.Errorf("misaligned bytes: c.BuilderPreregistrations length is %d, which is not a multiple of 64: %w", len(sszSlice6), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice6) / 64
+		if numElem > 4 {
+			return fmt.Errorf("ssz-max exceeded: c.BuilderPreregistrations has %d elements, ssz-max is 4: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.BuilderPreregistrations = make([]*BuilderPreregistrationRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *BuilderPreregistrationRequest
+			tmp = new(BuilderPreregistrationRequest)
+			tmpSlice := sszSlice6[i*64 : (1+i)*64]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("BuilderPreregistrations: %w", err)
+			}
+			c.BuilderPreregistrations[i] = tmp
+		}
+	}
+
+	// Field 7: VoluntaryExits
+	{
+		if len(sszSlice7)%32 != 0 {
+			return fmt.Errorf("misaligned bytes: c.VoluntaryExits length is %d, which is not a multiple of 32: %w", len(sszSlice7), ssz.ErrIncorrectListSize)
+		}
+		numElem := len(sszSlice7) / 32
+		if numElem > 16 {
+			return fmt.Errorf("ssz-max exceeded: c.VoluntaryExits has %d elements, ssz-max is 16: %w", numElem, ssz.ErrListTooBig)
+		}
+		c.VoluntaryExits = make([]*VoluntaryExitRequest, numElem)
+		for i := 0; i < numElem; i++ {
+			var tmp *VoluntaryExitRequest
+			tmp = new(VoluntaryExitRequest)
+			tmpSlice := sszSlice7[i*32 : (1+i)*32]
+			if err = tmp.UnmarshalSSZ(tmpSlice); err != nil {
+				return fmt.Errorf("VoluntaryExits: %w", err)
+			}
+			c.VoluntaryExits[i] = tmp
+		}
+	}
+	return err
+}
+
+func (c *ExecutionRequestsPQ) HashTreeRoot() ([32]byte, error) {
+	return c.ProgressiveHashTreeRoot()
+}
+
+func (c *ExecutionRequestsPQ) HashTreeRootWith(hh *ssz.Hasher) error {
+	return c.ProgressiveHashTreeRootWith(hh)
+}
+
+var activeFieldsExecutionRequestsPQ = []byte{0b10011111, 0b00000011}
+
+func (c *ExecutionRequestsPQ) ProgressiveHashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.ProgressiveHashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *ExecutionRequestsPQ) ProgressiveHashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Position 0: Deposits
+	{
+		subIndx := hh.Index()
+		for _, o := range c.Deposits {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("Deposits: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Deposits)))
+	}
+	// Position 1: Withdrawals
+	{
+		subIndx := hh.Index()
+		for _, o := range c.Withdrawals {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("Withdrawals: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Withdrawals)))
+	}
+	// Position 2: Consolidations
+	{
+		subIndx := hh.Index()
+		for _, o := range c.Consolidations {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("Consolidations: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.Consolidations)))
+	}
+	// Position 3: BuilderDeposits
+	{
+		subIndx := hh.Index()
+		for _, o := range c.BuilderDeposits {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("BuilderDeposits: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderDeposits)))
+	}
+	// Position 4: BuilderExits
+	{
+		subIndx := hh.Index()
+		for _, o := range c.BuilderExits {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("BuilderExits: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderExits)))
+	}
+	// Position 5: inactive (zero chunk)
+	hh.PutBool(false)
+	// Position 6: inactive (zero chunk)
+	hh.PutBool(false)
+	// Position 7: ValidatorPreregistrations
+	{
+		subIndx := hh.Index()
+		for _, o := range c.ValidatorPreregistrations {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("ValidatorPreregistrations: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.ValidatorPreregistrations)))
+	}
+	// Position 8: BuilderPreregistrations
+	{
+		subIndx := hh.Index()
+		for _, o := range c.BuilderPreregistrations {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("BuilderPreregistrations: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.BuilderPreregistrations)))
+	}
+	// Position 9: VoluntaryExits
+	{
+		subIndx := hh.Index()
+		for _, o := range c.VoluntaryExits {
+			if err := o.HashTreeRootWith(hh); err != nil {
+				return fmt.Errorf("VoluntaryExits: %w", err)
+			}
+		}
+		hh.MerkleizeProgressiveWithMixin(subIndx, uint64(len(c.VoluntaryExits)))
+	}
+	hh.MerkleizeProgressiveWithActiveFields(indx, activeFieldsExecutionRequestsPQ)
+	return nil
+}
+
+func (c *ValidatorPreregistrationRequest) SizeSSZ() int {
+	size := 96
+
+	return size
+}
+
+func (c *ValidatorPreregistrationRequest) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *ValidatorPreregistrationRequest) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: Pubkey
+	if len(c.Pubkey) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.Pubkey...)
+
+	// Field 1: WithdrawalCredentials
+	if len(c.WithdrawalCredentials) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.WithdrawalCredentials...)
+
+	// Field 2: VrfRoot
+	if len(c.VrfRoot) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.VrfRoot...)
+
+	return dst, err
+}
+
+func (c *ValidatorPreregistrationRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 96 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:32]  // c.Pubkey
+	sszSlice1 := buf[32:64] // c.WithdrawalCredentials
+	sszSlice2 := buf[64:96] // c.VrfRoot
+
+	// Field 0: Pubkey
+	c.Pubkey = make([]byte, 0, 32)
+	c.Pubkey = append(c.Pubkey, sszSlice0...)
+
+	// Field 1: WithdrawalCredentials
+	c.WithdrawalCredentials = make([]byte, 0, 32)
+	c.WithdrawalCredentials = append(c.WithdrawalCredentials, sszSlice1...)
+
+	// Field 2: VrfRoot
+	c.VrfRoot = make([]byte, 0, 32)
+	c.VrfRoot = append(c.VrfRoot, sszSlice2...)
+	return err
+}
+
+func (c *ValidatorPreregistrationRequest) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *ValidatorPreregistrationRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Pubkey
+	if len(c.Pubkey) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.Pubkey)
+	// Field 1: WithdrawalCredentials
+	if len(c.WithdrawalCredentials) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.WithdrawalCredentials)
+	// Field 2: VrfRoot
+	if len(c.VrfRoot) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.VrfRoot)
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *BuilderPreregistrationRequest) SizeSSZ() int {
+	size := 64
+
+	return size
+}
+
+func (c *BuilderPreregistrationRequest) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *BuilderPreregistrationRequest) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: Pubkey
+	if len(c.Pubkey) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.Pubkey...)
+
+	// Field 1: WithdrawalCredentials
+	if len(c.WithdrawalCredentials) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.WithdrawalCredentials...)
+
+	return dst, err
+}
+
+func (c *BuilderPreregistrationRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 64 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:32]  // c.Pubkey
+	sszSlice1 := buf[32:64] // c.WithdrawalCredentials
+
+	// Field 0: Pubkey
+	c.Pubkey = make([]byte, 0, 32)
+	c.Pubkey = append(c.Pubkey, sszSlice0...)
+
+	// Field 1: WithdrawalCredentials
+	c.WithdrawalCredentials = make([]byte, 0, 32)
+	c.WithdrawalCredentials = append(c.WithdrawalCredentials, sszSlice1...)
+	return err
+}
+
+func (c *BuilderPreregistrationRequest) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *BuilderPreregistrationRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Pubkey
+	if len(c.Pubkey) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.Pubkey)
+	// Field 1: WithdrawalCredentials
+	if len(c.WithdrawalCredentials) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.WithdrawalCredentials)
+	hh.Merkleize(indx)
+	return nil
+}
+
+func (c *VoluntaryExitRequest) SizeSSZ() int {
+	size := 32
+
+	return size
+}
+
+func (c *VoluntaryExitRequest) MarshalSSZ() ([]byte, error) {
+	buf := make([]byte, c.SizeSSZ())
+	return c.MarshalSSZTo(buf[:0])
+}
+
+func (c *VoluntaryExitRequest) MarshalSSZTo(dst []byte) ([]byte, error) {
+	var err error
+
+	// Field 0: Pubkey
+	if len(c.Pubkey) != 32 {
+		return nil, ssz.ErrBytesLength
+	}
+	dst = append(dst, c.Pubkey...)
+
+	return dst, err
+}
+
+func (c *VoluntaryExitRequest) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 32 {
+		return ssz.ErrSize
+	}
+
+	sszSlice0 := buf[0:32] // c.Pubkey
+
+	// Field 0: Pubkey
+	c.Pubkey = make([]byte, 0, 32)
+	c.Pubkey = append(c.Pubkey, sszSlice0...)
+	return err
+}
+
+func (c *VoluntaryExitRequest) HashTreeRoot() ([32]byte, error) {
+	hh := ssz.DefaultHasherPool.Get()
+	if err := c.HashTreeRootWith(hh); err != nil {
+		ssz.DefaultHasherPool.Put(hh)
+		return [32]byte{}, err
+	}
+	root, err := hh.HashRoot()
+	ssz.DefaultHasherPool.Put(hh)
+	return root, err
+}
+
+func (c *VoluntaryExitRequest) HashTreeRootWith(hh *ssz.Hasher) (err error) {
+	indx := hh.Index()
+	// Field 0: Pubkey
+	if len(c.Pubkey) != 32 {
+		return ssz.ErrBytesLength
+	}
+	hh.PutBytes(c.Pubkey)
+	hh.Merkleize(indx)
+	return nil
+}
+
 func (c *Withdrawal) SizeSSZ() int {
 	size := 44
 

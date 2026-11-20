@@ -37,5 +37,20 @@ types:
       Consolidations: {type: "ProgressiveList"}
       BuilderDeposits: {type: "ProgressiveList"}
       BuilderExits: {type: "ProgressiveList"}
+  - name: "ExecutionRequestsPQ"
+    progressive:
+      inactive_indices: [5, 6]
+    fields:
+      Deposits: {type: "ProgressiveList"}
+      Withdrawals: {type: "ProgressiveList"}
+      Consolidations: {type: "ProgressiveList"}
+      BuilderDeposits: {type: "ProgressiveList"}
+      BuilderExits: {type: "ProgressiveList"}
+      ValidatorPreregistrations: {type: "ProgressiveList"}
+      BuilderPreregistrations: {type: "ProgressiveList"}
+      VoluntaryExits: {type: "ProgressiveList"}
+  - name: "ValidatorPreregistrationRequest"
+  - name: "BuilderPreregistrationRequest"
+  - name: "VoluntaryExitRequest"
   - name: "Withdrawal"
   - name: "WithdrawalRequest"

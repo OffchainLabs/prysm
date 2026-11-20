@@ -110,6 +110,14 @@ ssz_methodical(
 )
 
 ssz_methodical(
+    name = "methodical_pq",
+    deps = [":beacon_state_go"],
+    config_file = "pq.yaml",
+    override_package_name = "eth",
+    out = "pq.ssz.go",
+)
+
+ssz_methodical(
     name = "methodical_heze",
     deps = [":beacon_state_go"],
     config_file = "heze.yaml",
@@ -158,6 +166,7 @@ go_library(
     srcs = [
         "beacon_state_mainnet.go",
         "beacon_state_minimal.go",  # keep
+        "aggregation_committees.go",
         "beacon_state_types.go",
     ],
     embed = [":go_proto"],
@@ -166,6 +175,7 @@ go_library(
     deps = [
         "//consensus-types/primitives:go_default_library",
         "//proto/engine/v1:go_default_library",
+        "@com_github_offchainlabs_methodical_ssz//ssz:go_default_library",
         "@com_github_prysmaticlabs_go_bitfield//:go_default_library",
     ],
 )
@@ -181,6 +191,7 @@ go_library(
         "gloas.go",
         "heze.go",
         "log.go",
+        "pq.go",
         "p2p_messages.go",
         "sync_committee_mainnet.go",
         "sync_committee_minimal.go",  # keep
@@ -194,6 +205,7 @@ go_library(
         ":methodical_fulu", # keep
         ":methodical_gloas", # keep
         ":methodical_heze", # keep
+        ":methodical_pq", # keep
         ":methodical_non_core", # keep
         ":methodical_phase0", # keep
         "validator.go",
@@ -244,6 +256,7 @@ ssz_proto_files(
 	"gloas_builder_api.proto",
         "heze.proto",
         "light_client.proto",
+        "pq.proto",
         "partial_data_columns.proto",
         "sync_committee.proto",
         "withdrawals.proto",

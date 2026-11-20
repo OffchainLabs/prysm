@@ -15,6 +15,7 @@ const (
 	Electra
 	Fulu
 	Gloas
+	PQ
 	Heze
 )
 
@@ -27,6 +28,7 @@ var versionToString = map[int]string{
 	Electra:   "electra",
 	Fulu:      "fulu",
 	Gloas:     "gloas",
+	PQ:        "pq",
 	Heze:      "heze",
 }
 
@@ -38,6 +40,7 @@ var supportedVersions []int
 // unsupportedVersions contains fork versions that exist in the enums but are not yet
 // enabled on any supported network. These versions are removed from All().
 var unsupportedVersions = map[int]struct{}{
+	PQ:   {},
 	Heze: {},
 }
 

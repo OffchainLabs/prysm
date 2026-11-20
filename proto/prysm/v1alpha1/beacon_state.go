@@ -273,6 +273,50 @@ func (st *BeaconStateGloas) Copy() *BeaconStateGloas {
 }
 
 // Copy deep-copies the state.
+func (st *BeaconStatePQ) Copy() *BeaconStatePQ {
+	if st == nil {
+		return nil
+	}
+	cp := *st
+	cp.GenesisValidatorsRoot = bytesutil.SafeCopyBytes(st.GenesisValidatorsRoot)
+	cp.Fork = st.Fork.Copy()
+	cp.LatestBlockHeader = st.LatestBlockHeader.Copy()
+	cp.BlockRoots = bytesutil.SafeCopy2dBytes(st.BlockRoots)
+	cp.StateRoots = bytesutil.SafeCopy2dBytes(st.StateRoots)
+	cp.HistoricalRoots = bytesutil.SafeCopy2dBytes(st.HistoricalRoots)
+	cp.Eth1Data = st.Eth1Data.Copy()
+	cp.Eth1DataVotes = CopySlice(st.Eth1DataVotes)
+	cp.Validators = CopySlice(st.Validators)
+	cp.Balances = slices.Clone(st.Balances)
+	cp.RandaoMixes = bytesutil.SafeCopy2dBytes(st.RandaoMixes)
+	cp.Slashings = slices.Clone(st.Slashings)
+	cp.PreviousEpochParticipation = bytesutil.SafeCopyBytes(st.PreviousEpochParticipation)
+	cp.CurrentEpochParticipation = bytesutil.SafeCopyBytes(st.CurrentEpochParticipation)
+	cp.JustificationBits = bytesutil.SafeCopyBytes(st.JustificationBits)
+	cp.PreviousJustifiedCheckpoint = st.PreviousJustifiedCheckpoint.Copy()
+	cp.CurrentJustifiedCheckpoint = st.CurrentJustifiedCheckpoint.Copy()
+	cp.FinalizedCheckpoint = st.FinalizedCheckpoint.Copy()
+	cp.InactivityScores = slices.Clone(st.InactivityScores)
+	cp.LatestBlockHash = bytesutil.SafeCopyBytes(st.LatestBlockHash)
+	cp.HistoricalSummaries = CopySlice(st.HistoricalSummaries)
+	cp.PendingDeposits = CopySlice(st.PendingDeposits)
+	cp.PendingPartialWithdrawals = CopySlice(st.PendingPartialWithdrawals)
+	cp.PendingConsolidations = CopySlice(st.PendingConsolidations)
+	cp.ProposerLookahead = slices.Clone(st.ProposerLookahead)
+	cp.Builders = CopySlice(st.Builders)
+	cp.ExecutionPayloadAvailability = bytesutil.SafeCopyBytes(st.ExecutionPayloadAvailability)
+	cp.BuilderPendingPayments = CopySlice(st.BuilderPendingPayments)
+	cp.BuilderPendingWithdrawals = CopySlice(st.BuilderPendingWithdrawals)
+	cp.LatestExecutionPayloadBid = st.LatestExecutionPayloadBid.Copy()
+	cp.PayloadExpectedWithdrawals = CopySlice(st.PayloadExpectedWithdrawals)
+	cp.PtcWindow = CopyPTCWindow(st.PtcWindow)
+	cp.ValidatorPreregistrations = CopySlice(st.ValidatorPreregistrations)
+	cp.BuilderPreregistrations = CopySlice(st.BuilderPreregistrations)
+	cp.AggregationCommitteeWindow = CopyAggregationCommitteeWindow(st.AggregationCommitteeWindow)
+	return &cp
+}
+
+// Copy deep-copies the state.
 func (st *BeaconStateHeze) Copy() *BeaconStateHeze {
 	if st == nil {
 		return nil

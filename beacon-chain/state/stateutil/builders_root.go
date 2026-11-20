@@ -9,6 +9,9 @@ import (
 
 // BuildersRoot computes the SSZ root of a slice of Builder.
 func BuildersRoot(stateVersion int, slice []*ethpb.Builder) ([32]byte, error) {
+	if stateVersion == version.PQ {
+		return ssz.SliceRootProgressive(BuildersToProtoPQ(slice))
+	}
 	if stateVersion >= version.Gloas {
 		return buildersRootProgressive(slice)
 	}

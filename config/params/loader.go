@@ -273,6 +273,8 @@ func ConfigToYaml(cfg *BeaconChainConfig) []byte {
 		fmt.Sprintf("FULU_FORK_VERSION: %#x", cfg.FuluForkVersion),
 		fmt.Sprintf("GLOAS_FORK_VERSION: %#x", cfg.GloasForkVersion),
 		fmt.Sprintf("GLOAS_FORK_EPOCH: %d", cfg.GloasForkEpoch),
+		fmt.Sprintf("PQ_FORK_VERSION: %#x", cfg.PQForkVersion),
+		fmt.Sprintf("PQ_FORK_EPOCH: %d", cfg.PQForkEpoch),
 		fmt.Sprintf("HEZE_FORK_VERSION: %#x", cfg.HezeForkVersion),
 		fmt.Sprintf("HEZE_FORK_EPOCH: %d", cfg.HezeForkEpoch),
 		fmt.Sprintf("EPOCHS_PER_SUBNET_SUBSCRIPTION: %d", cfg.EpochsPerSubnetSubscription),

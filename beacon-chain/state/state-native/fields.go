@@ -118,6 +118,9 @@ var (
 	gloasProgressiveSchema *ProgressiveStateSchema
 	gloasFields            []types.FieldIndex
 
+	pqProgressiveSchema *ProgressiveStateSchema
+	pqFields            []types.FieldIndex
+
 	hezeProgressiveSchema *ProgressiveStateSchema
 	hezeFields            []types.FieldIndex
 )
@@ -142,6 +145,27 @@ func init() {
 	gloasFields = gloasProgressiveSchema.fields
 
 	// Replace the LatestExecutionPayloadBid field with LatestExecutionPayloadBidHeze for Heze.
+	pqProgressiveSchema, err = newProgressiveStateFieldsSchema(
+		slices.Concat(gloasFields, []types.FieldIndex{
+			types.ValidatorPQRegistrations,
+			types.BuilderPQRegistrations,
+			types.ValidatorPreregistrations,
+			types.BuilderPreregistrations,
+			types.AggregationCommitteeWindow,
+		}),
+		[]types.FieldIndex{
+			types.CurrentSyncCommittee,
+			types.NextSyncCommittee,
+			types.ValidatorPQRegistrations,
+			types.BuilderPQRegistrations,
+		},
+		params.BeaconConfig().BeaconStatePQFieldCount,
+	)
+	if err != nil {
+		panic(err)
+	}
+	pqFields = pqProgressiveSchema.fields
+
 	hezeAllFields := slices.Clone(gloasFields)
 	hezeAllFields[slices.Index(hezeAllFields, types.LatestExecutionPayloadBid)] = types.LatestExecutionPayloadBidHeze
 	hezeProgressiveSchema, err = newProgressiveStateFieldsSchema(
@@ -159,6 +183,8 @@ func ProgressiveStateSchemaForVersion(v int) (*ProgressiveStateSchema, bool) {
 	switch v {
 	case version.Gloas:
 		return gloasProgressiveSchema, true
+	case version.PQ:
+		return pqProgressiveSchema, true
 	case version.Heze:
 		return hezeProgressiveSchema, true
 	default:
@@ -174,6 +200,7 @@ type ProgressiveStateSchema struct {
 	// progressive Merkle tree for this fork.
 	fields     []types.FieldIndex
 	fieldIndex map[types.FieldIndex]int
+	position   map[types.FieldIndex]int
 }
 
 func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveFields []types.FieldIndex, forkFieldCount int) (*ProgressiveStateSchema, error) {
@@ -206,6 +233,7 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 	fields := make([]types.FieldIndex, 0, len(allFields)-len(inactiveFields))
 	fieldIndex := make(map[types.FieldIndex]int, len(allFields)-len(inactiveFields))
 	activeFields := make([]bool, 0, len(allFields))
+	position := make(map[types.FieldIndex]int, len(allFields))
 
 	for _, field := range allFields {
 		if _, isInactive := inactive[field]; isInactive {
@@ -214,6 +242,7 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 		}
 		fields = append(fields, field)
 		fieldIndex[field] = len(fields) - 1
+		position[field] = len(activeFields)
 		activeFields = append(activeFields, true)
 	}
 
@@ -228,6 +257,7 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 		activeFields: activeFields,
 		fields:       fields,
 		fieldIndex:   fieldIndex,
+		position:     position,
 	}
 
 	return schema, nil
@@ -236,6 +266,11 @@ func newProgressiveStateFieldsSchema(allFields []types.FieldIndex, inactiveField
 func (s *ProgressiveStateSchema) GetFieldIndex(field types.FieldIndex) (int, bool) {
 	index, ok := s.fieldIndex[field]
 	return index, ok
+}
+
+func (s *ProgressiveStateSchema) Position(field types.FieldIndex) (int, bool) {
+	position, ok := s.position[field]
+	return position, ok
 }
 
 func (s *ProgressiveStateSchema) ActiveFields() []bool {

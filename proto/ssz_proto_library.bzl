@@ -37,6 +37,9 @@ mainnet = {
     "ptc_committee_indices.size": "512",  # PTC_SIZE
     "ptc.size": "64",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 512)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector512",
+    "committee_bits_pq.size": "2",  # MAX_COMMITTEES_PER_SLOT_PQ = 16
+    "committee_bits_pq.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
+    "max_attesting_indices_pq.size": "32768",  # MAX_VALIDATORS_PER_COMMITTEE * MAX_COMMITTEES_PER_SLOT_PQ
     "inclusion_list_bits.size": "2",  # Heze: INCLUSION_LIST_COMMITTEE_SIZE = 16
     "inclusion_list_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body
@@ -73,6 +76,9 @@ minimal = {
     "ptc_committee_indices.size": "16",  # PTC_SIZE
     "ptc.size": "2",  # Gloas: Payload Timeliness Committee aggregation bits (PTC_SIZE = 16)
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
+    "committee_bits_pq.size": "1",  # MAX_COMMITTEES_PER_SLOT_PQ = 4
+    "committee_bits_pq.type": "github.com/OffchainLabs/go-bitfield.Bitvector4",
+    "max_attesting_indices_pq.size": "8192",  # MAX_VALIDATORS_PER_COMMITTEE * MAX_COMMITTEES_PER_SLOT_PQ
     "inclusion_list_bits.size": "2",  # Heze: INCLUSION_LIST_COMMITTEE_SIZE = 16
     "inclusion_list_bits.type": "github.com/OffchainLabs/go-bitfield.Bitvector16",
     "payload_attestation.size": "4",  # Gloas: MAX_PAYLOAD_ATTESTATIONS defined in block body

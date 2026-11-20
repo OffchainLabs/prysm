@@ -1,6 +1,7 @@
 package stateutil
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -19,10 +20,12 @@ type CompactValidator struct {
 	WithdrawalCredentials      [32]byte                          // 32 bytes
 	EffectiveBalance           uint64                            // 8 bytes
 	Slashed                    bool                              // 1 byte
-	ActivationEligibilityEpoch primitives.Epoch                  // 8 bytes
-	ActivationEpoch            primitives.Epoch                  // 8 bytes
-	ExitEpoch                  primitives.Epoch                  // 8 bytes
-	WithdrawableEpoch          primitives.Epoch                  // 8 bytes
+	PQ                         bool
+	ActivationEligibilityEpoch primitives.Epoch // 8 bytes
+	ActivationEpoch            primitives.Epoch // 8 bytes
+	ExitEpoch                  primitives.Epoch // 8 bytes
+	WithdrawableEpoch          primitives.Epoch // 8 bytes
+	VrfRoot                    [32]byte
 }
 
 // CompactValidatorsFromProto converts a slice of protobuf Validators to CompactValidators.
@@ -135,8 +138,120 @@ func (cv *CompactValidator) fieldRoots() ([][32]byte, error) {
 	var withdrawalBuf [32]byte
 	binary.LittleEndian.PutUint64(withdrawalBuf[:8], uint64(cv.WithdrawableEpoch))
 
+	if cv.PQ {
+		return [][32]byte{
+			[32]byte(cv.PublicKey[XMSSPubkeyPrefixLength:]), cv.VrfRoot, withdrawCreds, effectiveBalanceBuf, slashBuf,
+			activationEligibilityBuf, activationBuf, exitBuf, withdrawalBuf,
+		}, nil
+	}
+
 	return [][32]byte{
 		pubKeyRoot, withdrawCreds, effectiveBalanceBuf, slashBuf,
 		activationEligibilityBuf, activationBuf, exitBuf, withdrawalBuf,
 	}, nil
+}
+
+const XMSSPubkeyPrefixLength = fieldparams.BLSPubkeyLength - 32
+
+// Spec: compute_deposit_pubkey. A PQ key is held as 16 zero bytes followed by the XMSS public key so 48-byte lookups keep working.
+func PadXMSSPubkey(pubkey []byte) [fieldparams.BLSPubkeyLength]byte {
+	var padded [fieldparams.BLSPubkeyLength]byte
+	copy(padded[XMSSPubkeyPrefixLength:], pubkey)
+	return padded
+}
+
+func CompactValidatorsFromProtoPQ(validators []*ethpb.ValidatorPQ) []CompactValidator {
+	compactValidators := make([]CompactValidator, len(validators))
+	for i, v := range validators {
+		if v == nil {
+			continue
+		}
+		var withdrawalCredentials, vrfRoot [32]byte
+		copy(withdrawalCredentials[:], v.WithdrawalCredentials)
+		copy(vrfRoot[:], v.VrfRoot)
+		compactValidators[i] = CompactValidator{
+			PublicKey:                  PadXMSSPubkey(v.PublicKey),
+			WithdrawalCredentials:      withdrawalCredentials,
+			EffectiveBalance:           v.EffectiveBalance,
+			Slashed:                    v.Slashed,
+			ActivationEligibilityEpoch: v.ActivationEligibilityEpoch,
+			ActivationEpoch:            v.ActivationEpoch,
+			ExitEpoch:                  v.ExitEpoch,
+			WithdrawableEpoch:          v.WithdrawableEpoch,
+			PQ:                         true,
+			VrfRoot:                    vrfRoot,
+		}
+	}
+	return compactValidators
+}
+
+func CompactValidatorsToProtoPQ(compactValidators []CompactValidator) []*ethpb.ValidatorPQ {
+	validators := make([]*ethpb.ValidatorPQ, len(compactValidators))
+	for i := range compactValidators {
+		cv := &compactValidators[i]
+		validators[i] = &ethpb.ValidatorPQ{
+			PublicKey:                  bytes.Clone(cv.PublicKey[XMSSPubkeyPrefixLength:]),
+			VrfRoot:                    bytes.Clone(cv.VrfRoot[:]),
+			WithdrawalCredentials:      bytes.Clone(cv.WithdrawalCredentials[:]),
+			EffectiveBalance:           cv.EffectiveBalance,
+			Slashed:                    cv.Slashed,
+			ActivationEligibilityEpoch: cv.ActivationEligibilityEpoch,
+			ActivationEpoch:            cv.ActivationEpoch,
+			ExitEpoch:                  cv.ExitEpoch,
+			WithdrawableEpoch:          cv.WithdrawableEpoch,
+		}
+	}
+	return validators
+}
+
+func BuildersFromProtoPQ(builders []*ethpb.BuilderPQ) []*ethpb.Builder {
+	out := make([]*ethpb.Builder, len(builders))
+	for i, b := range builders {
+		if b == nil {
+			continue
+		}
+		pubkey := PadXMSSPubkey(b.Pubkey)
+		out[i] = &ethpb.Builder{
+			Pubkey:            pubkey[:],
+			Version:           bytes.Clone(b.Version),
+			ExecutionAddress:  bytes.Clone(b.ExecutionAddress),
+			Balance:           b.Balance,
+			DepositEpoch:      b.DepositEpoch,
+			WithdrawableEpoch: b.WithdrawableEpoch,
+		}
+	}
+	return out
+}
+
+func BuildersToProtoPQ(builders []*ethpb.Builder) []*ethpb.BuilderPQ {
+	out := make([]*ethpb.BuilderPQ, len(builders))
+	for i, b := range builders {
+		if b == nil {
+			continue
+		}
+		out[i] = &ethpb.BuilderPQ{
+			Pubkey:            bytes.Clone(b.Pubkey[XMSSPubkeyPrefixLength:]),
+			Version:           bytes.Clone(b.Version),
+			ExecutionAddress:  bytes.Clone(b.ExecutionAddress),
+			Balance:           b.Balance,
+			DepositEpoch:      b.DepositEpoch,
+			WithdrawableEpoch: b.WithdrawableEpoch,
+		}
+	}
+	return out
+}
+
+func AggregationCommitteeWindowRoot(window []*ethpb.AggregationCommittees) ([32]byte, error) {
+	roots := make([][32]byte, len(window))
+	for i, committees := range window {
+		if committees == nil {
+			return [32]byte{}, fmt.Errorf("invalid aggregation committees at position %d", i)
+		}
+		r, err := committees.HashTreeRoot()
+		if err != nil {
+			return [32]byte{}, err
+		}
+		roots[i] = r
+	}
+	return ssz.MerkleizeVector(roots, uint64(len(roots))), nil
 }

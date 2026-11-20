@@ -71,6 +71,7 @@ func E2EMainnetTestConfig() *BeaconChainConfig {
 	e2eConfig.ElectraForkVersion = []byte{5, 0, 0, 254}
 	e2eConfig.FuluForkVersion = []byte{6, 0, 0, 254}
 	e2eConfig.GloasForkVersion = []byte{7, 0, 0, 254}
+	e2eConfig.PQForkVersion = []byte{0xe0, 0, 0, 254}
 	e2eConfig.HezeForkVersion = []byte{8, 0, 0, 254}
 
 	// Deneb changes.
