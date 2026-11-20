@@ -34,7 +34,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 
 	currentUpdate := s.lcStore.LastOptimisticUpdate()
 	if currentUpdate == nil {
-		log.Debug("No existing optimistic update to compare against. Ignoring.")
+		log.Debug("No existing optimistic update to compare against. Ignoring")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -81,7 +81,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-		}).Debug("Received light client optimistic update is different from the local one. Ignoring.")
+		}).Debug("Received light client optimistic update is different from the local one. Ignoring")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -89,7 +89,7 @@ func (s *Service) validateLightClientOptimisticUpdate(ctx context.Context, pid p
 		"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 		"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-	}).Debug("New gossiped light client optimistic update validated.")
+	}).Debug("New gossiped light client optimistic update validated")
 
 	msg.ValidatorData = newUpdate.Proto()
 	return pubsub.ValidationAccept, nil
@@ -112,7 +112,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 
 	currentUpdate := s.lcStore.LastFinalityUpdate()
 	if currentUpdate == nil {
-		log.Debug("No existing finality update to compare against. Ignoring.")
+		log.Debug("No existing finality update to compare against. Ignoring")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -159,7 +159,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 			"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 			"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 			"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-		}).Debug("Received light client finality update is different from the local one. ignoring.")
+		}).Debug("Received light client finality update is different from the local one. ignoring")
 		return pubsub.ValidationIgnore, nil
 	}
 
@@ -167,7 +167,7 @@ func (s *Service) validateLightClientFinalityUpdate(ctx context.Context, pid pee
 		"attestedSlot":       fmt.Sprintf("%d", newUpdate.AttestedHeader().Beacon().Slot),
 		"signatureSlot":      fmt.Sprintf("%d", newUpdate.SignatureSlot()),
 		"attestedHeaderRoot": fmt.Sprintf("%x", attestedHeaderRoot),
-	}).Debug("New gossiped light client finality update validated.")
+	}).Debug("New gossiped light client finality update validated")
 
 	msg.ValidatorData = newUpdate.Proto()
 	return pubsub.ValidationAccept, nil

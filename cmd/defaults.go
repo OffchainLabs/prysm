@@ -98,7 +98,7 @@ func FixDefaultDataDir(prevDataDir, curDataDir string) error {
 	if err := file.CopyDir(prevDataDir, curDataDir); err != nil {
 		return err
 	}
-	log.Infof("All files from the outdated data directory %s have been moved to %s.", prevDataDir, curDataDir)
+	log.Infof("All files from the outdated data directory %s have been moved to %s", prevDataDir, curDataDir)
 
 	// If directories match, previous data directory can be safely deleted.
 	actionText := "The outdated directory is copied and not needed anymore, so should be deleted. " +

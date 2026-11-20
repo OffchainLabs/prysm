@@ -686,7 +686,7 @@ func (s *Server) broadcastBLSBatch(ctx context.Context, ptr *[]*eth.SignedBLSToE
 				continue
 			}
 			if err := s.Broadcaster.Broadcast(ctx, ch); err != nil {
-				log.WithError(err).Error("Could not broadcast BLS to execution changes.")
+				log.WithError(err).Error("Could not broadcast BLS to execution changes")
 			}
 		}
 	}

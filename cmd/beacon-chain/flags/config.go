@@ -95,7 +95,7 @@ func ConfigureGlobalFlags(ctx *cli.Context) error {
 		}
 	} else {
 		if ctx.IsSet(StateDiffExponents.Name) {
-			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored.")
+			log.Warn("--state-diff-exponents is set but --enable-state-diff is not; the value will be ignored")
 		}
 	}
 

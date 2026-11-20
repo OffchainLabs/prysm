@@ -87,7 +87,7 @@ func (v *WeakSubjectivityVerifier) VerifyWeakSubjectivity(ctx context.Context, f
 		return errors.Wrap(err, "error while retrieving block roots to verify weak subjectivity")
 	}
 	if slices.Contains(roots, v.root) {
-		log.Info("Weak subjectivity check has passed!!")
+		log.Info("Weak subjectivity check has passed")
 		v.verified = true
 		return nil
 	}

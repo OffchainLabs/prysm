@@ -54,7 +54,7 @@ func (v *validator) waitForActivation(ctx context.Context, accountsChanged bool)
 				return errors.Wrap(ctx.Err(), "context closed while waiting for activation")
 			}
 			tracing.AnnotateError(span, err)
-			log.WithError(err).Error("Connection broken while waiting for activation. Reconnecting...")
+			log.WithError(err).Error("Connection broken while waiting for activation. Reconnecting")
 			if err := v.healthMonitor.WaitForHealthy(ctx); err != nil {
 				return errors.Wrap(err, "could not wait for a healthy beacon node")
 			}
@@ -95,7 +95,7 @@ func (v *validator) waitForNextEpoch(ctx context.Context, genesis time.Time) (bo
 	if err != nil {
 		return false, errors.Wrap(err, "could not compute time until next epoch")
 	}
-	log.WithField("seconds_until_next_epoch", waitTime).Warn("No active validator keys provided. Waiting until next epoch to check again...")
+	log.WithField("seconds_until_next_epoch", waitTime).Warn("No active validator keys provided. Waiting until next epoch to check again")
 	select {
 	case <-ctx.Done():
 		log.Debug("Context closed, exiting waitForNextEpoch")

@@ -65,9 +65,9 @@ func (acm *CLIManager) Delete(ctx context.Context) error {
 // DeleteAccount performs the deletion on the Keymanager.
 func DeleteAccount(ctx context.Context, cfg *DeleteConfig) error {
 	if len(cfg.DeletePublicKeys) == 1 {
-		log.Info("Deleting account...")
+		log.Info("Deleting account")
 	} else {
-		log.Info("Deleting accounts...")
+		log.Info("Deleting accounts")
 	}
 	statuses, err := cfg.Keymanager.DeleteKeystores(ctx, cfg.DeletePublicKeys)
 	if err != nil {

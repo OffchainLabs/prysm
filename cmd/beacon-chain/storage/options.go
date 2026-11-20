@@ -72,7 +72,7 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		return nil, errors.Wrap(err, "detecting blob storage layout")
 	}
 	if layout == filesystem.LayoutNameFlat {
-		log.Warnf("Existing '%s' blob storage layout detected. Consider setting the flag --%s=%s for faster startup and more reliable pruning. Setting this flag will automatically migrate your existing blob storage to the newer layout on the next restart.",
+		log.Warnf("Existing '%s' blob storage layout detected. Consider setting the flag --%s=%s for faster startup and more reliable pruning. Setting this flag will automatically migrate your existing blob storage to the newer layout on the next restart",
 
 			filesystem.LayoutNameFlat, BlobStorageLayout.Name, filesystem.LayoutNameByEpoch)
 	}
@@ -122,7 +122,7 @@ func detectLayout(dir string, c stringFlagGetter) (string, error) {
 	}
 	defer func() {
 		if err := base.Close(); err != nil {
-			log.WithError(err).Errorf("Could not close blob storage directory")
+			log.WithError(err).Error("Could not close blob storage directory")
 		}
 	}()
 

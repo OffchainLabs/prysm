@@ -115,7 +115,7 @@ func (s *Service) resyncIfBehind() {
 				numberOfTimesResyncedCounter.Inc()
 				s.clearPendingSlots()
 				if err := s.cfg.initialSync.Resync(); err != nil {
-					log.WithError(err).Errorf("Could not resync chain")
+					log.WithError(err).Error("Could not resync chain")
 				}
 			}
 		}

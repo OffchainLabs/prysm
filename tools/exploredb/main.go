@@ -81,7 +81,7 @@ func main() {
 		log.Fatal("Please specify --datadir <db path> to read the database")
 	}
 	if *dbName == "" {
-		log.Fatal("Please specify --dbname <db file name> to specify the database file.")
+		log.Fatal("Please specify --dbname <db file name> to specify the database file")
 	}
 
 	// check if the database file is present.
@@ -99,7 +99,7 @@ func main() {
 			"state-summary":
 			printBucketContents(dbNameWithPath, *rowLimit, *bucketName)
 		default:
-			log.Fatal("Oops, given bucket is supported for now.")
+			log.Fatal("Oops, given bucket is supported for now")
 		}
 	case "migration-check":
 		destDbNameWithPath := filepath.Join(*destDatadir, *dbName)
@@ -110,7 +110,7 @@ func main() {
 		case "validator-entries":
 			checkValidatorMigration(dbNameWithPath, destDbNameWithPath)
 		default:
-			log.Fatal("Oops, given migration is not supported for now.")
+			log.Fatal("Oops, given migration is not supported for now")
 		}
 	}
 }
@@ -173,7 +173,7 @@ func readBucketStat(dbNameWithPath string, statsC chan<- *bucketStat) {
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			log.WithError(closeErr).Fatalf("Could not close db after showing bucket stats")
+			log.WithError(closeErr).Fatal("Could not close db after showing bucket stats")
 		}
 	}()
 
@@ -392,7 +392,7 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 		// if you want to avoid this then we should pass the metric name when opening the DB which touches
 		// too many places.
 		if openErr.Error() != "duplicate metrics collector registration attempted" {
-			log.WithError(openErr).Fatalf("Could not open sourceDB")
+			log.WithError(openErr).Fatal("Could not open sourceDB")
 		}
 	}
 
@@ -415,11 +415,11 @@ func checkValidatorMigration(dbNameWithPath, destDbNameWithPath string) {
 	for rowCount, key := range sourceStateKeys[910:] {
 		sourceState, stateErr := sourceDB.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
-			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatalf("Could not get from source db, the state for key")
+			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatal("Could not get from source db, the state for key")
 		}
 		destinationState, stateErr := destDB.State(ctx, bytesutil.ToBytes32(key))
 		if stateErr != nil {
-			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatalf("Could not get from destination db, the state for key")
+			log.WithError(stateErr).WithField("key", hexutils.BytesToHex(key)).Fatal("Could not get from destination db, the state for key")
 		}
 		if destinationState == nil {
 			log.Infof("could not find state in migrated DB: index = %d, slot = %d, epoch = %d,  numOfValidators = %d, key = %s",

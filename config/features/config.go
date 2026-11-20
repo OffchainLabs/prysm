@@ -309,7 +309,7 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		cfg.EnableStateDiff = true
 
 		if ctx.IsSet(enableHistoricalSpaceRepresentation.Name) {
-			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag.")
+			log.Warn("--enable-state-diff is enabled, ignoring --enable-historical-space-representation flag")
 			cfg.EnableHistoricalSpaceRepresentation = false
 		}
 	}
@@ -410,7 +410,7 @@ func enableDevModeFlags(ctx *cli.Context) {
 func complainOnDeprecatedFlags(ctx *cli.Context) {
 	for _, f := range deprecatedFlags {
 		if ctx.IsSet(f.Names()[0]) {
-			log.Errorf("%s is deprecated and has no effect. Do not use this flag, it will be deleted soon.", f.Names()[0])
+			log.Errorf("%s is deprecated and has no effect. Do not use this flag, it will be deleted soon", f.Names()[0])
 		}
 	}
 }

@@ -372,7 +372,7 @@ func (s *Service) Start() {
 	go func() {
 		if s.listener != nil {
 			if err := s.grpcServer.Serve(s.listener); err != nil {
-				log.WithError(err).Errorf("Could not serve gRPC")
+				log.WithError(err).Error("Could not serve gRPC")
 			}
 		}
 	}()
@@ -441,7 +441,7 @@ func (s *Service) logNewClientConnection(ctx context.Context) {
 		if !s.connectedRPCClients[clientInfo.Addr] {
 			log.WithFields(logrus.Fields{
 				"addr": clientInfo.Addr.String(),
-			}).Infof("gRPC client connected to beacon node")
+			}).Info("gRPC client connected to beacon node")
 			s.connectedRPCClients[clientInfo.Addr] = true
 		}
 	}

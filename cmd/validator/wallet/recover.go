@@ -94,7 +94,7 @@ func walletRecover(c *cli.Context) error {
 	if _, err = acc.WalletRecover(c.Context); err != nil {
 		return err
 	}
-	log.Infof(
+	log.Info(
 		"Successfully recovered HD wallet with accounts and saved configuration to disk",
 	)
 	return nil

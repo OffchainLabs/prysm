@@ -744,7 +744,7 @@ func (s *Service) pruneCoveredElectraAttsFromPool(ctx context.Context, headState
 		return errors.Wrap(err, "could not get attestation committees")
 	}
 	if !ok {
-		log.Debug("Attestation committees are not cached. Skipping attestation pruning.")
+		log.Debug("Attestation committees are not cached. Skipping attestation pruning")
 		return nil
 	}
 

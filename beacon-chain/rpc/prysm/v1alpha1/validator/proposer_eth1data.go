@@ -138,7 +138,7 @@ func (vs *Server) canonicalEth1Data(
 
 func (vs *Server) randomETH1DataVote(ctx context.Context) (*ethpb.Eth1Data, error) {
 	if !eth1DataNotification {
-		log.Warn("Beacon Node is no longer connected to an ETH1 chain, so ETH1 data votes are now random.")
+		log.Warn("Beacon Node is no longer connected to an ETH1 chain, so ETH1 data votes are now random")
 		eth1DataNotification = true
 	}
 	headState, err := vs.HeadFetcher.HeadStateReadOnly(ctx)

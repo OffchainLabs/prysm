@@ -275,7 +275,7 @@ func (s *Service) StartFromSavedState(saved state.BeaconState) error {
 	if state.IsNil(saved) {
 		return errors.New("Last finalized state at startup is nil")
 	}
-	log.Info("Blockchain data already exists in DB, initializing...")
+	log.Info("Blockchain data already exists in DB, initializing")
 	s.genesisTime = saved.GenesisTime()
 	s.cfg.AttService.SetGenesisTime(saved.GenesisTime())
 

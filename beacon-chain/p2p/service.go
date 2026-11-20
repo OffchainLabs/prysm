@@ -224,7 +224,7 @@ func (s *Service) Start() {
 	if s.cfg.RelayNodeAddr != "" {
 		relayNodes = append(relayNodes, s.cfg.RelayNodeAddr)
 		if err := dialRelayNode(s.ctx, s.host, s.cfg.RelayNodeAddr); err != nil {
-			log.WithError(err).Errorf("Could not dial relay node")
+			log.WithError(err).Error("Could not dial relay node")
 		}
 	}
 

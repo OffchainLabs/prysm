@@ -69,7 +69,7 @@ func getProposerSettings(c *cli.Context, r io.Reader) error {
 		log.Infof("The default fee recipient is set to %s", defaultFeeRecipient)
 		var builderSettings *validatorpb.BuilderConfig
 		if c.Bool(WithBuilderFlag.Name) {
-			log.Warnf("--%s generates legacy (pre-gloas) mev-boost settings; they are discontinued at the gloas fork. Gloas builder participation requires v2 proposer settings with a builders list.", WithBuilderFlag.Name)
+			log.Warnf("--%s generates legacy (pre-gloas) mev-boost settings; they are discontinued at the gloas fork. Gloas builder participation requires v2 proposer settings with a builders list", WithBuilderFlag.Name)
 			builderSettings = &validatorpb.BuilderConfig{
 				Enabled:  true,
 				GasLimit: validatorType.Uint64(params.BeaconConfig().DefaultBuilderGasLimit),
@@ -98,7 +98,7 @@ func getProposerSettings(c *cli.Context, r io.Reader) error {
 		if err := file.WriteFile(c.String(ProposerSettingsOutputFlag.Name), b); err != nil {
 			return err
 		}
-		log.Infof("Successfully created `%s`. Settings can be imported into validator client using --%s flag.", c.String(ProposerSettingsOutputFlag.Name), flags.ProposerSettingsFlag.Name)
+		log.Infof("Successfully created `%s`. Settings can be imported into validator client using --%s flag", c.String(ProposerSettingsOutputFlag.Name), flags.ProposerSettingsFlag.Name)
 	}
 
 	return nil

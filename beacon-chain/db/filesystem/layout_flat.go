@@ -121,7 +121,7 @@ func slotFromFile(name string, fs afero.Fs) (primitives.Slot, error) {
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			log.WithError(err).Errorf("Could not close blob file")
+			log.WithError(err).Error("Could not close blob file")
 		}
 	}()
 	return slotFromBlob(f)

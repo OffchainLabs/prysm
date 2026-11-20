@@ -793,7 +793,7 @@ func (v *validator) pushPreGloasSettings(ctx context.Context, km keymanager.IKey
 	filteredKeys := v.activeKeysFromCache(slot)
 	proposerReqs := v.buildProposerSettingsRequests(filteredKeys)
 	if len(proposerReqs) == 0 {
-		log.Warnf("Could not locate valid validator indices. Skipping prepare proposer routine")
+		log.Warn("Could not locate valid validator indices. Skipping prepare proposer routine")
 		return nil
 	}
 	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
@@ -846,7 +846,7 @@ func (v *validator) pushPreferences(ctx context.Context, km keymanager.IKeymanag
 	// Legacy content only survives pre-fork (Gloas scrubs it), so this warns
 	// while there is still time to reconfigure.
 	if ps := v.ProposerSettings(); ps.HasLegacyBuilderContent() && slots.IsEpochStart(slot) {
-		log.Warn("Proposer settings contain v1 builder fields, which do not apply to gloas; proposer preferences are prepared with defaults. Configure builders via v2 proposer settings.")
+		log.Warn("Proposer settings contain v1 builder fields, which do not apply to gloas; proposer preferences are prepared with defaults. Configure builders via v2 proposer settings")
 	}
 
 	prefsChanged := v.connTracker.changed(proposerPrefsPush, connGen)
@@ -1079,7 +1079,7 @@ func (v *validator) activeKeysFromCache(slot primitives.Slot) [][fieldparams.BLS
 			log.WithFields(logrus.Fields{
 				"pubkey": hexutil.Encode(s.publicKey),
 				"status": s.status.Status.String(),
-			}).Debugf("Skipping non-active status key.")
+			}).Debug("Skipping non-active status key")
 		}
 	}
 	return filteredKeys
@@ -1580,7 +1580,7 @@ func (v *validator) buildSignedRegReqs(
 		if ps.Version >= proposer.SchemaV2 {
 			log.Warn("Default builder config has no default fee recipient; only keys with their own fee recipient can register")
 		} else {
-			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided!")
+			log.Warn("Builder is `enabled` in default config but will be ignored because no fee recipient was provided")
 		}
 	}
 

@@ -88,7 +88,7 @@ func main() {
 		logFileName := ctx.String(cmd.LogFileName.Name)
 		if logFileName != "" {
 			if err := logs.ConfigurePersistentLogging(logFileName, format, level, map[string]logrus.Level{}); err != nil {
-				log.WithError(err).Error("Failed to configuring logging to disk.")
+				log.WithError(err).Error("Failed to configuring logging to disk")
 			}
 		}
 		return cmd.ValidateNoArgs(ctx)
@@ -112,7 +112,7 @@ func run(ctx *cli.Context) error {
 		u := ctx.String(flags.ClientStatsAPIURLFlag.Name)
 		upd = clientstats.NewClientStatsHTTPPostUpdater(u)
 	} else {
-		log.Warn("No --clientstats-api-url flag set, writing to stdout as default metrics sink.")
+		log.Warn("No --clientstats-api-url flag set, writing to stdout as default metrics sink")
 		upd = clientstats.NewGenericClientStatsUpdater(os.Stdout)
 	}
 

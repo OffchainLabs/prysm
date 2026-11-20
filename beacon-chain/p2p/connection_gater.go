@@ -148,7 +148,7 @@ func configureFilter(cfg *Config) (*multiaddr.Filters, error) {
 			// it in the deny filter
 			action, _ := addrFilter.ActionForFilter(*ipnet)
 			if action == multiaddr.ActionAccept {
-				log.Warnf("Address %s is in conflict with previous rule.", ipnet.String())
+				log.Warnf("Address %s is in conflict with previous rule", ipnet.String())
 			}
 			addrFilter.AddFilter(*ipnet, multiaddr.ActionDeny)
 		}
@@ -171,11 +171,11 @@ func privateCIDRFilter(addrFilter *multiaddr.Filters, action multiaddr.Action) (
 		switch {
 		case action == multiaddr.ActionAccept:
 			if curAction == multiaddr.ActionDeny {
-				log.Warnf("Address %s is in conflict with previous rule.", ipnet.String())
+				log.Warnf("Address %s is in conflict with previous rule", ipnet.String())
 			}
 		case action == multiaddr.ActionDeny:
 			if curAction == multiaddr.ActionAccept {
-				log.Warnf("Address %s is in conflict with previous rule.", ipnet.String())
+				log.Warnf("Address %s is in conflict with previous rule", ipnet.String())
 			}
 		}
 		addrFilter.AddFilter(*ipnet, action)

@@ -27,7 +27,7 @@ import (
 // We start the iterate by the highest key and iterate down until we reach the current slot (resp. epoch).
 func (s *Store) Migrate(ctx context.Context, headEpoch, maxPruningEpoch primitives.Epoch, batchSize int) error {
 	// Migrate attestations.
-	log.Info("Starting migration of attestations. This may take a while.")
+	log.Info("Starting migration of attestations. This may take a while")
 	start := time.Now()
 
 	if err := s.migrateAttestations(ctx, headEpoch, maxPruningEpoch, batchSize); err != nil {
@@ -37,7 +37,7 @@ func (s *Store) Migrate(ctx context.Context, headEpoch, maxPruningEpoch primitiv
 	log.WithField("duration", time.Since(start)).Info("Migration of attestations completed successfully")
 
 	// Migrate proposals.
-	log.Info("Starting migration of proposals. This may take a while.")
+	log.Info("Starting migration of proposals. This may take a while")
 	start = time.Now()
 
 	if err := s.migrateProposals(ctx, headEpoch, maxPruningEpoch, batchSize); err != nil {

@@ -255,7 +255,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 	// The eviction method always assumes that the mutex is held.
 	r.slotToPendingBlocks.OnEvicted(func(s string, i any) {
 		if !mutexasserts.RWMutexLocked(&r.pendingQueueLock) {
-			log.Errorf("Mutex is not locked during cache eviction of values")
+			log.Error("Mutex is not locked during cache eviction of values")
 			// Continue on to allow elements to be properly removed.
 		}
 		blks, ok := i.([]interfaces.ReadOnlySignedBeaconBlock)
@@ -682,11 +682,11 @@ func (s *Service) updateCustodyInfoInDB(slot primitives.Slot) (primitives.Slot, 
 		log.WithFields(logrus.Fields{
 			"current": actualCustodyGroupCount,
 			"target":  cfg.NumberOfCustodyGroups,
-		}).Info("Supernode mode enabled. Will custody all data columns going forward.")
+		}).Info("Supernode mode enabled. Will custody all data columns going forward")
 	}
 
 	if wasSupernode && !isSupernode {
-		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node.", flags.Supernode.Name)
+		log.Warningf("Because the `--%s` flag was previously used, the node will continue to act as a super node", flags.Supernode.Name)
 	}
 
 	return earliestAvailableSlot, actualCustodyGroupCount, nil

@@ -586,7 +586,7 @@ func (vs *Server) PrepareBeaconProposer(
 	_ context.Context, request *ethpb.PrepareBeaconProposerRequest,
 ) (*emptypb.Empty, error) {
 	if slots.ToEpoch(vs.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		log.Warn("PrepareBeaconProposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op.")
+		log.Warn("PrepareBeaconProposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op")
 		return &emptypb.Empty{}, nil
 	}
 	for _, r := range request.Recipients {
@@ -657,7 +657,7 @@ func (vs *Server) computePostBlockStateAndRoot(ctx context.Context, block interf
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not compute state root")
 	}
-	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
+	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debug("Computed state root")
 	return root[:], st, nil
 }
 
