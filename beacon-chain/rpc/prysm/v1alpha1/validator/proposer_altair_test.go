@@ -153,6 +153,38 @@ func TestProposer_GetSyncAggregate_IncludesSyncCommitteeMessages(t *testing.T) {
 	assert.Equal(t, true, sa.SyncCommitteeBits.BitAt(subcommitteeSize+3))
 }
 
+func TestProposer_GetSyncAggregate_IgnoresContributionsForOtherRoots(t *testing.T) {
+	helpers.ClearCache()
+	st, err := util.NewBeaconStateAltair()
+	require.NoError(t, err)
+	val := &ethpb.Validator{PublicKey: bytesutil.PadTo([]byte{0xf0}, 48)}
+	require.NoError(t, st.SetValidators([]*ethpb.Validator{val}))
+	sc := &ethpb.SyncCommittee{Pubkeys: make([][]byte, params.BeaconConfig().SyncCommitteeSize)}
+	sc.Pubkeys[0] = val.PublicKey
+	require.NoError(t, st.SetCurrentSyncCommittee(sc))
+	proposerServer := &Server{
+		HeadFetcher:       &chainmock.ChainService{State: st},
+		SyncChecker:       &mockSync.Sync{IsSyncing: false},
+		SyncCommitteePool: synccommittee.NewStore(),
+	}
+
+	r := params.BeaconConfig().ZeroHash
+	otherRoot := [32]byte{'a'}
+	require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeMessage(&ethpb.SyncCommitteeMessage{
+		Slot: 1, BlockRoot: r[:], ValidatorIndex: 0, Signature: bls.NewAggregateSignature().Marshal(),
+	}))
+	// A contribution for another root covering the same position must not drop the message for r.
+	bits := ethpb.NewSyncCommitteeAggregationBits()
+	bits.SetBitAt(0, true)
+	require.NoError(t, proposerServer.SyncCommitteePool.SaveSyncCommitteeContribution(&ethpb.SyncCommitteeContribution{
+		Slot: 1, SubcommitteeIndex: 0, Signature: bls.NewAggregateSignature().Marshal(), AggregationBits: bits, BlockRoot: otherRoot[:],
+	}))
+
+	sa, err := proposerServer.getSyncAggregate(t.Context(), 1, r, st)
+	require.NoError(t, err)
+	assert.Equal(t, true, sa.SyncCommitteeBits.BitAt(0))
+}
+
 func Test_aggregatedSyncCommitteeMessages_NoIntersectionWithPoolContributions(t *testing.T) {
 	helpers.ClearCache()
 	st, err := util.NewBeaconStateAltair()
