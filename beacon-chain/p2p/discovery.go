@@ -329,7 +329,7 @@ func (s *Service) listenForNewNodes() {
 			// Reboot listener if connectivity drops
 			if thresholdCount > thresholdLimit {
 				outBoundConnectedCount := len(s.peers.OutboundConnected())
-				log.WithField("outboundConnectionCount", outBoundConnectedCount).Warn("Rebooting discovery listener, reached threshold.")
+				log.WithField("outboundConnectionCount", outBoundConnectedCount).Warn("Rebooting discovery listener, reached threshold")
 				if err := s.dv5Listener.RebootListener(); err != nil {
 					log.WithError(err).Error("Could not reboot listener")
 					continue

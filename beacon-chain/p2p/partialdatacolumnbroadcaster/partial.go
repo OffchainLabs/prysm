@@ -474,7 +474,7 @@ func (p *PartialColumnBroadcaster) loop() {
 			// This check enables the requester to cancel the request by cancelling the given context.
 			if req.ctx.Err() != nil {
 				p.logger.WithError(req.ctx.Err()).WithField("kind", req.kind.String()).
-					Debug("Context canceled for PartialColumnBroadcaster event.") // Debug log level to avoid log storm at node shutdown.
+					Debug("Context canceled for PartialColumnBroadcaster event") // Debug log level to avoid log storm at node shutdown.
 				req.finish(req.ctx.Err())
 				continue
 			}
@@ -497,7 +497,7 @@ func (p *PartialColumnBroadcaster) loop() {
 			}
 			if err != nil {
 				p.logger.WithField("kind", req.kind.String()).WithError(err).
-					Error("Failure handling PartialColumnBroadcaster event.")
+					Error("Failure handling PartialColumnBroadcaster event")
 				err = errors.Wrap(err, "partial column broadcaster "+req.kind.String()+" event")
 			}
 			req.finish(err)

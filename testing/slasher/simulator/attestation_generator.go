@@ -158,7 +158,7 @@ func (s *Simulator) generateAttestationsForSlot(ctx context.Context, ver int, sl
 		log.WithFields(logrus.Fields{
 			"amount":  len(slashedIndices),
 			"indices": slashedIndices,
-		}).Infof("Slashable attestation made")
+		}).Info("Slashable attestation made")
 	}
 	return attestations, slashings, nil
 }

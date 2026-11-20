@@ -138,13 +138,13 @@ func GenerateAttestations(bState state.BeaconState, privs []bls.SecretKey, numTo
 
 	if numToGen < committeesPerSlot {
 		log.Printf(
-			"Warning: %d attestations requested is less than %d committees in current slot, not all validators will be attesting.",
+			"Warning: %d attestations requested is less than %d committees in current slot, not all validators will be attesting",
 			numToGen,
 			committeesPerSlot,
 		)
 	} else if numToGen > committeesPerSlot {
 		log.Printf(
-			"Warning: %d attestations requested are more than %d committees in current slot, attestations will not be perfectly efficient.",
+			"Warning: %d attestations requested are more than %d committees in current slot, attestations will not be perfectly efficient",
 			numToGen,
 			committeesPerSlot,
 		)

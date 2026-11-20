@@ -118,13 +118,13 @@ func callWithdrawalEndpoints(ctx context.Context, host string, request []*struct
 	} else if err != nil {
 		return err
 	} else {
-		log.Infof("Successfully published messages to update %d withdrawal addresses.", len(request))
+		log.Infof("Successfully published messages to update %d withdrawal addresses", len(request))
 	}
 	return checkIfWithdrawsAreInPool(ctx, client, request)
 }
 
 func checkIfWithdrawsAreInPool(ctx context.Context, client *beacon.Client, request []*structs.SignedBLSToExecutionChange) error {
-	log.Info("Verifying requested withdrawal messages known to node...")
+	log.Info("Verifying requested withdrawal messages known to node")
 	poolResponse, err := client.GetBLStoExecutionChanges(ctx)
 	if err != nil {
 		return err
@@ -134,7 +134,7 @@ func checkIfWithdrawsAreInPool(ctx context.Context, client *beacon.Client, reque
 		requestMap[w.Message.ValidatorIndex] = w.Message.ToExecutionAddress
 	}
 	totalMessages := len(requestMap)
-	log.Infof("There are a total of %d messages known to the node's pool.", len(poolResponse.Data))
+	log.Infof("There are a total of %d messages known to the node's pool", len(poolResponse.Data))
 	for _, resp := range poolResponse.Data {
 		value, found := requestMap[resp.Message.ValidatorIndex]
 		if found && value == resp.Message.ToExecutionAddress {
@@ -146,11 +146,11 @@ func checkIfWithdrawsAreInPool(ctx context.Context, client *beacon.Client, reque
 			log.WithFields(logrus.Fields{
 				"validatorIndex":    key,
 				"executionAddress:": address,
-			}).Warn("Set withdrawal address message not found in the node's operations pool.")
+			}).Warn("Set withdrawal address message not found in the node's operations pool")
 		}
-		log.Warn("Please check before resubmitting. Set withdrawal address messages that were not found in the pool may have been already included into a block.")
+		log.Warn("Please check before resubmitting. Set withdrawal address messages that were not found in the pool may have been already included into a block")
 	} else {
-		log.Infof("All (total:%d) signed withdrawal messages were found in the pool.", totalMessages)
+		log.Infof("All (total:%d) signed withdrawal messages were found in the pool", totalMessages)
 	}
 	return nil
 }

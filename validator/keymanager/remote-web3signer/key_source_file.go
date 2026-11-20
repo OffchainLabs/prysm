@@ -46,7 +46,7 @@ func (km *Keymanager) refreshRemoteKeysFromFileChangesWithRetry(ctx context.Cont
 
 		km.retriesRemaining--
 		log.WithError(err).Debug("Error occurred on key refresh")
-		log.WithFields(logrus.Fields{"path": km.keyFilePath, "retriesRemaining": km.retriesRemaining, "retryDelay": retryDelay}).Warnf("Could not refresh keys. Retrying...")
+		log.WithFields(logrus.Fields{"path": km.keyFilePath, "retriesRemaining": km.retriesRemaining, "retryDelay": retryDelay}).Warn("Could not refresh keys. Retrying")
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

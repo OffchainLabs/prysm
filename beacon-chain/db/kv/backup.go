@@ -42,7 +42,7 @@ func (s *Store) Backup(ctx context.Context, outputDir string, permissionOverride
 		return err
 	}
 	backupPath := path.Join(backupsDir, fmt.Sprintf("prysm_beacondb_at_slot_%07d.backup", head.Block().Slot()))
-	log.WithField("backup", backupPath).Info("Writing backup database.")
+	log.WithField("backup", backupPath).Info("Writing backup database")
 
 	copyDB, err := bolt.Open(
 		backupPath,

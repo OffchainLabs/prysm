@@ -232,7 +232,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request) {
 
 	go es.outboxWriteLoop(ctx, cancel, sw, r.URL.Path)
 	if err := es.recvEventLoop(ctx, cancel, topics, s); err != nil {
-		log.WithError(err).Debug("Shutting down StreamEvents handler.")
+		log.WithError(err).Debug("Shutting down StreamEvents handler")
 	}
 	cleanupStart := time.Now()
 	es.waitForExit()
@@ -277,7 +277,7 @@ func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.Cance
 				// can no longer use it) are both expected, benign skips rather than failures, so
 				// they should not be logged as errors.
 				if !errors.Is(err, errNotRequested) && !errors.Is(err, errPayloadAttributeExpired) {
-					log.WithField("event_type", fmt.Sprintf("%T", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle.")
+					log.WithField("event_type", fmt.Sprintf("%T", event.Data)).WithError(err).Error("StreamEvents API endpoint received an event it was unable to handle")
 				}
 				continue
 			}
@@ -292,7 +292,7 @@ func (es *eventStreamer) recvEventLoop(ctx context.Context, cancel context.Cance
 				// A benefit of hijack and close is that it may force an error on the remote end, however just closing the context of the
 				// http handler may be sufficient to cause the remote http response reader to close.
 				if errors.Is(err, errSlowReader) {
-					log.WithError(err).Warn("Client is unable to keep up with event stream, shutting down.")
+					log.WithError(err).Warn("Client is unable to keep up with event stream, shutting down")
 				}
 				return err
 			}
@@ -328,7 +328,7 @@ func (es *eventStreamer) outboxWriteLoop(ctx context.Context, cancel context.Can
 	var err error
 	defer func() {
 		if err != nil {
-			log.WithError(err).Debug("Event streamer shutting down due to error.")
+			log.WithError(err).Debug("Event streamer shutting down due to error")
 			httpSSEErrorCount.WithLabelValues(endpoint, err.Error()).Inc()
 		}
 		es.exit()
@@ -376,7 +376,7 @@ func (es *eventStreamer) exit() {
 	for range es.outbox {
 		drained += 1
 	}
-	log.WithField("undelivered_events", drained).Debug("Event stream outbox drained.")
+	log.WithField("undelivered_events", drained).Debug("Event stream outbox drained")
 	close(es.openUntilExit)
 }
 
@@ -390,7 +390,7 @@ func (es *eventStreamer) waitForExit() {
 func writeLazyReaderWithRecover(w *streamingResponseWriterController, lr lazyReader) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.WithField("panic", r).Error("Recovered from panic while writing event to client.")
+			log.WithField("panic", r).Error("Recovered from panic while writing event to client")
 			err = errWriterUnusable
 			debug.PrintStack()
 		}

@@ -186,12 +186,12 @@ func onAccountsChanged(ctx context.Context, v *validator, current [][48]byte) {
 		log.WithError(err).Error("Could not properly handle reloaded keys")
 	}
 	if !anyActive {
-		log.Warn("No active keys found. Waiting for activation...")
+		log.Warn("No active keys found. Waiting for activation")
 		err := v.WaitForActivation(ctx)
 		if err != nil {
 			log.WithError(err).Warn("Could not wait for validator activation")
 		} else {
-			log.Debug("Resetting slot ticker after waiting for validator activation.")
+			log.Debug("Resetting slot ticker after waiting for validator activation")
 			v.SetTicker()
 		}
 	}

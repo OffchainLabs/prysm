@@ -46,7 +46,7 @@ func SubmitValidatorRegistrations(
 			lastErr = errors.Wrap(err, "could not submit signed registrations to beacon node")
 
 			if statusErr, ok := status.FromError(err); ok && statusErr.Code() == codes.FailedPrecondition {
-				log.Warnln("Beacon node does not utilize a custom builder via the --http-mev-relay flag. Validator registration skipped.")
+				log.Warnln("Beacon node does not utilize a custom builder via the --http-mev-relay flag. Validator registration skipped")
 
 				// We stop early the loop here, since if the builder endpoint is not configured for this chunk, it is useless to check the following chunks
 				break

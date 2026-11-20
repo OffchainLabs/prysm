@@ -46,7 +46,7 @@ func (p *blobPruner) notify(latest primitives.Epoch, layout fsLayout) chan struc
 		defer p.mu.Unlock()
 		sum, err := layout.pruneBefore(floor)
 		if err != nil {
-			log.WithError(err).WithFields(sum.LogFields()).Warn("Encountered errors during blob pruning.")
+			log.WithError(err).WithFields(sum.LogFields()).Warn("Encountered errors during blob pruning")
 		}
 		log.WithFields(logrus.Fields{
 			"upToEpoch":    floor,

@@ -123,7 +123,7 @@ func logValidatorWebAuth(validatorWebAddr, token, tokenPath string) {
 			validatorWebAddr,
 			url.QueryEscape(token),
 		)
-		log.Infof(
+		log.Info(
 			"Starting Prysm WebUI, once your validator process is running, navigate to the link below to authenticate",
 		)
 		log.Info(webAuthURL)
@@ -184,7 +184,7 @@ func readAuthTokenFile(r io.Reader) ([]byte, string, error) {
 		}
 		secret = bytesutil.SafeCopyBytes(s)
 		token = strings.TrimSpace(lines[1])
-		log.Warn("Auth token is a legacy file and should be regenerated.")
+		log.Warn("Auth token is a legacy file and should be regenerated")
 	default:
 		return nil, "", errors.New("Auth token file format has multiple lines, please update the auth token to a single line that is a 256 bit hex string")
 	}

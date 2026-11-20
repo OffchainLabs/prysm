@@ -864,7 +864,7 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		log.Warn("/eth/v1/validator/register_validator is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op.")
+		log.Warn("/eth/v1/validator/register_validator is deprecated post-Gloas; validator clients should use SignedProposerPreferences instead. Request accepted as a no-op")
 		return
 	}
 
@@ -908,7 +908,7 @@ func (s *Server) RegisterValidator(w http.ResponseWriter, r *http.Request) {
 // SignedProposerPreferences replaces this endpoint; requests are accepted as a no-op.
 func (s *Server) PrepareBeaconProposer(w http.ResponseWriter, r *http.Request) {
 	if slots.ToEpoch(s.TimeFetcher.CurrentSlot()) >= params.BeaconConfig().GloasForkEpoch {
-		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op.")
+		log.Warn("/eth/v1/validator/prepare_beacon_proposer is deprecated post-Gloas; use SignedProposerPreferences. Request accepted as a no-op")
 		return
 	}
 	var jsonFeeRecipients []*structs.FeeRecipient

@@ -124,7 +124,7 @@ func persist(d GenesisData) error {
 	if err := file.WriteFile(fpath, sb); err != nil {
 		return fmt.Errorf("error writing genesis state to %s: %w", fpath, err)
 	}
-	log.WithField("filePath", fpath).Info("Genesis state written to disk.")
+	log.WithField("filePath", fpath).Info("Genesis state written to disk")
 	return nil
 }
 

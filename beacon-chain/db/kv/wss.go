@@ -122,7 +122,7 @@ func (s *Store) SaveOrigin(ctx context.Context, serState, serBlock []byte) error
 		log.WithFields(logrus.Fields{
 			"slot":  state.Slot(),
 			"epoch": originEpoch,
-		}).Warn("Origin state is not at an epoch boundary.")
+		}).Warn("Origin state is not at an epoch boundary")
 	}
 
 	// The justified epoch stays truthful so imported blocks match forkchoice's voting source.

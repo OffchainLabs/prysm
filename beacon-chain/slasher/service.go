@@ -103,7 +103,7 @@ func (s *Service) run() {
 		validatorIndices[i] = primitives.ValidatorIndex(i)
 	}
 	start := time.Now()
-	log.Info("Reading last epoch written for each validator...")
+	log.Info("Reading last epoch written for each validator")
 	epochsByValidator, err := s.serviceCfg.Database.LastEpochWrittenForValidators(
 		s.ctx, validatorIndices,
 	)

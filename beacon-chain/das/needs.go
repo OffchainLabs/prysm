@@ -79,7 +79,7 @@ func NewSyncNeeds(current CurrentSlotter, oldestSlotFlagPtr, archiveOriginSlot *
 		} else {
 			log.WithField("backfill-oldest-slot", *oldestSlotFlagPtr).
 				WithField("specMinSlot", syncEpochOffset(current(), sn.blockRetention)).
-				Warn("Ignoring user-specified slot > MIN_EPOCHS_FOR_BLOCK_REQUESTS.")
+				Warn("Ignoring user-specified slot > MIN_EPOCHS_FOR_BLOCK_REQUESTS")
 		}
 	}
 

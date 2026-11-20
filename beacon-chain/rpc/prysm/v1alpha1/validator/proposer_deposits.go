@@ -185,7 +185,7 @@ func (vs *Server) depositTrie(ctx context.Context, canonicalEth1Data *ethpb.Eth1
 		log.WithFields(logrus.Fields{
 			"unfinalizedDeposits": len(upToEth1DataDeposits),
 			"totalDepositCount":   canonicalEth1Data.DepositCount,
-		}).Warn("Too many unfinalized deposits, building a deposit trie from scratch.")
+		}).Warn("Too many unfinalized deposits, building a deposit trie from scratch")
 		return vs.rebuildDepositTrie(ctx, canonicalEth1Data, canonicalEth1DataHeight)
 	}
 	for _, dep := range upToEth1DataDeposits {

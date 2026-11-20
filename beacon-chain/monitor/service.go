@@ -158,7 +158,7 @@ func (s *Service) initializePerformanceStructures(state state.BeaconState, epoch
 		balance, err := state.BalanceAtIndex(idx)
 		if err != nil {
 			log.WithError(err).WithField("validatorIndex", idx).Error(
-				"Could not fetch starting balance, skipping aggregated logs.")
+				"Could not fetch starting balance, skipping aggregated logs")
 			balance = 0
 		}
 		s.aggregatedPerformance[idx] = ValidatorAggregatedPerformance{

@@ -331,7 +331,7 @@ func (psl *SettingsLoader) loadFromDefault(cliCtx *cli.Context, dbSettings *vali
 
 	if psl.existsInDB && len(psl.loadMethods) == 1 {
 		// only log the below if default flag is the only load method
-		log.Debug("Overriding previously saved proposer default settings.")
+		log.Debug("Overriding previously saved proposer default settings")
 	}
 	logEntry.Info("Proposer settings loaded from default")
 	return psl.processProposerSettings(loaded, dbSettings), nil
@@ -481,7 +481,7 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	inferSchemaVersion(settingFromURL)
 	warnBuilderFlagsReplaced(cliCtx, settingFromURL, flags.ProposerSettingsURLFlag.Name)
 	psl.replacesDBKeys = len(settingFromURL.ProposerConfig) > 0
-	log.WithField(flags.ProposerSettingsURLFlag.Name, logs.MaskCredentialsLogging(cliCtx.String(flags.ProposerSettingsURLFlag.Name))).Infof("Proposer settings loaded from URL")
+	log.WithField(flags.ProposerSettingsURLFlag.Name, logs.MaskCredentialsLogging(cliCtx.String(flags.ProposerSettingsURLFlag.Name))).Info("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
 

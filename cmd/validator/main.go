@@ -230,7 +230,7 @@ func main() {
 
 			if logFileName != "" {
 				if err := logs.ConfigurePersistentLogging(logFileName, format, verbosityLevel, vmodule); err != nil {
-					log.WithError(err).Error("Failed to configuring logging to disk.")
+					log.WithError(err).Error("Failed to configuring logging to disk")
 				}
 			}
 

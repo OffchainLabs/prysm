@@ -117,8 +117,8 @@ func TestCallWithdrawalEndpoint_Multiple(t *testing.T) {
 	require.NoError(t, err)
 	assert.LogsContain(t, hook, "Successfully published")
 	assert.LogsContain(t, hook, "to update 2 withdrawal")
-	assert.LogsContain(t, hook, "All (total:2) signed withdrawal messages were found in the pool.")
-	assert.LogsDoNotContain(t, hook, "Set withdrawal address message not found in the node's operations pool.")
+	assert.LogsContain(t, hook, "All (total:2) signed withdrawal messages were found in the pool")
+	assert.LogsDoNotContain(t, hook, "Set withdrawal address message not found in the node's operations pool")
 }
 
 func TestCallWithdrawalEndpoint_Multiple_stakingcli(t *testing.T) {
@@ -149,8 +149,8 @@ func TestCallWithdrawalEndpoint_Multiple_stakingcli(t *testing.T) {
 	require.NoError(t, err)
 	assert.LogsContain(t, hook, "Successfully published")
 	assert.LogsContain(t, hook, "to update 2 withdrawal")
-	assert.LogsContain(t, hook, "All (total:2) signed withdrawal messages were found in the pool.")
-	assert.LogsDoNotContain(t, hook, "Set withdrawal address message not found in the node's operations pool.")
+	assert.LogsContain(t, hook, "All (total:2) signed withdrawal messages were found in the pool")
+	assert.LogsDoNotContain(t, hook, "Set withdrawal address message not found in the node's operations pool")
 }
 
 func TestCallWithdrawalEndpoint_Multiple_notfound(t *testing.T) {
@@ -181,8 +181,8 @@ func TestCallWithdrawalEndpoint_Multiple_notfound(t *testing.T) {
 	require.NoError(t, err)
 	assert.LogsContain(t, hook, "Successfully published")
 	assert.LogsContain(t, hook, "to update 2 withdrawal")
-	assert.LogsContain(t, hook, "Set withdrawal address message not found in the node's operations pool.")
-	assert.LogsContain(t, hook, "Please check before resubmitting. Set withdrawal address messages that were not found in the pool may have been already included into a block.")
+	assert.LogsContain(t, hook, "Set withdrawal address message not found in the node's operations pool")
+	assert.LogsContain(t, hook, "Please check before resubmitting. Set withdrawal address messages that were not found in the pool may have been already included into a block")
 	assert.LogsDoNotContain(t, hook, "Set withdrawal address message found in the node's operations pool.")
 }
 
@@ -366,6 +366,6 @@ func TestVerifyWithdrawal_Multiple(t *testing.T) {
 
 	err = verifyWithdrawalsInPool(cliCtx)
 	require.NoError(t, err)
-	assert.LogsContain(t, hook, "All (total:2) signed withdrawal messages were found in the pool.")
+	assert.LogsContain(t, hook, "All (total:2) signed withdrawal messages were found in the pool")
 	assert.LogsDoNotContain(t, hook, "set withdrawal address message not found in the node's operations pool.")
 }

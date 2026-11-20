@@ -37,7 +37,7 @@ func ParseGraffitiFile(f string) (*Graffiti, error) {
 		if !errors.As(err, &typeError) {
 			return nil, err
 		} else {
-			log.WithError(err).Error("There were some issues parsing graffiti from a yaml file.")
+			log.WithError(err).Error("There were some issues parsing graffiti from a yaml file")
 		}
 	}
 

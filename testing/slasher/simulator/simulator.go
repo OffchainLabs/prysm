@@ -263,7 +263,7 @@ func (s *Simulator) verifySlashingsWereDetected(ctx context.Context) {
 			log.WithFields(logrus.Fields{
 				"slot":          slashing.Header_1.Header.Slot,
 				"proposerIndex": slashing.Header_1.Header.ProposerIndex,
-			}).Errorf("Did not detect simulated proposer slashing")
+			}).Error("Did not detect simulated proposer slashing")
 			continue
 		}
 		log.WithFields(logrus.Fields{
@@ -280,7 +280,7 @@ func (s *Simulator) verifySlashingsWereDetected(ctx context.Context) {
 				"prevSourceEpoch":     slashing.SecondAttestation().GetData().Source.Epoch,
 				"prevBeaconBlockRoot": fmt.Sprintf("%#x", slashing.FirstAttestation().GetData().BeaconBlockRoot),
 				"newBeaconBlockRoot":  fmt.Sprintf("%#x", slashing.SecondAttestation().GetData().BeaconBlockRoot),
-			}).Errorf("Did not detect simulated attester slashing")
+			}).Error("Did not detect simulated attester slashing")
 			continue
 		}
 		log.WithFields(logrus.Fields{

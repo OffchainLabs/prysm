@@ -150,7 +150,7 @@ func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCach
 		}
 		if !migrationLogged {
 			log.WithField("fromLayout", from.name()).WithField("toLayout", to.name()).
-				Info("Migrating blob filesystem layout. This one-time operation can take extra time (up to a few minutes for systems with extended blob storage and a cold disk cache).")
+				Info("Migrating blob filesystem layout. This one-time operation can take extra time (up to a few minutes for systems with extended blob storage and a cold disk cache)")
 			migrationLogged = true
 		}
 		src := from.dir(ident)
@@ -179,7 +179,7 @@ func migrateLayout(fs afero.Fs, from, to fsLayout, cache *blobStorageSummaryCach
 	dc.clean(fs)
 	if moved > 0 {
 		log.WithField("dirsMoved", moved).WithField("elapsed", time.Since(start)).
-			Info("Blob filesystem migration complete.")
+			Info("Blob filesystem migration complete")
 	}
 	return nil
 }
@@ -219,14 +219,14 @@ func (d *dirCleaner) cleanLayer(fs afero.Fs, layer int) {
 	for dir := range dirs {
 		// Use Remove rather than RemoveAll to make sure we're only removing empty directories
 		if err := fs.Remove(dir); err != nil {
-			log.WithField("dir", dir).WithError(err).Error("Failed to remove blob directory, please remove it manually if desired.")
+			log.WithField("dir", dir).WithError(err).Error("Failed to remove blob directory, please remove it manually if desired")
 			contents, err := listDir(fs, dir)
 			if err != nil {
-				log.WithField("dir", dir).WithError(err).Error("Could not list blob directory contents to find reason for removal failure.")
+				log.WithField("dir", dir).WithError(err).Error("Could not list blob directory contents to find reason for removal failure")
 				continue
 			}
 			for _, c := range contents {
-				log.WithField("file", c).WithField("dir", dir).Debug("Unexpected file blocking migrated blob directory cleanup.")
+				log.WithField("file", c).WithField("dir", dir).Debug("Unexpected file blocking migrated blob directory cleanup")
 			}
 		}
 	}

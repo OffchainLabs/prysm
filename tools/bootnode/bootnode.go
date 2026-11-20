@@ -72,7 +72,7 @@ func main() {
 
 	if *logFileName != "" {
 		if err := logs.ConfigurePersistentLogging(*logFileName, "text", logrus.DebugLevel, map[string]logrus.Level{}); err != nil {
-			log.WithError(err).Error("Failed to configuring logging to disk.")
+			log.WithError(err).Error("Failed to configuring logging to disk")
 		}
 	}
 
@@ -84,7 +84,7 @@ func main() {
 		// Geth specific logging.
 		gethlog.SetDefault(gethlog.NewLogger(gethlog.NewTerminalHandlerWithLevel(os.Stderr, gethlog.LvlTrace, true)))
 
-		log.Debug("Debug logging enabled.")
+		log.Debug("Debug logging enabled")
 	}
 	privKey := extractPrivateKey()
 	cfg := discover.Config{

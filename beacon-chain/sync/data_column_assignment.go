@@ -74,7 +74,7 @@ func (c *DASPeerCache) NewPicker(pids []peer.ID, toCustody peerdas.ColumnIndices
 	for _, pid := range pids {
 		peer, err := c.refresh(pid, toCustody)
 		if err != nil {
-			log.WithField("peerID", pid).WithError(err).Debug("Failed to convert peer ID to node ID.")
+			log.WithField("peerID", pid).WithError(err).Debug("Failed to convert peer ID to node ID")
 			continue
 		}
 		for col := range peer.custodied {

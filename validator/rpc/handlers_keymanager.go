@@ -506,7 +506,7 @@ func (s *Server) ImportRemoteKeys(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if isUrlUsed {
-		log.Warnf("Setting the remote signer base url within the request is not supported. The remote signer url can only be set from the --%s flag.", flags.Web3SignerURLFlag.Name)
+		log.Warnf("Setting the remote signer base url within the request is not supported. The remote signer url can only be set from the --%s flag", flags.Web3SignerURLFlag.Name)
 	}
 
 	ks, err := adder.AddPublicKeys(remoteKeys)

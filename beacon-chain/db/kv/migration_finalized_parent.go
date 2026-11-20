@@ -80,7 +80,7 @@ func migrateFinalizedParent(ctx context.Context, db *bolt.DB) error {
 		// Mark migration complete.
 		return mb.Put(migrationFinalizedParent, migrationCompleted)
 	}); updateErr != nil {
-		log.WithError(updateErr).Errorf("could not run finalized parent root index repair migration")
+		log.WithError(updateErr).Error("could not run finalized parent root index repair migration")
 		return updateErr
 	}
 	return nil

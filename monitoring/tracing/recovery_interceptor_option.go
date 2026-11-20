@@ -26,6 +26,6 @@ func RecoveryHandlerFunc(ctx context.Context, p any) error {
 		err = fmt.Errorf("%v", p)
 	}
 
-	logrus.WithError(err).WithField("stack", string(debug.Stack())).Error("gRPC panicked!")
+	logrus.WithError(err).WithField("stack", string(debug.Stack())).Error("gRPC panicked")
 	return err
 }
