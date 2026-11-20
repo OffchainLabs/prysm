@@ -22,10 +22,16 @@ type Statement struct {
 	Message   [32]byte
 }
 
+// One input of MergeProofs, a proof and the statements it proves
+type ProofChild struct {
+	Statements []Statement
+	Proof      []byte
+}
+
 // Spec: the stark module
 type ProofBackend interface {
 	Prove(statements []Statement, signatures [][][]byte) ([]byte, error)
-	Merge(proofs [][]byte) ([]byte, error)
+	Merge(children []ProofChild) ([]byte, error)
 	Verify(statements []Statement, proof []byte) error
 }
 
@@ -54,10 +60,10 @@ func (concatenation) Prove(statements []Statement, signatures [][][]byte) ([]byt
 	return proof, nil
 }
 
-func (concatenation) Merge(proofs [][]byte) ([]byte, error) {
+func (concatenation) Merge(children []ProofChild) ([]byte, error) {
 	var out []byte
-	for _, p := range proofs {
-		out = append(out, p...)
+	for _, c := range children {
+		out = append(out, c.Proof...)
 	}
 	return out, nil
 }

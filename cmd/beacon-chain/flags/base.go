@@ -362,6 +362,10 @@ var (
 			"WARNING: This flag should be used only if you have a clear understanding that community has decided to override the terminal block hash activation epoch. " +
 			"Incorrect usage will result in your node experience consensus failure.",
 	}
+	PQProverSocket = &cli.StringFlag{
+		Name:  "pq-prover-socket",
+		Usage: "Unix socket of the leanVM sidecar that builds and verifies attestation proofs on a PQ network. Without it the spec reference proofs are used, which only work if every client on the network does the same.",
+	}
 	// SlasherDirFlag defines a path on disk where the slasher database is stored.
 	SlasherDirFlag = &cli.StringFlag{
 		Name:  "slasher-datadir",

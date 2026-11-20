@@ -343,6 +343,9 @@ func configureBeacon(cliCtx *cli.Context) error {
 
 	configureNetwork(cliCtx)
 
+	if err := configurePQProver(cliCtx); err != nil {
+		return err
+	}
 	if err := configureExecutionSetting(cliCtx); err != nil {
 		return errors.Wrap(err, "could not configure execution setting")
 	}

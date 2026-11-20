@@ -124,7 +124,7 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 
 	budget := maxProofSize
 	var atts []ethpb.Att
-	var proofs [][]byte
+	var proofs []pq.ProofChild
 	for _, g := range ordered {
 		if uint64(len(atts)) >= cfg.MaxAttestationsPQ || budget == 0 {
 			break
@@ -178,7 +178,7 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 					return nil, nil, err
 				}
 			}
-			proofs = append(proofs, c.proof)
+			proofs = append(proofs, pq.ProofChild{Statements: statements[i : i+1], Proof: c.proof})
 		}
 		atts = append(atts, att)
 		budget -= used
