@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/verification"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	consensus_types "github.com/OffchainLabs/prysm/v7/consensus-types"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -904,21 +905,6 @@ func SendExecutionPayloadEnvelopesByRootRequest(
 	return envelopes, nil
 }
 
-func readChunkedExecutionPayloadEnvelope(
-	stream network.Stream,
-	encoding encoder.NetworkEncoding,
-	ctxMap ContextByteVersions,
-) (*ethpb.SignedExecutionPayloadEnvelope, error) {
-	if _, err := readEnvelopeChunkVersion(stream, encoding, ctxMap); err != nil {
-		return nil, err
-	}
-	envelope := &ethpb.SignedExecutionPayloadEnvelope{}
-	if err := encoding.DecodeWithMaxLength(stream, envelope); err != nil {
-		return nil, errors.Wrap(err, "failed to decode execution payload envelope from RPC chunk stream")
-	}
-	return envelope, nil
-}
-
 func readEnvelopeChunkVersion(stream network.Stream, encoding encoder.NetworkEncoding, ctxMap ContextByteVersions) (int, error) {
 	code, msg, err := ReadStatusCode(stream, encoding)
 	if err != nil {
@@ -960,7 +946,7 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 	pid peer.ID,
 	ctxMap ContextByteVersions,
 	req *ethpb.ExecutionPayloadEnvelopesByRangeRequest,
-) ([]*ethpb.SignedExecutionPayloadEnvelope, error) {
+) ([]interfaces.ROSignedExecutionPayloadEnvelope, error) {
 	topic, err := p2p.TopicFromMessage(p2p.ExecutionPayloadEnvelopesByRangeName, slots.ToEpoch(tor.CurrentSlot()))
 	if err != nil {
 		return nil, err
@@ -978,13 +964,16 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 
 	max := min(req.Count, params.BeaconConfig().MaxRequestPayloads)
 
-	envelopes := make([]*ethpb.SignedExecutionPayloadEnvelope, 0, max)
+	envelopes := make([]interfaces.ROSignedExecutionPayloadEnvelope, 0, max)
 	var prevSlot primitives.Slot
 	var prevHash []byte
 	for i := uint64(0); i < max+1; i++ {
-		env, err := readChunkedExecutionPayloadEnvelope(stream, p2pProvider.Encoding(), ctxMap)
+		env, err := readChunkedROExecutionPayloadEnvelope(stream, p2pProvider.Encoding(), ctxMap)
 		if errors.Is(err, io.EOF) {
 			break
+		}
+		if errors.Is(err, consensus_types.ErrNilObjectWrapped) {
+			return nil, errors.Wrap(ErrInvalidFetchedData, "invalid execution payload envelope")
 		}
 		if err != nil {
 			return nil, err
@@ -1005,25 +994,30 @@ func SendExecutionPayloadEnvelopesByRangeRequest(
 }
 
 func validateExecutionPayloadEnvelopeByRangeResponse(
-	env *ethpb.SignedExecutionPayloadEnvelope,
+	signed interfaces.ROSignedExecutionPayloadEnvelope,
 	req *ethpb.ExecutionPayloadEnvelopesByRangeRequest,
 	prevSlot primitives.Slot,
 	prevHash []byte,
 	hasPrevious bool,
 ) (primitives.Slot, []byte, error) {
-	if _, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env); err != nil {
+	env, err := signed.Envelope()
+	if err != nil {
+		return 0, nil, errors.Wrap(ErrInvalidFetchedData, "invalid execution payload envelope")
+	}
+	payload, err := env.Execution()
+	if err != nil {
 		return 0, nil, errors.Wrap(ErrInvalidFetchedData, "invalid execution payload envelope")
 	}
 
-	envSlot := primitives.Slot(env.Message.Payload.SlotNumber)
+	envSlot := env.Slot()
 	if envSlot < req.StartSlot || uint64(envSlot-req.StartSlot) >= req.Count {
 		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d outside requested range (start %d, count %d)", envSlot, req.StartSlot, req.Count)
 	}
 	if hasPrevious && envSlot <= prevSlot {
 		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope slot %d not greater than previous slot %d", envSlot, prevSlot)
 	}
-	if len(prevHash) != 0 && !bytes.Equal(env.Message.Payload.ParentHash, prevHash) {
-		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", env.Message.Payload.ParentHash, prevHash)
+	if len(prevHash) != 0 && !bytes.Equal(payload.ParentHash(), prevHash) {
+		return 0, nil, errors.Wrapf(ErrInvalidFetchedData, "envelope parent hash %x does not match previous hash %x", payload.ParentHash(), prevHash)
 	}
-	return envSlot, env.Message.Payload.BlockHash, nil
+	return envSlot, payload.BlockHash(), nil
 }

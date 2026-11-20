@@ -432,11 +432,7 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []blocks.ROBlock
 		return err
 	}
 	for _, e := range envelopes {
-		protoEnv, ok := e.Proto().(*ethpb.SignedExecutionPayloadEnvelope)
-		if !ok {
-			return errors.New("could not type assert signed envelope to proto")
-		}
-		if err := s.cfg.BeaconDB.SaveExecutionPayloadEnvelope(ctx, protoEnv); err != nil {
+		if err := s.savePostPayload(ctx, e); err != nil {
 			return errors.Wrap(err, "could not save execution payload envelope")
 		}
 	}
