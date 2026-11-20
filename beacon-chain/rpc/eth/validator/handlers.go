@@ -1288,6 +1288,11 @@ func (s *Server) GetSyncCommitteeDuties(w http.ResponseWriter, r *http.Request) 
 		httputil.HandleError(w, "Sync committees are not supported for Phase0", http.StatusBadRequest)
 		return
 	}
+	// PQ has no sync committees, an empty list keeps validator clients quiet.
+	if isPQEpoch(requestedEpoch) {
+		httputil.WriteJson(w, &structs.GetSyncCommitteeDutiesResponse{Data: []*structs.SyncCommitteeDuty{}})
+		return
+	}
 	var indices []string
 	err := json.NewDecoder(r.Body).Decode(&indices)
 	switch {
