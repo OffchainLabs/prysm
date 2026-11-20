@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 
@@ -104,14 +105,8 @@ func (s *Service) Start() {
 	s.Lock()
 	defer s.Unlock()
 
-	tracked := make([]primitives.ValidatorIndex, 0, len(s.TrackedValidators))
-	for idx := range s.TrackedValidators {
-		tracked = append(tracked, idx)
-	}
-	slices.Sort(tracked)
-
 	log.WithFields(logrus.Fields{
-		"validatorIndices": tracked,
+		"validatorIndices": slices.Sorted(maps.Keys(s.TrackedValidators)),
 	}).Info("Starting service")
 
 	go s.run()

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"maps"
 	"slices"
 	"sync"
 
@@ -76,11 +77,7 @@ func (c *slotAwareCache) pruneOldestSlots() {
 	}
 
 	// Get all slots and sort them to find the oldest
-	slots := make([]primitives.Slot, 0, len(c.slotToKeys))
-	for slot := range c.slotToKeys {
-		slots = append(slots, slot)
-	}
-	slices.Sort(slots)
+	slots := slices.Sorted(maps.Keys(c.slotToKeys))
 
 	// Remove oldest slots until we're back under the limit
 	slotsToRemove := len(c.slotToKeys) - maxSlots
