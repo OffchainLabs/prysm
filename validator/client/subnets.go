@@ -30,8 +30,11 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 		CommitteesAtSlot: make([]uint64, 0, total),
 	}
 
-	if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
-		return fmt.Errorf("could not prepare aggregated selection proofs: %w", err)
+	// In the PQ fork, there is no selection proof: the beacon node tells which validators aggregate.
+	if v.pqKeys == nil {
+		if err := v.aggSelector.RefreshSelectionProofs(ctx); err != nil {
+			return fmt.Errorf("could not prepare aggregated selection proofs: %w", err)
+		}
 	}
 
 	for _, set := range [][]*ethpb.ValidatorDuty{duties.CurrentEpochDuties, duties.NextEpochDuties} {
@@ -54,7 +57,9 @@ func (v *validator) subscribeToSubnets(ctx context.Context, duties *ethpb.Valida
 	req.IsAggregator = make([]bool, len(subscribeDuties))
 	for i, duty := range subscribeDuties {
 		g.Go(func() error {
-			agg, err := v.isAggregator(gctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey))
+			// In the PQ fork, the beacon node proves the aggregate of a committee only if one of its aggregators
+			// subscribed to it.
+			agg, err := v.isAggregator(gctx, duty.CommitteeLength, duty.AttesterSlot, bytesutil.ToBytes48(duty.PublicKey), duty.ValidatorIndex)
 			if err != nil {
 				return fmt.Errorf("could not check if validator is an aggregator: %w", err)
 			}

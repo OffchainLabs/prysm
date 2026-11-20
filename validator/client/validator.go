@@ -45,6 +45,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
 	"github.com/OffchainLabs/prysm/v7/validator/pqkeys"
+	"github.com/OffchainLabs/prysm/v7/validator/xmsssigner"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -127,7 +128,10 @@ type validator struct {
 	accountChangedSub            event.Subscription
 	ticker                       slots.Ticker
 	km                           keymanager.IKeymanager
-	pqKeys                       *pqkeys.Registry // Set in the PQ fork only.
+	pqKeys                       *pqkeys.Registry    // Set in the PQ fork only.
+	pqSigner                     *xmsssigner.Signer  // Set in the PQ fork only, once the keys are loaded.
+	pqSignerLock                 sync.Mutex          // Guards the creation of pqSigner.
+	pqSignedPreferences          pqSignedPreferences // Proposer preferences signed with XMSS keys, to submit them again.
 	graffiti                     []byte
 	genesisTime                  time.Time
 	genesisTimeLock              sync.RWMutex // guards genesisTime writes against GenesisTime readers
@@ -511,7 +515,7 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 		if duty.AttesterSlot == slot {
 			roles = append(roles, roleAttester)
 
-			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk)
+			aggregator, err := v.isAggregator(ctx, duty.CommitteeLength, slot, pk, duty.ValidatorIndex)
 			if err != nil {
 				aggregator = false
 				log.WithError(err).Errorf("Could not check if validator %#x is an aggregator", bytesutil.Trunc(duty.PublicKey))
@@ -574,14 +578,21 @@ func (v *validator) Keymanager() (keymanager.IKeymanager, error) {
 
 // isAggregator checks if a validator is an aggregator of a given slot and committee,
 // it uses a modulo calculated by validator count in committee and samples randomness around it.
+// In the PQ fork, it returns whether the beacon node selected the validator of index `validatorIndex`.
 func (v *validator) isAggregator(
 	ctx context.Context,
 	committeeLength uint64,
 	slot primitives.Slot,
 	pubKey [fieldparams.BLSPubkeyLength]byte,
+	validatorIndex primitives.ValidatorIndex,
 ) (bool, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.isAggregator")
 	defer span.End()
+
+	// In the PQ fork, there is no selection proof: the beacon node selects the aggregators.
+	if v.pqKeys != nil {
+		return v.isAggregatorPQ(slot, validatorIndex), nil
+	}
 
 	modulo := uint64(1)
 	if committeeLength/params.BeaconConfig().TargetAggregatorsPerCommittee > 1 {
@@ -873,6 +884,12 @@ func (v *validator) pushPreferences(ctx context.Context, km keymanager.IKeymanag
 		// Nothing was reserved in the dedup cache, so there is no suppressed
 		// batch to retry; safe to consume the switch signal.
 		v.connTracker.confirm(proposerPrefsPush, connGen)
+	}
+
+	// The builder preferences are signed with BLS keys: the PQ fork has none.
+	if v.pqKeys != nil {
+		v.connTracker.confirm(builderPrefsPush, connGen)
+		return
 	}
 
 	if entries := v.warmBuilderRequestAuths(ctx, km, slot, forceFullPush || builderPrefsChanged); len(entries) > 0 {
@@ -1496,15 +1513,32 @@ func (v *validator) warmBuilderRequestAuthsForDuties(ctx context.Context, km key
 // submitProposerPreferenceBatch submits a batch, un-reserving its slots on
 // failure so a later build retries them. Reports whether the RPC succeeded.
 func (v *validator) submitProposerPreferenceBatch(ctx context.Context, prefs []*ethpb.SignedProposerPreferences) bool {
-	if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, &ethpb.SubmitSignedProposerPreferencesRequest{
-		SignedProposerPreferences: prefs,
-	}); err != nil {
+	if err := v.submitProposerPreferences(ctx, prefs); err != nil {
 		log.WithError(err).Warn("Failed to submit proposer preferences")
 		v.releasePrefSlots(prefs)
 		return false
 	}
 	log.WithField("count", len(prefs)).Debug("Submitted proposer preferences")
 	return true
+}
+
+// submitProposerPreferences submits the signed proposer preferences `prefs` to the beacon node.
+// In the PQ fork, `prefs` are signed with XMSS keys.
+func (v *validator) submitProposerPreferences(ctx context.Context, prefs []*ethpb.SignedProposerPreferences) error {
+	if v.pqKeys != nil {
+		if err := v.submitProposerPreferencesPQ(ctx, prefs); err != nil {
+			return fmt.Errorf("submit PQ proposer preferences: %w", err)
+		}
+
+		return nil
+	}
+
+	request := &ethpb.SubmitSignedProposerPreferencesRequest{SignedProposerPreferences: prefs}
+	if _, err := v.validatorClient.SubmitSignedProposerPreferences(ctx, request); err != nil {
+		return fmt.Errorf("submit signed proposer preferences: %w", err)
+	}
+
+	return nil
 }
 
 // submitBuilderPreferenceBatch submits a batch, un-reserving its slots on

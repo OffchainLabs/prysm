@@ -131,6 +131,19 @@ func (r *Registry) Keys(pubkey blsPubkey) (*Keys, bool) {
 	return keys, ok
 }
 
+// Pubkeys returns the BLS public keys of the validators of the registry.
+func (r *Registry) Pubkeys() []blsPubkey {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	pubkeys := make([]blsPubkey, 0, len(r.keysByBLS))
+	for pubkey := range r.keysByBLS {
+		pubkeys = append(pubkeys, pubkey)
+	}
+
+	return pubkeys
+}
+
 // XMSSPubkey returns the XMSS public key of the validator whose BLS public key is `pubkey`.
 func (r *Registry) XMSSPubkey(pubkey blsPubkey) (xmssPubkey, bool) {
 	r.mu.RLock()

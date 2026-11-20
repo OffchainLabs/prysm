@@ -285,6 +285,11 @@ func performRoles(slotCtx context.Context, allRoles map[[48]byte][]validatorRole
 					defer rewardedWg.Done()
 				}
 
+				if v.pqKeys != nil {
+					v.performRolePQ(slotCtx, role, slot, pubKey)
+					return
+				}
+
 				switch role {
 				case roleAttester:
 					v.SubmitAttestation(slotCtx, slot, pubKey)

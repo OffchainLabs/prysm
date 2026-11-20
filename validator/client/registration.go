@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -103,6 +104,15 @@ func (v *validator) signProposerPreferences(
 ) (*ethpb.SignedProposerPreferences, error) {
 	ctx, span := trace.StartSpan(ctx, "validator.signProposerPreferences")
 	defer span.End()
+
+	if v.pqKeys != nil {
+		signed, err := v.signProposerPreferencesPQ(ctx, pubkey, pref)
+		if err != nil {
+			return nil, fmt.Errorf("sign PQ proposer preferences: %w", err)
+		}
+
+		return signed, nil
+	}
 
 	epoch := slots.ToEpoch(pref.ProposalSlot)
 	resp, err := v.domainData(ctx, epoch, params.BeaconConfig().DomainProposerPreferences[:])

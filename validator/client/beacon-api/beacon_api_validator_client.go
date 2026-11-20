@@ -28,6 +28,7 @@ type beaconApiValidatorClient struct {
 	eventStreamGuard        event.StreamGuard
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
+	pqAggregators           *pqAggregators
 }
 
 func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...iface.Option) iface.ValidatorClient {
@@ -51,6 +52,8 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 	}
 	if cfg.PQKeys != nil {
 		c.stateValidatorsProvider = pqStateValidatorsProvider{handler: handler, keys: cfg.PQKeys}
+		c.pqAggregators = newPQAggregators()
+		c.dutiesProvider = pqDutiesProvider{inner: c.dutiesProvider, keys: cfg.PQKeys, aggregators: c.pqAggregators}
 	}
 	return c
 }
