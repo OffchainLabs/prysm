@@ -44,6 +44,11 @@ func (s *Server) GetExecutionPayloadEnvelope(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if blk, err := s.Blocker.Block(ctx, root[:]); err == nil && blk != nil && blk.Version() >= version.PQ {
+		s.writeEnvelopePQ(ctx, w, r, root)
+		return
+	}
+
 	blinded, err := s.BeaconDB.ExecutionPayloadEnvelope(ctx, root)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -123,6 +128,11 @@ func (s *Server) PublishExecutionPayloadEnvelope(w http.ResponseWriter, r *http.
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		httputil.HandleError(w, "could not read request body: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if v >= version.PQ {
+		s.publishEnvelopePQ(ctx, w, r, body, blobDataIncluded)
 		return
 	}
 

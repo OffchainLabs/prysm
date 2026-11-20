@@ -147,6 +147,11 @@ func (s *Server) SubmitAttestationsV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if v >= version.PQ {
+		s.submitAttestationsPQ(ctx, w, r)
+		return
+	}
+
 	var attFailures, failedBroadcasts, decodeFailures []*server.IndexedError
 	if v >= version.Electra {
 		currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())

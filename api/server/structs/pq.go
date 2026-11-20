@@ -156,3 +156,10 @@ type SignedExecutionPayloadEnvelopeContentsPQ struct {
 	KzgProofs                      []string                          `json:"kzg_proofs"`
 	Blobs                          []string                          `json:"blobs"`
 }
+
+type GetExecutionPayloadEnvelopeResponsePQ struct {
+	Version             string                            `json:"version"`
+	ExecutionOptimistic bool                              `json:"execution_optimistic"`
+	Finalized           bool                              `json:"finalized"`
+	Data                *SignedExecutionPayloadEnvelopePQ `json:"data"`
+}

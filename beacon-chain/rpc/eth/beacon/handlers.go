@@ -84,7 +84,9 @@ func versionHeaderFromRequest(body []byte) (string, error) {
 		return "", errors.Wrap(err, "unable to peek slot from block")
 	}
 	ce := slots.ToEpoch(sp.Block.Slot)
-	if ce >= params.BeaconConfig().HezeForkEpoch {
+	if ce >= params.BeaconConfig().PQForkEpoch {
+		return version.String(version.PQ), nil
+	} else if ce >= params.BeaconConfig().HezeForkEpoch {
 		return version.String(version.Heze), nil
 	} else if ce >= params.BeaconConfig().GloasForkEpoch {
 		return version.String(version.Gloas), nil
@@ -876,6 +878,7 @@ func (s *Server) publishBlock(ctx context.Context, w http.ResponseWriter, r *htt
 var jsonDecoders = map[string]blockDecoder{
 	version.String(version.Heze):      decodeHezeJSON,
 	version.String(version.Gloas):     decodeGloasJSON,
+	version.String(version.PQ):        decodePQJSON,
 	version.String(version.Fulu):      decodeFuluJSON,
 	version.String(version.Electra):   decodeElectraJSON,
 	version.String(version.Deneb):     decodeDenebJSON,

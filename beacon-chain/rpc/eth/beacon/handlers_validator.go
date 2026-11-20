@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"io"
 	"iter"
 	"net/http"
@@ -112,7 +114,9 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 				httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			containers = append(containers, valContainerFromReadOnlyVal(val, id, balance, valStatus))
+			c := valContainerFromReadOnlyVal(val, id, balance, valStatus)
+			setValidatorPQFields(st, c, id)
+			containers = append(containers, c)
 		}
 		resp := &structs.GetValidatorsResponse{
 			Data:                containers,
@@ -150,7 +154,9 @@ func (s *Server) GetValidators(w http.ResponseWriter, r *http.Request) {
 				httputil.HandleError(w, "Could not get validator balance: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			valContainers = append(valContainers, valContainerFromReadOnlyVal(val, id, balance, valSubStatus))
+			c := valContainerFromReadOnlyVal(val, id, balance, valSubStatus)
+			setValidatorPQFields(st, c, id)
+			valContainers = append(valContainers, c)
 		}
 	}
 
@@ -208,6 +214,7 @@ func (s *Server) GetValidator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	container := valContainerFromReadOnlyVal(roVal, valIdx, bal, valSubStatus)
+	setValidatorPQFields(st, container, valIdx)
 
 	isOptimistic, err := helpers.IsOptimistic(ctx, []byte(stateId), s.OptimisticModeFetcher, s.Stater, s.ChainInfoFetcher, s.BeaconDB)
 	if err != nil {
@@ -520,6 +527,9 @@ func decodeIds(w http.ResponseWriter, st state.BeaconState, rawIds []string, ign
 	for _, rawId := range rawIds {
 		pubkey, err := hexutil.Decode(rawId)
 		if err == nil {
+			if st.Version() >= version.PQ && len(pubkey) == fieldparams.XMSSPubkeyLength {
+				pubkey = append(make([]byte, stateutil.XMSSPubkeyPrefixLength), pubkey...)
+			}
 			if len(pubkey) != fieldparams.BLSPubkeyLength {
 				httputil.HandleError(w, fmt.Sprintf("Pubkey length is %d instead of %d", len(pubkey), fieldparams.BLSPubkeyLength), http.StatusBadRequest)
 				return nil, false
