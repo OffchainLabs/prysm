@@ -261,6 +261,9 @@ func ProcessPendingDeposits(ctx context.Context, st state.BeaconState, activeBal
 	if st == nil || st.IsNil() {
 		return errors.New("nil state")
 	}
+	if st.Version() >= version.PQ {
+		return processPendingDepositsPQ(st, activeBalance)
+	}
 
 	// constants & initializations
 	nextEpoch := slots.ToEpoch(st.Slot()) + 1
@@ -444,6 +447,9 @@ func batchProcessNewPendingDeposits(ctx context.Context, state state.BeaconState
 func ApplyPendingDeposit(ctx context.Context, st state.BeaconState, deposit *ethpb.PendingDeposit) error {
 	_, span := trace.StartSpan(ctx, "electra.ApplyPendingDeposit")
 	defer span.End()
+	if st.Version() >= version.PQ {
+		return applyPendingDepositPQ(st, deposit)
+	}
 	index, ok := st.ValidatorIndexByPubkey(bytesutil.ToBytes48(deposit.PublicKey))
 	if !ok {
 		verified, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{

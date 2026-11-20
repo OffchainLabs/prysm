@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -110,5 +112,23 @@ func (b *BeaconState) RotateAggregationCommitteeWindow(newEpochSlots []*ethpb.Ag
 	copy(newWindow[lastEpochStart:], ethpb.CopyAggregationCommitteeWindow(newEpochSlots))
 	b.aggregationCommitteeWindow = newWindow
 	b.markFieldAsDirty(types.AggregationCommitteeWindow)
+	return nil
+}
+
+func (b *BeaconState) AppendValidatorPQ(val *ethpb.Validator, vrfRoot [32]byte) error {
+	if b.version != version.PQ {
+		return errNotSupported("AppendValidatorPQ", b.version)
+	}
+	compactValidator := stateutil.CompactValidatorFromProto(val)
+	compactValidator.PQ, compactValidator.VrfRoot = true, vrfRoot
+	b.validatorsMultiValue.Append(b, compactValidator)
+	valIdx := primitives.ValidatorIndex(b.validatorsMultiValue.Len(b) - 1)
+
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.valMapHandler.Set(bytesutil.ToBytes48(val.PublicKey), valIdx)
+	b.markFieldAsDirty(types.Validators)
+	b.addDirtyIndices(types.Validators, []uint64{uint64(valIdx)})
 	return nil
 }

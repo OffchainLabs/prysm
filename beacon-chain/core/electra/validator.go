@@ -2,6 +2,7 @@ package electra
 
 import (
 	"errors"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -69,11 +70,16 @@ func QueueExcessActiveBalance(s state.BeaconState, idx primitives.ValidatorIndex
 			return err
 		}
 		pk := val.PublicKey()
+		// Spec: queue_excess_active_balance, the placeholder is an empty signature on PQ
+		signature := common.InfiniteSignature[:]
+		if s.Version() >= version.PQ {
+			signature = make([]byte, len(signature))
+		}
 		return s.AppendPendingDeposit(&ethpb.PendingDeposit{
 			PublicKey:             pk[:],
 			WithdrawalCredentials: val.GetWithdrawalCredentials(),
 			Amount:                excessBalance,
-			Signature:             common.InfiniteSignature[:],
+			Signature:             signature,
 			Slot:                  params.BeaconConfig().GenesisSlot,
 		})
 	}

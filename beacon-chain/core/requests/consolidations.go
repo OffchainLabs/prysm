@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -309,11 +310,16 @@ func queueExcessActiveBalance(st state.BeaconState, idx primitives.ValidatorInde
 			return err
 		}
 		pk := val.PublicKey()
+		// Spec: queue_excess_active_balance, the placeholder is an empty signature on PQ
+		signature := common.InfiniteSignature[:]
+		if st.Version() >= version.PQ {
+			signature = make([]byte, len(signature))
+		}
 		return st.AppendPendingDeposit(&eth.PendingDeposit{
 			PublicKey:             pk[:],
 			WithdrawalCredentials: val.GetWithdrawalCredentials(),
 			Amount:                excessBalance,
-			Signature:             common.InfiniteSignature[:],
+			Signature:             signature,
 			Slot:                  params.BeaconConfig().GenesisSlot,
 		})
 	}

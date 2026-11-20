@@ -8,6 +8,7 @@ import (
 type writeOnlyPQFields interface {
 	SetAggregationCommitteeWindow([]*ethpb.AggregationCommittees) error
 	RotateAggregationCommitteeWindow([]*ethpb.AggregationCommittees) error
+	AppendValidatorPQ(val *ethpb.Validator, vrfRoot [32]byte) error
 }
 
 type readOnlyPQFields interface {

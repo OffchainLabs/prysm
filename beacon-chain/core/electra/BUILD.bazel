@@ -7,6 +7,7 @@ go_library(
         "churn.go",
         "consolidations.go",
         "deposits.go",
+        "deposits_pq.go",
         "effective_balance_updates.go",
         "error.go",
         "log.go",
