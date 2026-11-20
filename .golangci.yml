@@ -3,6 +3,7 @@ run:
   go: 1.23.5
 linters:
   enable:
+    - copyloopvar
     - errcheck
     - ineffassign
     - govet
