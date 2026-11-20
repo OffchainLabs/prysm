@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/rewards"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -31,6 +32,7 @@ type Server struct {
 	OptimisticModeFetcher     blockchain.OptimisticModeFetcher
 	SyncCommitteePool         synccommittee.Pool
 	V1Alpha1Server            eth.BeaconNodeValidatorServer
+	PQValidator               shared.PQValidator
 	ChainInfoFetcher          blockchain.ChainInfoFetcher
 	BeaconDB                  db.HeadAccessDatabase
 	BlockBuilder              builder.BlockBuilder

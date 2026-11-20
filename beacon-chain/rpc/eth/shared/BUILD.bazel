@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "errors.go",
+        "pq.go",
         "request.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared",
@@ -16,7 +17,9 @@ go_library(
         "//beacon-chain/sync:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/interfaces:go_default_library",
+        "//consensus-types/primitives:go_default_library",
         "//network/httputil:go_default_library",
+        "//proto/prysm/v1alpha1:go_default_library",
         "@com_github_ethereum_go_ethereum//common/hexutil:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
     ],

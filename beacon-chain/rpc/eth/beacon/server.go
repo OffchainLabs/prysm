@@ -17,6 +17,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/voluntaryexits"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/eth/shared"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/lookup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
@@ -47,6 +48,7 @@ type Server struct {
 	TimeFetcher                blockchain.TimeFetcher
 	OptimisticModeFetcher      blockchain.OptimisticModeFetcher
 	V1Alpha1ValidatorServer    eth.BeaconNodeValidatorServer
+	PQValidator                shared.PQValidator
 	SyncChecker                sync.Checker
 	CanonicalHistory           *stategen.CanonicalHistory
 	ExecutionReconstructor     execution.Reconstructor

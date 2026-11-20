@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
@@ -78,4 +79,27 @@ func (vs *Server) SubmitSignedAggregateAndProofPQ(ctx context.Context, signed *e
 		return nil, status.Errorf(codes.Internal, "Could not save aggregate: %v", err)
 	}
 	return &ethpb.SignedAggregateSubmitResponse{AttestationDataRoot: root[:]}, nil
+}
+
+// The REST aggregate endpoint names the data root, not the aggregator.
+func (vs *Server) AggregateAttestationPQ(ctx context.Context, slot primitives.Slot, index primitives.CommitteeIndex, dataRoot [32]byte) (*ethpb.AttestationPQ, []byte, error) {
+	st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		return nil, nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
+	}
+	aggregate, err := pqpool.BuildAggregate(ctx, st, vs.PQAttPool.All(), slot, index)
+	if err != nil {
+		return nil, nil, status.Errorf(codes.Internal, "Could not build aggregate: %v", err)
+	}
+	if aggregate == nil {
+		return nil, nil, status.Error(codes.NotFound, "No attestations to aggregate")
+	}
+	root, err := aggregate.Att.Data.HashTreeRoot()
+	if err != nil {
+		return nil, nil, status.Errorf(codes.Internal, "Could not get attestation root: %v", err)
+	}
+	if root != dataRoot {
+		return nil, nil, status.Error(codes.NotFound, "No matching aggregate found")
+	}
+	return aggregate.Att, aggregate.Proof, nil
 }

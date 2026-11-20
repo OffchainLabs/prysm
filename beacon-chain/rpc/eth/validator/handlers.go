@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"io"
 	"net/http"
 	"slices"
@@ -57,6 +58,11 @@ func (s *Server) GetAggregateAttestationV2(w http.ResponseWriter, r *http.Reques
 	}
 	_, index, ok := shared.UintFromQuery(w, r, "committee_index", true)
 	if !ok {
+		return
+	}
+
+	if slotIsPQ(primitives.Slot(slot)) {
+		s.aggregateAttestationPQ(w, r, primitives.Slot(slot), primitives.CommitteeIndex(index), attDataRoot)
 		return
 	}
 
@@ -399,6 +405,11 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 	v, err := version.FromString(versionHeader)
 	if err != nil {
 		httputil.HandleError(w, "Invalid version: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if v >= version.PQ {
+		s.submitAggregateAndProofsPQ(w, r)
 		return
 	}
 
@@ -1013,8 +1024,18 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 
 	duties := make([]*structs.AttesterDuty, 0, len(coreDuties))
 	for _, d := range coreDuties {
+		var isAggregator *bool
+		if isPQEpoch(requestedEpoch) {
+			ok, err := pq.IsAggregator(st, d.Slot, d.CommitteeIndex, d.ValidatorIndex)
+			if err != nil {
+				httputil.HandleError(w, "Could not get aggregation committee: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			isAggregator = &ok
+		}
 		duties = append(duties, &structs.AttesterDuty{
-			Pubkey:                  hexutil.Encode(d.Pubkey[:]),
+			IsAggregator:            isAggregator,
+			Pubkey:                  dutyPubkey(requestedEpoch, d.Pubkey[:]),
 			ValidatorIndex:          strconv.FormatUint(uint64(d.ValidatorIndex), 10),
 			CommitteeIndex:          strconv.FormatUint(uint64(d.CommitteeIndex), 10),
 			CommitteeLength:         strconv.FormatUint(d.CommitteeLength, 10),
@@ -1104,7 +1125,7 @@ func (s *Server) GetProposerDuties(w http.ResponseWriter, r *http.Request) {
 	duties := make([]*structs.ProposerDuty, 0, len(coreDuties))
 	for _, d := range coreDuties {
 		duties = append(duties, &structs.ProposerDuty{
-			Pubkey:         hexutil.Encode(d.Pubkey[:]),
+			Pubkey:         dutyPubkey(requestedEpoch, d.Pubkey[:]),
 			ValidatorIndex: strconv.FormatUint(uint64(d.ValidatorIndex), 10),
 			Slot:           strconv.FormatUint(uint64(d.Slot), 10),
 		})
@@ -1193,7 +1214,7 @@ func (s *Server) GetProposerDutiesV2(w http.ResponseWriter, r *http.Request) {
 	duties := make([]*structs.ProposerDuty, 0, len(coreDuties))
 	for _, d := range coreDuties {
 		duties = append(duties, &structs.ProposerDuty{
-			Pubkey:         hexutil.Encode(d.Pubkey[:]),
+			Pubkey:         dutyPubkey(requestedEpoch, d.Pubkey[:]),
 			ValidatorIndex: strconv.FormatUint(uint64(d.ValidatorIndex), 10),
 			Slot:           strconv.FormatUint(uint64(d.Slot), 10),
 		})
@@ -1512,7 +1533,7 @@ func (s *Server) GetPTCDuties(w http.ResponseWriter, r *http.Request) {
 	for _, duty := range computedDuties {
 		pubkey := st.PubkeyAtIndex(duty.validatorIndex)
 		duties = append(duties, &structs.PTCDuty{
-			Pubkey:         hexutil.Encode(pubkey[:]),
+			Pubkey:         dutyPubkey(requestedEpoch, pubkey[:]),
 			ValidatorIndex: strconv.FormatUint(uint64(duty.validatorIndex), 10),
 			Slot:           strconv.FormatUint(uint64(duty.slot), 10),
 		})

@@ -65,6 +65,11 @@ func (s *Server) ProduceBlockV4(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if slotIsPQ(primitives.Slot(slot)) {
+		s.produceBlockPQ(w, r, primitives.Slot(slot), includePayload)
+		return
+	}
+
 	var randaoReveal []byte
 	if skipRandaoVerification(r) {
 		randaoReveal = common.InfiniteSignature[:]
