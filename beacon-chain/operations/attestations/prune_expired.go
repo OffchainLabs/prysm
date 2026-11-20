@@ -40,6 +40,8 @@ func (s *Service) pruneExpiredExperimental() {
 			}
 			numExpired := s.cfg.Cache.PruneBefore(expirySlot)
 			s.updateMetricsExperimental(numExpired)
+			// Fork choice attestations are saved to the pool in this mode too.
+			s.pruneExpiredForkchoiceAtts()
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
 			return
@@ -82,6 +84,8 @@ func (s *Service) pruneExpiredAtts() {
 		}
 	}
 
+	s.pruneExpiredForkchoiceAtts()
+
 	expirySlot, err := s.expirySlot()
 	if err != nil {
 		log.WithError(err).Error("Could not get expiry slot for seen aggregated attestations")
@@ -89,6 +93,19 @@ func (s *Service) pruneExpiredAtts() {
 	}
 
 	s.cfg.Pool.DeleteSeenAggregatedAttestationsBefore(expirySlot)
+}
+
+// pruneExpiredForkchoiceAtts deletes fork choice attestations from before the previous epoch, which fork choice
+// no longer accepts. Attestations for blocks that are never imported would otherwise stay in the pool forever.
+func (s *Service) pruneExpiredForkchoiceAtts() {
+	currentEpoch := slots.ToEpoch(slots.CurrentSlot(s.genesisTime))
+	for _, att := range s.cfg.Pool.ForkchoiceAttestations() {
+		if slots.ToEpoch(att.GetData().Slot)+1 < currentEpoch {
+			if err := s.cfg.Pool.DeleteForkchoiceAttestation(att); err != nil {
+				log.WithError(err).Error("Could not delete expired fork choice attestation")
+			}
+		}
+	}
 }
 
 // Return true if the input slot has been expired.

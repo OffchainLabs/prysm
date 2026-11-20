@@ -118,6 +118,22 @@ func TestPruneExpired_PruneExpiredAtts(t *testing.T) {
 	}
 }
 
+func TestPruneExpired_ForkchoiceAtts(t *testing.T) {
+	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
+	require.NoError(t, err)
+	epoch0 := util.HydrateAttestation(&ethpb.Attestation{})
+	epoch1 := util.HydrateAttestation(&ethpb.Attestation{Data: &ethpb.AttestationData{Slot: params.BeaconConfig().SlotsPerEpoch}})
+	require.NoError(t, s.cfg.Pool.SaveForkchoiceAttestations([]ethpb.Att{epoch0, epoch1}))
+
+	// In epoch 2, fork choice still accepts epoch 1 votes but no longer epoch 0 votes.
+	s.genesisTime = time.Now().Add(-2 * time.Duration(params.BeaconConfig().SlotsPerEpoch) * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)
+	s.pruneExpiredAtts()
+
+	atts := s.cfg.Pool.ForkchoiceAttestations()
+	require.Equal(t, 1, len(atts))
+	require.Equal(t, params.BeaconConfig().SlotsPerEpoch, atts[0].GetData().Slot)
+}
+
 func TestPruneExpired_Expired(t *testing.T) {
 	s, err := NewService(t.Context(), &Config{Pool: NewPool()})
 	require.NoError(t, err)
