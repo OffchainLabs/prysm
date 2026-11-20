@@ -245,7 +245,7 @@ func (s *Service) ForkchoiceUpdated(
 		if err != nil {
 			return nil, nil, handleRPCError(err)
 		}
-	case version.Gloas, version.Heze:
+	case version.Gloas, version.Heze, version.PQ:
 		a, err := attrs.PbV4()
 		if err != nil {
 			return nil, nil, err
