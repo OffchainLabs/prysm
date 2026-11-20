@@ -53,9 +53,8 @@ func readbootNodes(fileName string) ([]string, error) {
 		var typeError *yaml.TypeError
 		if !errors.As(err, &typeError) {
 			return nil, err
-		} else {
-			log.WithError(err).Error("There were some issues parsing the bootnodes from a yaml file.")
 		}
+		log.WithError(err).Error("There were some issues parsing the bootnodes from a yaml file.")
 	}
 	return listNodes, nil
 }

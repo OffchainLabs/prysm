@@ -192,12 +192,12 @@ func (s *Store) Blocks(ctx context.Context, f *filters.QueryFilter) ([]interface
 	ctx, span := trace.StartSpan(ctx, "BeaconDB.Blocks")
 	defer span.End()
 
-	if q, err := f.GetAncestryQuery(); err == nil {
+	q, err := f.GetAncestryQuery()
+	if err == nil {
 		return s.blocksAncestryQuery(ctx, q)
-	} else {
-		if !errors.Is(err, filters.ErrNotSet) {
-			return nil, nil, err
-		}
+	}
+	if !errors.Is(err, filters.ErrNotSet) {
+		return nil, nil, err
 	}
 
 	blocks := make([]interfaces.ReadOnlySignedBeaconBlock, 0)
@@ -207,7 +207,7 @@ func (s *Store) Blocks(ctx context.Context, f *filters.QueryFilter) ([]interface
 		return s.blocksForSlotRange(ctx, start, end)
 	}
 
-	err := s.db.View(func(tx *bolt.Tx) error {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
 
 		keys, err := blockRootsByFilter(ctx, tx, f)

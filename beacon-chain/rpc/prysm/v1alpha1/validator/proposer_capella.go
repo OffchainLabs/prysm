@@ -20,10 +20,9 @@ func (vs *Server) setBlsToExecData(blk interfaces.SignedBeaconBlock, headState s
 	if err != nil {
 		log.WithError(err).Error("Could not get bls to execution changes")
 		return
-	} else {
-		if err := blk.SetBLSToExecutionChanges(changes); err != nil {
-			log.WithError(err).Error("Could not set bls to execution changes")
-			return
-		}
+	}
+	if err := blk.SetBLSToExecutionChanges(changes); err != nil {
+		log.WithError(err).Error("Could not set bls to execution changes")
+		return
 	}
 }

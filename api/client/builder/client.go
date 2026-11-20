@@ -736,9 +736,8 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 			return nil, nil, errors.Wrapf(err, "unable to wrap execution data for %s", version.String(forkVersion))
 		}
 		return ed, nil, nil
-	} else {
-		return nil, nil, fmt.Errorf("unsupported header version %s", version.String(forkVersion))
 	}
+	return nil, nil, fmt.Errorf("unsupported header version %s", version.String(forkVersion))
 }
 
 func (c *Client) parseBlindedBlockResponseJSON(

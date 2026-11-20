@@ -240,11 +240,10 @@ func (s *Slice[V]) Value(obj Identifiable) []V {
 			}
 		}
 		return result
-	} else {
-		result := make([]V, len(s.sharedItems))
-		s.fillOriginalItems(obj, &result)
-		return result
 	}
+	result := make([]V, len(s.sharedItems))
+	s.fillOriginalItems(obj, &result)
+	return result
 }
 
 // At returns the item at the requested index for the input object.
@@ -273,16 +272,15 @@ func (s *Slice[V]) At(obj Identifiable, index uint64) (V, error) {
 			}
 		}
 		return s.sharedItems[index], nil
-	} else {
-		item := s.appendedItems[index-uint64(len(s.sharedItems))]
-		for _, v := range item.Values {
-			if slices.Contains(v.ids, obj.Id()) {
-				return v.val, nil
-			}
-		}
-		var def V
-		return def, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
 	}
+	item := s.appendedItems[index-uint64(len(s.sharedItems))]
+	for _, v := range item.Values {
+		if slices.Contains(v.ids, obj.Id()) {
+			return v.val, nil
+		}
+	}
+	var def V
+	return def, fmt.Errorf("index %d %w", index, ErrOutOfBounds)
 }
 
 // UpdateAt updates the item at the required index for the input object to the passed in value.

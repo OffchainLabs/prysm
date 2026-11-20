@@ -611,11 +611,10 @@ func (s *Service) createLocalNode(
 		hostIP := net.ParseIP(s.cfg.HostAddress)
 		if hostIP.To4() == nil && hostIP.To16() == nil {
 			return nil, errors.Errorf("invalid host address: %s", s.cfg.HostAddress)
-		} else {
-			localNode.SetFallbackIP(hostIP)
-			localNode.SetStaticIP(hostIP)
-			advertiseIPv6 = advertiseIPv6 || isIPv6(hostIP)
 		}
+		localNode.SetFallbackIP(hostIP)
+		localNode.SetStaticIP(hostIP)
+		advertiseIPv6 = advertiseIPv6 || isIPv6(hostIP)
 	}
 
 	if s.cfg != nil && s.cfg.HostDNS != "" {

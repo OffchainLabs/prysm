@@ -62,59 +62,58 @@ func IsOptimistic(
 			return isStateRootOptimistic(ctx, id, optimisticModeFetcher, stateFetcher, chainInfo, database)
 		} else if len(stateId) == 32 {
 			return isStateRootOptimistic(ctx, stateId, optimisticModeFetcher, stateFetcher, chainInfo, database)
-		} else {
-			optimistic, err := optimisticModeFetcher.IsOptimistic(ctx)
-			if err != nil {
-				return true, errors.Wrap(err, "could not check optimistic status")
-			}
-			if !optimistic {
-				return false, nil
-			}
-			slotNumber, parseErr := strconv.ParseUint(stateIdString, 10, 64)
-			if parseErr != nil {
-				// ID format does not match any valid options.
-				e := lookup.NewStateIdParseError(parseErr)
-				return true, &e
-			}
-			fcp := chainInfo.FinalizedCheckpt()
-			if fcp == nil {
-				return true, errors.New("received nil finalized checkpoint")
-			}
-			finalizedSlot, err := slots.EpochStart(fcp.Epoch)
-			if err != nil {
-				return true, errors.Wrap(err, "could not get head state's finalized slot")
-			}
-			lastValidatedCheckpoint, err := database.LastValidatedCheckpoint(ctx)
-			if err != nil {
-				return true, errors.Wrap(err, "could not get last validated checkpoint")
-			}
-			validatedSlot, err := slots.EpochStart(lastValidatedCheckpoint.Epoch)
-			if err != nil {
-				return true, errors.Wrap(err, "could not get last validated slot")
-			}
-			if primitives.Slot(slotNumber) <= validatedSlot {
-				return false, nil
-			}
-			// if the finalized checkpoint is higher than the last
-			// validated checkpoint, we are syncing and have synced
-			// a finalization being optimistic
-			if validatedSlot < finalizedSlot {
-				return true, nil
-			}
-			if primitives.Slot(slotNumber) == chainInfo.HeadSlot() {
-				// We know the head is optimistic because we checked it above.
-				return true, nil
-			}
-			headRoot, err := chainInfo.HeadRoot(ctx)
-			if err != nil {
-				return true, errors.Wrap(err, "could not get head root")
-			}
-			r, err := chainInfo.Ancestor(ctx, headRoot, primitives.Slot(slotNumber))
-			if err != nil {
-				return true, errors.Wrap(err, "could not get ancestor root")
-			}
-			return optimisticModeFetcher.IsOptimisticForRoot(ctx, bytesutil.ToBytes32(r))
 		}
+		optimistic, err := optimisticModeFetcher.IsOptimistic(ctx)
+		if err != nil {
+			return true, errors.Wrap(err, "could not check optimistic status")
+		}
+		if !optimistic {
+			return false, nil
+		}
+		slotNumber, parseErr := strconv.ParseUint(stateIdString, 10, 64)
+		if parseErr != nil {
+			// ID format does not match any valid options.
+			e := lookup.NewStateIdParseError(parseErr)
+			return true, &e
+		}
+		fcp := chainInfo.FinalizedCheckpt()
+		if fcp == nil {
+			return true, errors.New("received nil finalized checkpoint")
+		}
+		finalizedSlot, err := slots.EpochStart(fcp.Epoch)
+		if err != nil {
+			return true, errors.Wrap(err, "could not get head state's finalized slot")
+		}
+		lastValidatedCheckpoint, err := database.LastValidatedCheckpoint(ctx)
+		if err != nil {
+			return true, errors.Wrap(err, "could not get last validated checkpoint")
+		}
+		validatedSlot, err := slots.EpochStart(lastValidatedCheckpoint.Epoch)
+		if err != nil {
+			return true, errors.Wrap(err, "could not get last validated slot")
+		}
+		if primitives.Slot(slotNumber) <= validatedSlot {
+			return false, nil
+		}
+		// if the finalized checkpoint is higher than the last
+		// validated checkpoint, we are syncing and have synced
+		// a finalization being optimistic
+		if validatedSlot < finalizedSlot {
+			return true, nil
+		}
+		if primitives.Slot(slotNumber) == chainInfo.HeadSlot() {
+			// We know the head is optimistic because we checked it above.
+			return true, nil
+		}
+		headRoot, err := chainInfo.HeadRoot(ctx)
+		if err != nil {
+			return true, errors.Wrap(err, "could not get head root")
+		}
+		r, err := chainInfo.Ancestor(ctx, headRoot, primitives.Slot(slotNumber))
+		if err != nil {
+			return true, errors.Wrap(err, "could not get ancestor root")
+		}
+		return optimisticModeFetcher.IsOptimisticForRoot(ctx, bytesutil.ToBytes32(r))
 	}
 }
 

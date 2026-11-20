@@ -314,10 +314,9 @@ func (*Server) ValidateKeystores(w http.ResponseWriter, r *http.Request) {
 					"Prysm web only supports importing batches of keystores with the same password for all of them",
 					keystore.Pubkey), http.StatusBadRequest)
 				return
-			} else {
-				httputil.HandleError(w, "Unexpected error decrypting keystore: "+err.Error(), http.StatusInternalServerError)
-				return
 			}
+			httputil.HandleError(w, "Unexpected error decrypting keystore: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 }

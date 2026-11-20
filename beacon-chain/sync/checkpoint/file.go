@@ -46,10 +46,9 @@ func (fi *FileInitializer) Initialize(ctx context.Context, d db.Database) error 
 	if err == nil && origin != params.BeaconConfig().ZeroHash {
 		log.WithField("root", fmt.Sprintf("%#x", origin)).Info("Origin checkpoint found in the database, ignoring checkpoint sync flags")
 		return nil
-	} else {
-		if !errors.Is(err, db.ErrNotFound) {
-			return errors.Wrap(err, "error while checking database for origin root")
-		}
+	}
+	if !errors.Is(err, db.ErrNotFound) {
+		return errors.Wrap(err, "error while checking database for origin root")
 	}
 	serBlock, err := file.ReadFileAsBytes(fi.blockPath)
 	if err != nil {

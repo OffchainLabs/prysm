@@ -21,13 +21,11 @@ func SubsetUint64(a, b []uint64) bool {
 	}
 
 	for _, v := range a {
-		if count, found := set[v]; !found {
+		count := set[v]
+		if count < 1 {
 			return false
-		} else if count < 1 {
-			return false
-		} else {
-			set[v] = count - 1
 		}
+		set[v] = count - 1
 	}
 	return true
 }
