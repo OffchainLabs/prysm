@@ -45,6 +45,10 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 		return pubsub.ValidationReject, err
 	}
 
+	// The devnet is self-build, so PQ builder bids are dropped without a penalty.
+	if _, ok := m.(*ethpb.SignedExecutionPayloadBidPQ); ok {
+		return pubsub.ValidationIgnore, nil
+	}
 	signedBid, ok := m.(*ethpb.SignedExecutionPayloadBid)
 	if !ok {
 		return pubsub.ValidationReject, errWrongMessage

@@ -37,6 +37,16 @@ var gossipTopicMappings = map[string]func() proto.Message{
 // versioned by epoch.
 func GossipTopicMappings(topic string, epoch primitives.Epoch) proto.Message {
 	switch topic {
+	case ProposerSlashingSubnetTopicFormat:
+		if epoch >= params.BeaconConfig().PQForkEpoch {
+			return &ethpb.ProposerSlashingPQ{}
+		}
+		return &ethpb.ProposerSlashing{}
+	case ExecutionPayloadBidTopicFormat:
+		if epoch >= params.BeaconConfig().PQForkEpoch {
+			return &ethpb.SignedExecutionPayloadBidPQ{}
+		}
+		return &ethpb.SignedExecutionPayloadBid{}
 	case PayloadAttestationMessageTopicFormat:
 		if epoch >= params.BeaconConfig().PQForkEpoch {
 			return &ethpb.PayloadAttestationMessagePQ{}
@@ -206,6 +216,8 @@ func init() {
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedAggregateAttestationAndProofPQ]()] = AggregateAndProofSubnetTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadEnvelopePQ]()] = ExecutionPayloadEnvelopeTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.PayloadAttestationMessagePQ]()] = PayloadAttestationMessageTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.ProposerSlashingPQ]()] = ProposerSlashingSubnetTopicFormat
+	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedExecutionPayloadBidPQ]()] = ExecutionPayloadBidTopicFormat
 	GossipTypeMapping[reflect.TypeFor[*ethpb.SignedProposerPreferencesPQ]()] = SignedProposerPreferencesTopicFormat
 
 	// Specially handle Heze objects.

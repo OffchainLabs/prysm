@@ -38,6 +38,10 @@ func (s *Service) validateProposerSlashing(ctx context.Context, pid peer.ID, msg
 		return pubsub.ValidationReject, err
 	}
 
+	// PQ proposer slashings decode but have no pool yet, so they are dropped without a penalty.
+	if _, ok := m.(*ethpb.ProposerSlashingPQ); ok {
+		return pubsub.ValidationIgnore, nil
+	}
 	slashing, ok := m.(*ethpb.ProposerSlashing)
 	if !ok {
 		return pubsub.ValidationReject, errWrongMessage
