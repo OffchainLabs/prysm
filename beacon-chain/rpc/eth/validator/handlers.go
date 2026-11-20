@@ -732,6 +732,11 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	for _, idx := range indices {
 		s.SubscribedValidatorsCache.Add(idx)
 	}
+	for _, sub := range subs {
+		if sub.IsAggregator && slotIsPQ(sub.Slot) {
+			s.PQValidator.RegisterAggregationDutyPQ(sub.Slot, sub.CommitteeIndex)
+		}
+	}
 }
 
 // GetAttestationData requests that the beacon node produces attestation data for

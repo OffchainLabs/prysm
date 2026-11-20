@@ -11,5 +11,6 @@ import (
 type PQValidator interface {
 	ExecutionPayloadContentsPQ(slot primitives.Slot) (envelope *eth.ExecutionPayloadEnvelopePQ, kzgProofs, blobs [][]byte, err error)
 	PublishExecutionPayloadEnvelopeContentsPQ(ctx context.Context, signed *eth.SignedExecutionPayloadEnvelopePQ, kzgProofs, blobs [][]byte) error
+	RegisterAggregationDutyPQ(slot primitives.Slot, index primitives.CommitteeIndex)
 	AggregateAttestationPQ(ctx context.Context, slot primitives.Slot, index primitives.CommitteeIndex, dataRoot [32]byte) (*eth.AttestationPQ, []byte, error)
 }

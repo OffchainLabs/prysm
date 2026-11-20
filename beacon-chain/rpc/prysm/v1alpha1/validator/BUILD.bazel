@@ -8,6 +8,7 @@ go_library(
         "aggregator.go",
         "attester.go",
         "aggregator_pq.go",
+        "aggregator_precompute_pq.go",
         "attester_pq.go",
         "blocks.go",
         "builder_preferences.go",

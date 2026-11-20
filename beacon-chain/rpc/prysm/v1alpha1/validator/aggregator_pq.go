@@ -87,9 +87,12 @@ func (vs *Server) AggregateAttestationPQ(ctx context.Context, slot primitives.Sl
 	if err != nil {
 		return nil, nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 	}
-	aggregate, err := pqpool.BuildAggregate(ctx, st, vs.PQAttPool.All(), slot, index)
-	if err != nil {
-		return nil, nil, status.Errorf(codes.Internal, "Could not build aggregate: %v", err)
+	aggregate := vs.precomputedAggregatePQ(ctx, slot, index)
+	if aggregate == nil {
+		aggregate, err = pqpool.BuildAggregate(ctx, st, vs.PQAttPool.All(), slot, index)
+		if err != nil {
+			return nil, nil, status.Errorf(codes.Internal, "Could not build aggregate: %v", err)
+		}
 	}
 	if aggregate == nil {
 		return nil, nil, status.Error(codes.NotFound, "No attestations to aggregate")
