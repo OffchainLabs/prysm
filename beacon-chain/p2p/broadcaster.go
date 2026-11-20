@@ -165,7 +165,7 @@ func (s *Service) internalBroadcastAttestation(ctx context.Context, subnet uint6
 			savedAttestationBroadcasts.Inc()
 			return nil
 		}(); err != nil {
-			log.WithError(err).Error("Failed to find peers")
+			logFindPeersError(err, "Failed to find peers")
 			tracing.AnnotateError(span, err)
 		}
 	}
@@ -221,7 +221,7 @@ func (s *Service) broadcastSyncCommittee(ctx context.Context, subnet uint64, sMs
 			savedSyncCommitteeBroadcasts.Inc()
 			return nil
 		}(); err != nil {
-			log.WithError(err).Error("Failed to find peers")
+			logFindPeersError(err, "Failed to find peers")
 			tracing.AnnotateError(span, err)
 		}
 	}
@@ -286,7 +286,7 @@ func (s *Service) internalBroadcastBlob(ctx context.Context, subnet uint64, blob
 			blobSidecarBroadcasts.Inc()
 			return nil
 		}(); err != nil {
-			log.WithError(err).Error("Failed to find peers")
+			logFindPeersError(err, "Failed to find peers")
 			tracing.AnnotateError(span, err)
 		}
 	}
@@ -556,7 +556,7 @@ func (s *Service) broadcastDataColumnSidecars(ctx context.Context, forkDigest [f
 
 			if err := s.findPeersIfNeeded(ctx, item.wrappedSubIdx, DataColumnSubnetTopicFormat, forkDigest, item.subnet); err != nil {
 				tracing.AnnotateError(span, err)
-				log.WithError(err).Error("Cannot find peers if needed")
+				logFindPeersError(err, "Cannot find peers if needed")
 				return
 			}
 
@@ -745,4 +745,13 @@ func lcFinalityToTopic(forkDigest [4]byte) string {
 
 func dataColumnSubnetToTopic(subnet uint64, forkDigest [fieldparams.VersionLength]byte) string {
 	return fmt.Sprintf(DataColumnSubnetTopicFormat, forkDigest, subnet)
+}
+
+func logFindPeersError(err error, msg string) {
+	entry := log.WithError(err)
+	if errors.Is(err, context.DeadlineExceeded) {
+		entry.Debug(msg)
+		return
+	}
+	entry.Error(msg)
 }

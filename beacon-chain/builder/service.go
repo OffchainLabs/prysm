@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"net"
 	"net/url"
@@ -432,7 +433,7 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 		if !exists {
 			// we want to allow validators to set up keys that haven't been added to the beaconstate validator list yet,
 			// so we should tolerate keys that do not seem to be valid by skipping past them.
-			log.Warnf("Skipping validator registration for pubkey=%#x - not in current validator set.", r.Message.Pubkey)
+			log.WithField("pubkey", fmt.Sprintf("%#x", r.Message.Pubkey)).Debug("Skipping validator registration, pubkey not in current validator set")
 			continue
 		}
 		valid = append(valid, r)
