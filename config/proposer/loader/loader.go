@@ -481,7 +481,7 @@ func (psl *SettingsLoader) loadFromURL(cliCtx *cli.Context, dbSettings *validato
 	inferSchemaVersion(settingFromURL)
 	warnBuilderFlagsReplaced(cliCtx, settingFromURL, flags.ProposerSettingsURLFlag.Name)
 	psl.replacesDBKeys = len(settingFromURL.ProposerConfig) > 0
-	log.WithField(flags.ProposerSettingsURLFlag.Name, cliCtx.String(flags.ProposerSettingsURLFlag.Name)).Infof("Proposer settings loaded from URL")
+	log.WithField(flags.ProposerSettingsURLFlag.Name, logs.MaskCredentialsLogging(cliCtx.String(flags.ProposerSettingsURLFlag.Name))).Infof("Proposer settings loaded from URL")
 	return psl.processProposerSettings(settingFromURL, dbSettings), nil
 }
 
