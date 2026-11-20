@@ -1188,7 +1188,7 @@ func (s *Service) areBlobsAvailable(ctx context.Context, root [fieldparams.RootL
 					"root":          fmt.Sprintf("%#x", root),
 					"blobsExpected": expected,
 					"blobsWaiting":  len(missing),
-				}).Error("Still waiting for blobs DA check at slot end.")
+				}).Warning("Still waiting for blobs DA check at slot end")
 			}
 			slotEnd = nil
 		case <-ctx.Done():

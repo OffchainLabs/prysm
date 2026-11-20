@@ -27,7 +27,6 @@ func (s *Service) lightClientBootstrapRPCHandler(ctx context.Context, msg any, s
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -77,7 +76,6 @@ func (s *Service) lightClientUpdatesByRangeRPCHandler(ctx context.Context, msg a
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -162,7 +160,6 @@ func (s *Service) lightClientFinalityUpdateRPCHandler(ctx context.Context, _ any
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
@@ -200,7 +197,6 @@ func (s *Service) lightClientOptimisticUpdateRPCHandler(ctx context.Context, _ a
 
 	SetRPCStreamDeadlines(stream)
 	if err := s.rateLimiter.validateRequest(stream, 1); err != nil {
-		logger.WithError(err).Error("Cannot validate request")
 		return err
 	}
 	s.rateLimiter.add(stream, 1)
