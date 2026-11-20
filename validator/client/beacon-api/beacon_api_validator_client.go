@@ -49,6 +49,9 @@ func NewBeaconApiValidatorClient(provider rest.RestConnectionProvider, opts ...i
 	if cfg.Stateless {
 		c.envelopeCache = cache.NewExecutionPayloadEnvelopeCache()
 	}
+	if cfg.PQKeys != nil {
+		c.stateValidatorsProvider = pqStateValidatorsProvider{handler: handler, keys: cfg.PQKeys}
+	}
 	return c
 }
 
