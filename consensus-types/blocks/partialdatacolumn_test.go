@@ -630,7 +630,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				var initial PartialDataColumnPeerState
-				nextState, action, headerIncluded := p.forPeer(peer.ID("peer-a"), true, initial, true)
+				nextState, action, headerIncluded := p.forPeer(true, initial, true)
 				require.Equal(t, true, headerIncluded)
 				require.NoError(t, action.Err)
 				require.Equal(t, true, headerIncluded)
@@ -654,11 +654,11 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			name: "eager push not repeated when peerState preserved",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
-				state, action, _ := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{}, true)
+				state, action, _ := p.forPeer(true, PartialDataColumnPeerState{}, true)
 				require.NoError(t, action.Err)
 				require.NotNil(t, state.Recvd)
 				// Second call with the returned state should not send eager push again.
-				next, action, _ := p.forPeer(peer.ID("peer-a"), true, state, true)
+				next, action, _ := p.forPeer(true, state, true)
 				require.NoError(t, action.Err)
 				require.IsNil(t, action.EncodedPartialMessage) // no cells to send (peer has no requests)
 				require.IsNil(t, action.EncodedPartsMetadata)  // partsMetadata already sent, no change
@@ -669,7 +669,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			name: "requested false sends only parts metadata",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
-				next, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{}, true)
+				next, action, _ := p.forPeer(false, PartialDataColumnPeerState{}, true)
 				require.NoError(t, action.Err)
 				require.IsNil(t, action.EncodedPartialMessage)
 				require.NotNil(t, action.EncodedPartsMetadata)
@@ -680,7 +680,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			name: "recvdState with mismatched length",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0)
-				_, action, _ := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{
+				_, action, _ := p.forPeer(true, PartialDataColumnPeerState{
 					Recvd: &ethpb.PartialDataColumnPartsMetadata{
 						Available: testBitlist(2),
 						Requests:  testBitlist(2, 0, 1),
@@ -696,7 +696,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				initialMeta := testPeerMeta(4, nil, allSet(4))
 				initialAvailable := slices.Clone(initialMeta.Available)
 				initialRequests := slices.Clone(initialMeta.Requests)
-				next, action, _ := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(true, PartialDataColumnPeerState{
 					Recvd: initialMeta,
 				}, true)
 				require.NoError(t, action.Err)
@@ -735,7 +735,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Available: testBitlist(3, 1),
 					Requests:  testBitlist(3, allSet(3)...),
 				}
-				next, action, _ := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(true, PartialDataColumnPeerState{
 					Recvd: recvd,
 				}, true)
 				require.NoError(t, action.Err)
@@ -748,7 +748,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			name: "requested true nil SentState peer requests nothing",
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0, 1, 2)
-				next, action, _ := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(true, PartialDataColumnPeerState{
 					Recvd: testPeerMeta(3, nil, nil), // no requests
 				}, true)
 				require.NoError(t, action.Err)
@@ -763,7 +763,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			run: func(t *testing.T) {
 				// We have cells 0, 1, 2. Peer has none but only requests 0 and 2.
 				p := mustNewPartialColumn(t, 3, 0, 1, 2)
-				next, action, _ := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(true, PartialDataColumnPeerState{
 					Recvd: testPeerMeta(3, nil, []uint64{0, 2}),
 				}, true)
 				require.NoError(t, action.Err)
@@ -788,7 +788,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 1)
 				myMeta, err := p.newPartsMetadata()
 				require.NoError(t, err)
-				next, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(false, PartialDataColumnPeerState{
 					Sent: myMeta,
 				}, true)
 				require.NoError(t, action.Err)
@@ -808,7 +808,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Available: testBitlist(3, 0, 1),
 					Requests:  testBitlist(3, 1, 2), // same as newPartsMetadata
 				}
-				next, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(false, PartialDataColumnPeerState{
 					Sent: sentMeta,
 				}, true)
 				require.NoError(t, action.Err)
@@ -828,7 +828,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Available: testBitlist(3, 0),
 					Requests:  testBitlist(3, 1),
 				}
-				next, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(false, PartialDataColumnPeerState{
 					Sent: sentMeta,
 				}, true)
 				require.NoError(t, action.Err)
@@ -845,7 +845,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			run: func(t *testing.T) {
 				// First call: we have cell 0 only, Sent is nil.
 				p := mustNewPartialColumn(t, 3, 0)
-				state1, action1, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{}, true)
+				state1, action1, _ := p.forPeer(false, PartialDataColumnPeerState{}, true)
 				require.NoError(t, action1.Err)
 				require.NotNil(t, action1.EncodedPartsMetadata)
 				require.Equal(t, true, bitfield.Bitlist(state1.Sent.Available).BitAt(0))
@@ -855,7 +855,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				p.ExtendFromVerifiedCell(1, []byte{0xAA}, []byte{0xBB})
 
 				// Second call: Sent has {0}, we now have {0,1}. Should trigger resend.
-				state2, action2, _ := p.forPeer(peer.ID("peer-a"), false, state1, true)
+				state2, action2, _ := p.forPeer(false, state1, true)
 				require.NoError(t, action2.Err)
 				require.NotNil(t, action2.EncodedPartsMetadata)
 				// Merged: {0} | {0,1} = {0,1}
@@ -864,7 +864,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				require.Equal(t, false, bitfield.Bitlist(state2.Sent.Available).BitAt(2))
 
 				// Third call: Sent has {0,1}, we still have {0,1}. No resend.
-				_, action3, _ := p.forPeer(peer.ID("peer-a"), false, state2, true)
+				_, action3, _ := p.forPeer(false, state2, true)
 				require.NoError(t, action3.Err)
 				require.IsNil(t, action3.EncodedPartsMetadata)
 			},
@@ -879,7 +879,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Available: testBitlist(3, 0),
 					Requests:  testBitlist(3, 0, 1),
 				}
-				state1, action1, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
+				state1, action1, _ := p.forPeer(false, PartialDataColumnPeerState{
 					Sent: sentMeta,
 				}, true)
 				require.NoError(t, action1.Err)
@@ -893,7 +893,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				require.Equal(t, false, bitfield.Bitlist(state1.Sent.Available).BitAt(1))
 
 				// Second call with corrected Sent should converge (no resend).
-				_, action2, _ := p.forPeer(peer.ID("peer-a"), false, state1, true)
+				_, action2, _ := p.forPeer(false, state1, true)
 				require.NoError(t, action2.Err)
 				require.IsNil(t, action2.EncodedPartsMetadata) // converged, no resend
 			},
@@ -908,7 +908,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Available: testBitlist(2, 0),
 					Requests:  testBitlist(3, 1, 2), // Requests match so we reach Contains check
 				}
-				_, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
+				_, action, _ := p.forPeer(false, PartialDataColumnPeerState{
 					Sent: sentMeta,
 				}, true)
 				require.ErrorContains(t, "different lengths", action.Err)
@@ -927,7 +927,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Requests:  testBitlist(3, allSet(3)...),
 				}
 				recvdMeta := testPeerMeta(3, nil, allSet(3))
-				next, action, _ := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{
+				next, action, _ := p.forPeer(true, PartialDataColumnPeerState{
 					Sent:  sentMeta,
 					Recvd: recvdMeta,
 				}, true)
@@ -954,7 +954,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 					Available: testBitlist(4, 0, 1), // same as ours
 					Requests:  testBitlist(4, 0, 1), // only 2 requests
 				}
-				_, action, _ := p.forPeer(peer.ID("peer-a"), false, PartialDataColumnPeerState{
+				_, action, _ := p.forPeer(false, PartialDataColumnPeerState{
 					Sent: sentMeta,
 				}, true)
 				require.NoError(t, action.Err)
@@ -966,7 +966,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 			run: func(t *testing.T) {
 				p := mustNewPartialColumn(t, 2, 0)
 				var initial PartialDataColumnPeerState
-				nextState, action, headerIncluded := p.forPeer(peer.ID("peer-a"), true, initial, false)
+				nextState, action, headerIncluded := p.forPeer(true, initial, false)
 				require.NoError(t, action.Err)
 				require.Equal(t, false, headerIncluded)
 				// No header and no cells to send for non-proposer → nil encoded message.
@@ -983,7 +983,7 @@ func TestPartialDataColumn_ForPeer(t *testing.T) {
 				p := mustNewPartialColumn(t, 3, 0, 1, 2)
 				// Set up state with Recvd so we skip the eager push path.
 				recvdMeta := testPeerMeta(3, nil, allSet(3))
-				_, action, headerIncluded := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{
+				_, action, headerIncluded := p.forPeer(true, PartialDataColumnPeerState{
 					Recvd: recvdMeta,
 				}, true)
 				require.NoError(t, action.Err)
@@ -1586,7 +1586,7 @@ func TestPartialDataColumn_CellsToVerifyFromPartialMessage_Gloas(t *testing.T) {
 
 func TestPartialDataColumn_ForPeer_GloasNoHeaderEagerPush(t *testing.T) {
 	p := mustNewGloasPartialColumn(t, 2, 0)
-	nextState, action, includeHeader := p.forPeer(peer.ID("peer-a"), true, PartialDataColumnPeerState{}, true)
+	nextState, action, includeHeader := p.forPeer(true, PartialDataColumnPeerState{}, true)
 	require.NoError(t, action.Err)
 	// Gloas never eager-pushes a header.
 	require.Equal(t, false, includeHeader)

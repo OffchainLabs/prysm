@@ -78,7 +78,7 @@ func (vs *Server) buildBlockGloas(ctx context.Context, sBlk interfaces.SignedBea
 
 	wg.Wait()
 
-	sr, _, err := vs.computePostBlockStateAndRoot(ctx, sBlk)
+	sr, err := vs.computePostBlockStateRoot(ctx, sBlk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}

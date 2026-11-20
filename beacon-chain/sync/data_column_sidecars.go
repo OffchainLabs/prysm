@@ -294,10 +294,7 @@ func requestDirectSidecarsFromPeers(
 		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(params, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
 
 		// Verify the received data column sidecars.
-		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, blockByRoot, roDataColumnsByPeer)
-		if err != nil {
-			return nil, errors.Wrap(err, "verify data columns sidecars by peer")
-		}
+		verifiedRoDataColumnSidecars := verifyDataColumnSidecarsByPeer(params.P2P, params.NewVerifier, blockByRoot, roDataColumnsByPeer)
 
 		// Remove the verified sidecars from the missing indices map and compute the new verified columns by root.
 		localVerifiedColumnsByRoot := updateResults(verifiedRoDataColumnSidecars, missingIndicesByRoot)
@@ -413,10 +410,7 @@ func requestIndirectSidecarsFromPeers(
 		roDataColumnsByPeer := fetchDataColumnSidecarsFromPeers(p, slotByRoot, slotsWithCommitments, indicesByRootByPeerToQuery)
 
 		// Verify the received data column sidecars.
-		verifiedRoDataColumnSidecars, err := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, blockByRoot, roDataColumnsByPeer)
-		if err != nil {
-			return nil, errors.Wrap(err, "verify data columns sidecars by peer")
-		}
+		verifiedRoDataColumnSidecars := verifyDataColumnSidecarsByPeer(p.P2P, p.NewVerifier, blockByRoot, roDataColumnsByPeer)
 
 		// Add to results all verified sidecars.
 		localVerifiedColumnsByRoot := updateResults(verifiedRoDataColumnSidecars, indicesToRetrieveByRoot)
@@ -962,7 +956,7 @@ func verifyDataColumnSidecarsByPeer(
 	newVerifier verification.NewDataColumnsVerifier,
 	blockByRoot map[[fieldparams.RootLength]byte]blocks.ROBlock,
 	roDataColumnsByPeer map[goPeer.ID][]blocks.RODataColumn,
-) ([]blocks.VerifiedRODataColumn, error) {
+) []blocks.VerifiedRODataColumn {
 	// First optimistically verify all received data columns in a single batch.
 	count := 0
 	for _, columns := range roDataColumnsByPeer {
@@ -977,7 +971,7 @@ func verifyDataColumnSidecarsByPeer(
 	verifiedRoDataColumnSidecars, err := verifyByRootDataColumnSidecars(newVerifier, blockByRoot, roDataColumnSidecars)
 	if err == nil {
 		// This is the happy path where all sidecars are verified.
-		return verifiedRoDataColumnSidecars, nil
+		return verifiedRoDataColumnSidecars
 	}
 
 	// An error occurred during verification, which means that at least one sidecar is invalid.
@@ -996,7 +990,7 @@ func verifyDataColumnSidecarsByPeer(
 		verifiedRoDataColumnSidecars = append(verifiedRoDataColumnSidecars, peerVerifiedRoDataColumnSidecars...)
 	}
 
-	return verifiedRoDataColumnSidecars, nil
+	return verifiedRoDataColumnSidecars
 }
 
 // verifyByRootDataColumnSidecars verifies the provided read-only data columns against the

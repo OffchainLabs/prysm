@@ -2127,7 +2127,7 @@ func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {
 	f.votes = []Vote{
 		{currentRoot: zeroHash, nextRoot: rootB, nextSlot: slotB, currentSlot: 0, nextPayloadStatus: false, currentPayloadStatus: false},
 	}
-	require.NoError(t, f.updateBalances())
+	f.updateBalances()
 
 	emptyB := s.emptyNodeByRoot[rootB]
 	require.NotNil(t, emptyB)
@@ -2143,7 +2143,7 @@ func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {
 	// Step 3: updateBalances should detect the slot change and reprocess.
 	// It should subtract from Node.balance (pending, old slot 100==100) and
 	// add to PayloadNode.balance (non-pending, new slot 140!=100).
-	require.NoError(t, f.updateBalances())
+	f.updateBalances()
 
 	assert.Equal(t, uint64(0), emptyB.node.balance, "Node.balance should be zero after slot change moved balance out")
 	assert.Equal(t, validatorBalance, emptyB.balance, "balance should have moved to PayloadNode.balance (non-pending)")
@@ -2152,7 +2152,7 @@ func TestUpdateBalances_SlotChangeMovesBalance(t *testing.T) {
 	// The subtract from B should now correctly target PayloadNode.balance (non-pending).
 	f.votes[0].nextRoot = rootC
 	f.votes[0].nextSlot = slotC
-	require.NoError(t, f.updateBalances())
+	f.updateBalances()
 
 	// B's balances should both be zero (balance was correctly subtracted).
 	assert.Equal(t, uint64(0), emptyB.node.balance, "Node.balance should remain zero")
@@ -2479,7 +2479,7 @@ func TestUpdateNewFullNodeWeight_SkipsSlashed(t *testing.T) {
 		require.NoError(t, f.InsertNode(ctx, st, blk))
 		f.ProcessAttestation(ctx, []uint64{0, 1}, root, 2, true)
 		f.justifiedBalances = []uint64{100, 200}
-		require.NoError(t, f.updateBalances())
+		f.updateBalances()
 		require.Equal(t, true, f.votes[0].currentPayloadStatus)
 		return f, root
 	}

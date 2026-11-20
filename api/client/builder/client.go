@@ -689,7 +689,7 @@ func (c *Client) parseBlindedBlockResponse(
 	if ssz {
 		return c.parseBlindedBlockResponseSSZ(respBytes, forkVersion)
 	}
-	return c.parseBlindedBlockResponseJSON(respBytes, forkVersion)
+	return c.parseBlindedBlockResponseJSON(respBytes)
 }
 
 func (c *Client) parseBlindedBlockResponseSSZ(
@@ -743,7 +743,6 @@ func (c *Client) parseBlindedBlockResponseSSZ(
 
 func (c *Client) parseBlindedBlockResponseJSON(
 	respBytes []byte,
-	forkVersion int,
 ) (interfaces.ExecutionData, *v1.BlobsBundle, error) {
 	ep := &ExecutionPayloadResponse{}
 	if err := json.Unmarshal(respBytes, ep); err != nil {

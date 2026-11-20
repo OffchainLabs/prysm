@@ -61,13 +61,8 @@ func (f *ForkChoice) Head(
 
 	calledHeadCount.Inc()
 
-	if err := f.updateBalances(); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not update balances")
-	}
-
-	if err := f.applyProposerBoostScore(); err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not apply proposer boost score")
-	}
+	f.updateBalances()
+	f.applyProposerBoostScore()
 
 	if err := f.store.applyWeightChangesConsensusNode(ctx, f.store.treeRootNode); err != nil {
 		return [32]byte{}, errors.Wrap(err, "could not apply weight changes")
@@ -314,7 +309,7 @@ func (f *ForkChoice) IsViableForCheckpoint(cp *forkchoicetypes.Checkpoint) (bool
 
 // updateBalances updates the balances that directly voted for each block taking into account the
 // validators' latest votes.
-func (f *ForkChoice) updateBalances() error {
+func (f *ForkChoice) updateBalances() {
 	newBalances := f.justifiedBalances
 	zHash := params.BeaconConfig().ZeroHash
 
@@ -400,7 +395,6 @@ func (f *ForkChoice) updateBalances() error {
 		f.votes[index].currentPayloadStatus = vote.nextPayloadStatus
 	}
 	f.balances = newBalances
-	return nil
 }
 
 // Tips returns a list of possible heads from fork choice store, it returns the

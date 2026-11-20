@@ -286,7 +286,7 @@ func TestExtractDataType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotBlock, err := extractDataTypeFromTypeMap(types.BlockMap, tt.args.digest[:], tt.args.chain)
+			gotBlock, err := extractDataTypeFromTypeMap(types.BlockMap, tt.args.digest[:])
 			if (err != nil) != tt.wantErr {
 				t.Errorf("block: error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -294,7 +294,7 @@ func TestExtractDataType(t *testing.T) {
 			if !reflect.DeepEqual(gotBlock, tt.wantBlock) {
 				t.Errorf("block: got = %v, want %v", gotBlock, tt.wantBlock)
 			}
-			gotAtt, err := extractDataTypeFromTypeMap(types.AttestationMap, tt.args.digest[:], tt.args.chain)
+			gotAtt, err := extractDataTypeFromTypeMap(types.AttestationMap, tt.args.digest[:])
 			if (err != nil) != tt.wantErr {
 				t.Errorf("attestation: error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -302,7 +302,7 @@ func TestExtractDataType(t *testing.T) {
 			if !reflect.DeepEqual(gotAtt, tt.wantAtt) {
 				t.Errorf("attestation: got = %v, want %v", gotAtt, tt.wantAtt)
 			}
-			gotAggregate, err := extractDataTypeFromTypeMap(types.AggregateAttestationMap, tt.args.digest[:], tt.args.chain)
+			gotAggregate, err := extractDataTypeFromTypeMap(types.AggregateAttestationMap, tt.args.digest[:])
 			if (err != nil) != tt.wantErr {
 				t.Errorf("aggregate: error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -310,7 +310,7 @@ func TestExtractDataType(t *testing.T) {
 			if !reflect.DeepEqual(gotAggregate, tt.wantAggregate) {
 				t.Errorf("aggregate: got = %v, want %v", gotAggregate, tt.wantAggregate)
 			}
-			gotAttSlashing, err := extractDataTypeFromTypeMap(types.AttesterSlashingMap, tt.args.digest[:], tt.args.chain)
+			gotAttSlashing, err := extractDataTypeFromTypeMap(types.AttesterSlashingMap, tt.args.digest[:])
 			if (err != nil) != tt.wantErr {
 				t.Errorf("attester slashing: error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -326,9 +326,8 @@ func TestExtractDataTypeFromTypeMapInvalid(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.BeaconConfig().FuluForkEpoch = params.BeaconConfig().ElectraForkEpoch + 4096*2
 	params.BeaconConfig().InitializeForkSchedule()
-	chain := &mock.ChainService{ValidatorsRoot: [32]byte{}}
-	_, err := extractDataTypeFromTypeMap(types.BlockMap, []byte{0x00, 0x01}, chain)
+	_, err := extractDataTypeFromTypeMap(types.BlockMap, []byte{0x00, 0x01})
 	require.ErrorIs(t, err, errInvalidDigest)
-	_, err = extractDataTypeFromTypeMap(types.AttestationMap, []byte{0x00, 0x01}, chain)
+	_, err = extractDataTypeFromTypeMap(types.AttestationMap, []byte{0x00, 0x01})
 	require.ErrorIs(t, err, errInvalidDigest)
 }

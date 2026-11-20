@@ -126,7 +126,8 @@ func (v *validator) UpdateDuties(ctx context.Context) error {
 	}
 	v.logDuties(ss)
 
-	return v.onDutiesUpdated(ctx)
+	v.onDutiesUpdated(ctx)
+	return nil
 }
 
 // updateDutiesCombined uses the combined Duties() endpoint (pre-GLOAS).
@@ -561,7 +562,8 @@ func (v *validator) ensureNextEpochDuties(ctx context.Context) error {
 	// logDuties only sees the deferred next-epoch set while still empty, so
 	// next-epoch metrics are emitted here, once the fetch lands.
 	v.emitNextEpochMetrics(next)
-	return v.onDutiesUpdated(ctx)
+	v.onDutiesUpdated(ctx)
+	return nil
 }
 
 // emitNextEpochMetrics records next-epoch duty metrics for active validators.
@@ -629,7 +631,7 @@ func overlayNextDuties(
 }
 
 // onDutiesUpdated kicks off subnet subscriptions for the current duty set.
-func (v *validator) onDutiesUpdated(ctx context.Context) error {
+func (v *validator) onDutiesUpdated(ctx context.Context) {
 	md, exists := metadata.FromOutgoingContext(ctx)
 	ctx = context.Background()
 	if exists {
@@ -641,8 +643,6 @@ func (v *validator) onDutiesUpdated(ctx context.Context) error {
 			log.WithError(err).Error("Failed to subscribe to subnets")
 		}
 	}()
-
-	return nil
 }
 
 func (v *validator) logDuties(slot primitives.Slot) {

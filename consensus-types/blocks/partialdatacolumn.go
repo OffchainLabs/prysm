@@ -486,7 +486,7 @@ func (p *PartialDataColumn) publishActions(
 	return func(yield func(peer.ID, partialmessages.PublishAction) bool) {
 		for peerID, peerState := range peerStates {
 			requested := peerRequestsPartial(peerID)
-			nextState, action, includeHeader := p.forPeer(peerID, requested, peerState, !headerSentCache[peerID])
+			nextState, action, includeHeader := p.forPeer(requested, peerState, !headerSentCache[peerID])
 			// Only update state if there was no error.
 			if action.Err == nil {
 				if onEagerPush != nil && isEagerPush(requested, peerState) {
@@ -516,7 +516,7 @@ func isEagerPush(requestedMessage bool, peerState PartialDataColumnPeerState) bo
 }
 
 // forPeer returns the next peer state and the publish action for this peer
-func (p *PartialDataColumn) forPeer(remote peer.ID, requestedMessage bool, peerState PartialDataColumnPeerState, includeHeader bool) (PartialDataColumnPeerState, partialmessages.PublishAction, bool) {
+func (p *PartialDataColumn) forPeer(requestedMessage bool, peerState PartialDataColumnPeerState, includeHeader bool) (PartialDataColumnPeerState, partialmessages.PublishAction, bool) {
 	peerState = peerState.Clone()
 
 	// Eager push - we don't know what the peer has and message has been requested.

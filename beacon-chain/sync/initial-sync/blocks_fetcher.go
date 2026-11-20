@@ -259,7 +259,7 @@ func (f *blocksFetcher) loop() {
 	// Main loop.
 	for {
 		// Make sure there are available peers before processing requests.
-		if _, err := f.waitForMinimumPeers(f.ctx); err != nil {
+		if err := f.waitForMinimumPeers(f.ctx); err != nil {
 			log.Error(err)
 		}
 

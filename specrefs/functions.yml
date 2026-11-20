@@ -1310,7 +1310,7 @@
 - name: compute_new_state_root#phase0
   sources:
     - file: beacon-chain/rpc/prysm/v1alpha1/validator/proposer.go
-      search: func (vs *Server) computePostBlockStateAndRoot(
+      search: func (vs *Server) computePostBlockStateRoot(
   spec: |
     <spec fn="compute_new_state_root" fork="phase0" hash="ea175ec5">
     def compute_new_state_root(state: BeaconState, block: BeaconBlock) -> Root:

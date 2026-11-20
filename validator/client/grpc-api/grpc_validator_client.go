@@ -49,7 +49,7 @@ func (c *grpcValidatorClient) Duties(ctx context.Context, in *ethpb.DutiesReques
 			errors.Wrap(err, "getDutiesV2").Error(),
 		)
 	}
-	return toValidatorDutiesContainerV2(dutiesResponse)
+	return toValidatorDutiesContainerV2(dutiesResponse), nil
 }
 
 // getDuties is calling the v1 of get duties
@@ -61,35 +61,27 @@ func (c *grpcValidatorClient) getDuties(ctx context.Context, in *ethpb.DutiesReq
 			errors.Wrap(err, "getDuties").Error(),
 		)
 	}
-	return toValidatorDutiesContainer(dutiesResponse)
+	return toValidatorDutiesContainer(dutiesResponse), nil
 }
 
-func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) (*ethpb.ValidatorDutiesContainer, error) {
+func toValidatorDutiesContainer(dutiesResponse *ethpb.DutiesResponse) *ethpb.ValidatorDutiesContainer {
 	currentDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.CurrentEpochDuties))
 	for i, cd := range dutiesResponse.CurrentEpochDuties {
-		duty, err := toValidatorDuty(cd)
-		if err != nil {
-			return nil, err
-		}
-		currentDuties[i] = duty
+		currentDuties[i] = toValidatorDuty(cd)
 	}
 	nextDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.NextEpochDuties))
 	for i, nd := range dutiesResponse.NextEpochDuties {
-		duty, err := toValidatorDuty(nd)
-		if err != nil {
-			return nil, err
-		}
-		nextDuties[i] = duty
+		nextDuties[i] = toValidatorDuty(nd)
 	}
 	return &ethpb.ValidatorDutiesContainer{
 		PrevDependentRoot:  dutiesResponse.PreviousDutyDependentRoot,
 		CurrDependentRoot:  dutiesResponse.CurrentDutyDependentRoot,
 		CurrentEpochDuties: currentDuties,
 		NextEpochDuties:    nextDuties,
-	}, nil
+	}
 }
 
-func toValidatorDuty(duty *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, error) {
+func toValidatorDuty(duty *ethpb.DutiesResponse_Duty) *ethpb.ValidatorDuty {
 	var valIndexInCommittee uint64
 	// valIndexInCommittee will be 0 in case we don't get a match. This is a potential false positive,
 	// however it's an impossible condition because every validator must be assigned to a committee.
@@ -110,35 +102,27 @@ func toValidatorDuty(duty *ethpb.DutiesResponse_Duty) (*ethpb.ValidatorDuty, err
 		Status:                  duty.Status,
 		ValidatorIndex:          duty.ValidatorIndex,
 		IsSyncCommittee:         duty.IsSyncCommittee,
-	}, nil
+	}
 }
 
-func toValidatorDutiesContainerV2(dutiesResponse *ethpb.DutiesV2Response) (*ethpb.ValidatorDutiesContainer, error) {
+func toValidatorDutiesContainerV2(dutiesResponse *ethpb.DutiesV2Response) *ethpb.ValidatorDutiesContainer {
 	currentDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.CurrentEpochDuties))
 	for i, cd := range dutiesResponse.CurrentEpochDuties {
-		duty, err := toValidatorDutyV2(cd)
-		if err != nil {
-			return nil, err
-		}
-		currentDuties[i] = duty
+		currentDuties[i] = toValidatorDutyV2(cd)
 	}
 	nextDuties := make([]*ethpb.ValidatorDuty, len(dutiesResponse.NextEpochDuties))
 	for i, nd := range dutiesResponse.NextEpochDuties {
-		duty, err := toValidatorDutyV2(nd)
-		if err != nil {
-			return nil, err
-		}
-		nextDuties[i] = duty
+		nextDuties[i] = toValidatorDutyV2(nd)
 	}
 	return &ethpb.ValidatorDutiesContainer{
 		PrevDependentRoot:  dutiesResponse.PreviousDutyDependentRoot,
 		CurrDependentRoot:  dutiesResponse.CurrentDutyDependentRoot,
 		CurrentEpochDuties: currentDuties,
 		NextEpochDuties:    nextDuties,
-	}, nil
+	}
 }
 
-func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty, error) {
+func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) *ethpb.ValidatorDuty {
 	return &ethpb.ValidatorDuty{
 		CommitteeLength:         duty.CommitteeLength,
 		CommitteeIndex:          duty.CommitteeIndex,
@@ -151,7 +135,7 @@ func toValidatorDutyV2(duty *ethpb.DutiesV2Response_Duty) (*ethpb.ValidatorDuty,
 		ValidatorIndex:          duty.ValidatorIndex,
 		IsSyncCommittee:         duty.IsSyncCommittee,
 		PtcSlots:                duty.PtcSlots,
-	}, nil
+	}
 }
 
 func (c *grpcValidatorClient) AttesterDuties(ctx context.Context, epoch primitives.Epoch, validatorIndices []primitives.ValidatorIndex) (*ethpb.AttesterDutiesResponse, error) {

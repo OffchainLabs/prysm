@@ -57,8 +57,7 @@ func TestToValidatorDutiesContainer_HappyPath(t *testing.T) {
 		},
 	}
 
-	gotContainer, err := toValidatorDutiesContainer(dutiesResp)
-	require.NoError(t, err)
+	gotContainer := toValidatorDutiesContainer(dutiesResp)
 
 	// Validate we have the correct number of duties in current and next epochs.
 	assert.Equal(t, len(gotContainer.CurrentEpochDuties), len(dutiesResp.CurrentEpochDuties))
@@ -110,8 +109,7 @@ func TestToValidatorDutiesContainerV2_HappyPath(t *testing.T) {
 		},
 	}
 
-	gotContainer, err := toValidatorDutiesContainerV2(dutiesResp)
-	require.NoError(t, err)
+	gotContainer := toValidatorDutiesContainerV2(dutiesResp)
 
 	// Validate we have the correct number of duties in current and next epochs.
 	assert.Equal(t, len(gotContainer.CurrentEpochDuties), len(dutiesResp.CurrentEpochDuties))

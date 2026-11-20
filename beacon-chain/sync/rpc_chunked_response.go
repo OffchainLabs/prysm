@@ -45,15 +45,15 @@ func WriteBlockChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, en
 func ReadChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOracle, p2p p2p.EncodingProvider, isFirstChunk bool) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	// Handle deadlines differently for first chunk
 	if isFirstChunk {
-		return readFirstChunkedBlock(stream, tor, p2p)
+		return readFirstChunkedBlock(stream, p2p)
 	}
 
-	return readResponseChunk(stream, tor, p2p)
+	return readResponseChunk(stream, p2p)
 }
 
 // readFirstChunkedBlock reads the first chunked block and applies the appropriate deadlines to
 // it.
-func readFirstChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOracle, p2p p2p.EncodingProvider) (interfaces.ReadOnlySignedBeaconBlock, error) {
+func readFirstChunkedBlock(stream libp2pcore.Stream, p2p p2p.EncodingProvider) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	code, errMsg, err := ReadStatusCode(stream, p2p.Encoding())
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func readFirstChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 	if err != nil {
 		return nil, err
 	}
-	blk, err := extractDataTypeFromTypeMap(types.BlockMap, rpcCtx, tor)
+	blk, err := extractDataTypeFromTypeMap(types.BlockMap, rpcCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func readFirstChunkedBlock(stream libp2pcore.Stream, tor blockchain.TemporalOrac
 
 // readResponseChunk reads the response from the stream and decodes it into the
 // provided message type.
-func readResponseChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, p2p p2p.EncodingProvider) (interfaces.ReadOnlySignedBeaconBlock, error) {
+func readResponseChunk(stream libp2pcore.Stream, p2p p2p.EncodingProvider) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	SetStreamReadDeadline(stream, respTimeout)
 	code, errMsg, err := readStatusCodeNoDeadline(stream, p2p.Encoding())
 	if err != nil {
@@ -90,7 +90,7 @@ func readResponseChunk(stream libp2pcore.Stream, tor blockchain.TemporalOracle, 
 	if err != nil {
 		return nil, err
 	}
-	blk, err := extractDataTypeFromTypeMap(types.BlockMap, rpcCtx, tor)
+	blk, err := extractDataTypeFromTypeMap(types.BlockMap, rpcCtx)
 	if err != nil {
 		return nil, err
 	}

@@ -384,9 +384,9 @@ func (s *Service) processBlockHeader(header *types.HeaderInfo) {
 
 // batchRequestHeaders requests the block range specified in the arguments. Instead of requesting
 // each block in one call, it batches all requests into a single rpc call.
-func (s *Service) batchRequestHeaders(startBlock, endBlock uint64) ([]*types.HeaderInfo, error) {
+func (s *Service) batchRequestHeaders(startBlock, endBlock uint64) error {
 	if startBlock > endBlock {
-		return nil, fmt.Errorf("start block height %d cannot be > end block height %d", startBlock, endBlock)
+		return fmt.Errorf("start block height %d cannot be > end block height %d", startBlock, endBlock)
 	}
 	requestRange := (endBlock - startBlock) + 1
 	elems := make([]gethRPC.BatchElem, 0, requestRange)
@@ -403,21 +403,21 @@ func (s *Service) batchRequestHeaders(startBlock, endBlock uint64) ([]*types.Hea
 	}
 	ioErr := s.rpcClient.BatchCall(elems)
 	if ioErr != nil {
-		return nil, ioErr
+		return ioErr
 	}
 	for _, e := range elems {
 		if e.Error != nil {
-			return nil, e.Error
+			return e.Error
 		}
 	}
 	for _, h := range headers {
 		if h != nil {
 			if err := s.headerCache.AddHeader(h); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
-	return headers, nil
+	return nil
 }
 
 // safelyHandleHeader will recover and log any panic that occurs from the block
@@ -615,8 +615,8 @@ func (s *Service) cacheBlockHeaders(start, end uint64) error {
 			endReq -= 1
 		}
 		endReq = min(endReq, end)
-		// We call batchRequestHeaders for its header caching side-effect, so we don't need the return value.
-		_, err := s.batchRequestHeaders(startReq, endReq)
+		// We call batchRequestHeaders for its header caching side-effect.
+		err := s.batchRequestHeaders(startReq, endReq)
 		if err != nil {
 			if clientTimedOutError(err) {
 				// Reduce batch size as eth1 node is

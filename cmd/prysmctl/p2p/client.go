@@ -51,10 +51,7 @@ func newClient(beaconEndpoints []string, tcpPort, quicPort uint) (*client, error
 	if err != nil {
 		return nil, errors.Wrap(err, "could not set up p2p private key")
 	}
-	meta, err := readMetadata()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not set up p2p metadata")
-	}
+	meta := readMetadata()
 	multiaddrs, err := p2p.MultiAddressBuilder(ipAdd, tcpPort, quicPort)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not set up listening multiaddr")
@@ -222,10 +219,10 @@ func privKeyOption(privkey *ecdsa.PrivateKey) libp2p.Option {
 	}
 }
 
-func readMetadata() (metadata.Metadata, error) {
+func readMetadata() metadata.Metadata {
 	metaData := &pb.MetaDataV1{
 		SeqNumber: 0,
 		Attnets:   bitfield.NewBitvector64(),
 	}
-	return wrapper.WrappedMetadataV1(metaData), nil
+	return wrapper.WrappedMetadataV1(metaData)
 }

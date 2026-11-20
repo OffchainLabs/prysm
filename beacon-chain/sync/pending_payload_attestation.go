@@ -13,6 +13,7 @@ import (
 
 const maxPendingPayloadAttestationRoots = 2
 
+//nolint:unparam // Keeps the gossip validator (ValidationResult, error) shape of its caller.
 func (s *Service) queuePendingPayloadAttestation(ctx context.Context, pid peer.ID, v verification.PayloadAttestationMsgVerifier, att *eth.PayloadAttestationMessage) (pubsub.ValidationResult, error) {
 	root := bytesutil.ToBytes32(att.Data.BeaconBlockRoot)
 	validatorIndex := att.ValidatorIndex

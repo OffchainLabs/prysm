@@ -198,12 +198,7 @@ func (s *Store) LightClientUpdates(ctx context.Context, startPeriod, endPeriod u
 		return nil, errors.Wrapf(err, "failed to get updates from the database")
 	}
 
-	cacheUpdatesByPeriod, err := s.getCacheUpdatesByPeriod(headBlock)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get updates from cache")
-	}
-
-	maps.Copy(updatesMap, cacheUpdatesByPeriod)
+	maps.Copy(updatesMap, s.getCacheUpdatesByPeriod(headBlock))
 
 	var updates []interfaces.LightClientUpdate
 
@@ -231,7 +226,7 @@ func (s *Store) LightClientUpdate(ctx context.Context, period uint64, headBlock 
 	return updates[0], nil
 }
 
-func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaconBlock) (map[uint64]interfaces.LightClientUpdate, error) {
+func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaconBlock) map[uint64]interfaces.LightClientUpdate {
 	updatesByPeriod := make(map[uint64]interfaces.LightClientUpdate)
 
 	cacheHeadRoot := headBlock.Block().ParentRoot()
@@ -239,7 +234,7 @@ func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaco
 	cacheHeadItem, ok := s.cache.items[cacheHeadRoot]
 	if !ok {
 		log.Debugf("Head root %x not found in light client cache. Returning empty updates map for non finality cache.", cacheHeadRoot)
-		return updatesByPeriod, nil
+		return updatesByPeriod
 	}
 
 	for cacheHeadItem != nil {
@@ -249,7 +244,7 @@ func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaco
 		cacheHeadItem = cacheHeadItem.parent
 	}
 
-	return updatesByPeriod, nil
+	return updatesByPeriod
 }
 
 // SetLastFinalityUpdate should be used only for testing.

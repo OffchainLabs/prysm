@@ -8,10 +8,8 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/types"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -56,7 +54,7 @@ func (s *Service) decodePubsubMessage(msg *pubsub.Message) (ssz.Unmarshaler, err
 		return nil, errors.Errorf("message of %T does not support marshaller interface", base)
 	}
 	// Handle different message types across forks.
-	dt, err := extractValidDataTypeFromTopic(topic, fDigest[:], s.cfg.clock)
+	dt, err := extractValidDataTypeFromTopic(topic, fDigest[:])
 	if err != nil {
 		return nil, err
 	}
@@ -79,27 +77,27 @@ func (*Service) replaceForkDigest(topic string) (string, error) {
 	return strings.Join(subStrings, "/"), nil
 }
 
-func extractValidDataTypeFromTopic(topic string, digest []byte, clock *startup.Clock) (ssz.Unmarshaler, error) {
+func extractValidDataTypeFromTopic(topic string, digest []byte) (ssz.Unmarshaler, error) {
 	switch topic {
 	case p2p.BlockSubnetTopicFormat:
-		return extractDataTypeFromTypeMap(types.BlockMap, digest, clock)
+		return extractDataTypeFromTypeMap(types.BlockMap, digest)
 	case p2p.AttestationSubnetTopicFormat:
-		return extractDataTypeFromTypeMap(types.AttestationMap, digest, clock)
+		return extractDataTypeFromTypeMap(types.AttestationMap, digest)
 	case p2p.AggregateAndProofSubnetTopicFormat:
-		return extractDataTypeFromTypeMap(types.AggregateAttestationMap, digest, clock)
+		return extractDataTypeFromTypeMap(types.AggregateAttestationMap, digest)
 	case p2p.AttesterSlashingSubnetTopicFormat:
-		return extractDataTypeFromTypeMap(types.AttesterSlashingMap, digest, clock)
+		return extractDataTypeFromTypeMap(types.AttesterSlashingMap, digest)
 	case p2p.LightClientOptimisticUpdateTopicFormat:
-		return extractDataTypeFromTypeMap(types.LightClientOptimisticUpdateMap, digest, clock)
+		return extractDataTypeFromTypeMap(types.LightClientOptimisticUpdateMap, digest)
 	case p2p.LightClientFinalityUpdateTopicFormat:
-		return extractDataTypeFromTypeMap(types.LightClientFinalityUpdateMap, digest, clock)
+		return extractDataTypeFromTypeMap(types.LightClientFinalityUpdateMap, digest)
 	case p2p.DataColumnSubnetTopicFormat:
-		return extractDataTypeFromTypeMap(types.DataColumnSidecarMap, digest, clock)
+		return extractDataTypeFromTypeMap(types.DataColumnSidecarMap, digest)
 	}
 	return nil, nil
 }
 
-func extractDataTypeFromTypeMap[T any](typeMap map[[4]byte]func() (T, error), digest []byte, tor blockchain.TemporalOracle) (T, error) {
+func extractDataTypeFromTypeMap[T any](typeMap map[[4]byte]func() (T, error), digest []byte) (T, error) {
 	var zero T
 
 	if len(digest) == 0 {
