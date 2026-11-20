@@ -223,7 +223,18 @@ func (w *p2pWorker) handleEnvelopes(ctx context.Context, b batch) batch {
 		return b.transitionToNext()
 	}
 	fetch := func(ctx context.Context, pid peer.ID, req *eth.ExecutionPayloadEnvelopesByRangeRequest) ([]*eth.SignedExecutionPayloadEnvelope, error) {
-		return sync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, w.cfg.clock, w.p2p, pid, w.cfg.ctxMap, req)
+		envelopes, err := sync.SendExecutionPayloadEnvelopesByRangeRequest(ctx, w.cfg.clock, w.p2p, pid, w.cfg.ctxMap, req)
+		if err != nil {
+			return nil, err
+		}
+		// Backfill verifies BLS envelopes only.
+		out := make([]*eth.SignedExecutionPayloadEnvelope, 0, len(envelopes))
+		for _, e := range envelopes {
+			if env, ok := e.Proto().(*eth.SignedExecutionPayloadEnvelope); ok {
+				out = append(out, env)
+			}
+		}
+		return out, nil
 	}
 	b.envelopes.fetchPass(ctx, b.assignedPeer, fetch)
 	return b.transitionToNext()

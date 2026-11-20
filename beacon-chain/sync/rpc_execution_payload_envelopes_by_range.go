@@ -185,19 +185,23 @@ func (s *Service) streamCanonicalEnvelopes(ctx context.Context, rp rangeParams, 
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			return errors.Errorf("missing reconstructed payload for block hash %#x", c.blockHash)
 		}
-		fullEnv := &pb.SignedExecutionPayloadEnvelope{
-			Message: &pb.ExecutionPayloadEnvelope{
-				Payload:               payload,
-				ExecutionRequests:     c.env.Message.ExecutionRequests,
-				BuilderIndex:          c.env.Message.BuilderIndex,
-				BeaconBlockRoot:       c.env.Message.BeaconBlockRoot,
-				ParentBeaconBlockRoot: c.env.Message.ParentBeaconBlockRoot,
-			},
-			Signature: c.env.Signature,
-		}
-
 		SetStreamWriteDeadline(stream, defaultWriteDuration)
-		if chunkErr := WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.p2p.Encoding(), fullEnv); chunkErr != nil {
+		var chunkErr error
+		if isPQSlot(c.env.Message.Slot) {
+			chunkErr = s.writeExecutionPayloadEnvelopePQChunk(ctx, stream, bytesutil.ToBytes32(c.env.Message.BeaconBlockRoot), payload)
+		} else {
+			chunkErr = WriteExecutionPayloadEnvelopeChunk(stream, s.cfg.p2p.Encoding(), &pb.SignedExecutionPayloadEnvelope{
+				Message: &pb.ExecutionPayloadEnvelope{
+					Payload:               payload,
+					ExecutionRequests:     c.env.Message.ExecutionRequests,
+					BuilderIndex:          c.env.Message.BuilderIndex,
+					BeaconBlockRoot:       c.env.Message.BeaconBlockRoot,
+					ParentBeaconBlockRoot: c.env.Message.ParentBeaconBlockRoot,
+				},
+				Signature: c.env.Signature,
+			})
+		}
+		if chunkErr != nil {
 			log.WithError(chunkErr).Debug("Could not send execution payload envelope chunk")
 			s.writeErrorResponseToStream(responseCodeServerError, p2ptypes.ErrGeneric.Error(), stream)
 			tracing.AnnotateError(span, chunkErr)
