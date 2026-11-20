@@ -334,7 +334,7 @@ func (s *Service) updateMetrics() {
 	attTopic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	syncTopic += s.cfg.p2p.Encoding().ProtocolSuffix()
 	if flags.Get().SubscribeToAllSubnets {
-		for i := uint64(0); i < params.BeaconConfig().AttestationSubnetCount; i++ {
+		for i := uint64(0); i < params.BeaconConfig().AttestationSubnetCountAtEpoch(slots.ToEpoch(s.cfg.clock.CurrentSlot())); i++ {
 			s.collectMetricForSubnet(attTopic, digest, i)
 		}
 		for i := uint64(0); i < params.BeaconConfig().SyncCommitteeSubnetCount; i++ {
