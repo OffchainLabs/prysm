@@ -44,6 +44,7 @@ import (
 	validatorHelpers "github.com/OffchainLabs/prysm/v7/validator/helpers"
 	"github.com/OffchainLabs/prysm/v7/validator/keymanager"
 	remoteweb3signer "github.com/OffchainLabs/prysm/v7/validator/keymanager/remote-web3signer"
+	"github.com/OffchainLabs/prysm/v7/validator/pqkeys"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -126,6 +127,7 @@ type validator struct {
 	accountChangedSub            event.Subscription
 	ticker                       slots.Ticker
 	km                           keymanager.IKeymanager
+	pqKeys                       *pqkeys.Registry // Set in the PQ fork only.
 	graffiti                     []byte
 	genesisTime                  time.Time
 	genesisTimeLock              sync.RWMutex // guards genesisTime writes against GenesisTime readers
@@ -220,6 +222,9 @@ func (v *validator) WaitForKeymanagerInitialization(ctx context.Context) error {
 		return errors.New("key manager not set")
 	}
 	recheckKeys(ctx, v.db, v.km)
+	if err := v.loadPQKeys(ctx); err != nil {
+		return fmt.Errorf("load post-quantum keys: %w", err)
+	}
 	if err := v.snapshotBootKeysForDoppelGanger(ctx); err != nil {
 		return err
 	}
