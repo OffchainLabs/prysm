@@ -52,7 +52,6 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 		return pubsub.ValidationReject, err
 	}
 
-	signedEnvelope, _ := m.(*ethpb.SignedExecutionPayloadEnvelope)
 	var e interfaces.ROSignedExecutionPayloadEnvelope
 	switch t := m.(type) {
 	case *ethpb.SignedExecutionPayloadEnvelope:
@@ -76,11 +75,7 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	// [IGNORE] The envelope's block root envelope.block_root has been seen (via gossip or non-gossip sources)
 	// (a client MAY queue payload for processing once the block is retrieved).
 	if err := v.VerifyBlockRootSeen(func(root [32]byte) bool { return s.cfg.chain.HasBlock(ctx, root) }); err != nil {
-		// The pending queue holds Gloas envelopes only.
-		if signedEnvelope == nil {
-			return pubsub.ValidationIgnore, nil
-		}
-		return s.queuePendingPayloadEnvelope(ctx, v, env, signedEnvelope)
+		return s.queuePendingPayloadEnvelope(ctx, v, env, e)
 	}
 	root := env.BeaconBlockRoot()
 	// [IGNORE] The node has not seen another valid SignedExecutionPayloadEnvelope for this block root from this builder.
@@ -197,7 +192,7 @@ func (s *Service) queuePendingPayloadEnvelope(
 	ctx context.Context,
 	v verification.ExecutionPayloadEnvelopeVerifier,
 	env interfaces.ROExecutionPayloadEnvelope,
-	signedEnvelope *ethpb.SignedExecutionPayloadEnvelope,
+	signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope,
 ) (pubsub.ValidationResult, error) {
 	currentSlot := s.cfg.clock.CurrentSlot()
 	if env.Slot() != currentSlot {
@@ -214,9 +209,6 @@ func (s *Service) queuePendingPayloadEnvelope(
 	builderIdx := uint64(env.BuilderIndex())
 	isSelfBuild := builderIdx == uint64(params.BeaconConfig().BuilderIndexSelfBuild)
 	root := env.BeaconBlockRoot()
-	if signedEnvelope == nil || signedEnvelope.Message == nil || signedEnvelope.Message.Payload == nil {
-		return pubsub.ValidationIgnore, errNilMessage
-	}
 	s.pendingEnvelopeLock.Lock()
 	defer s.pendingEnvelopeLock.Unlock()
 	inner, rootExists := s.pendingPayloadEnvelopes[root]
@@ -267,16 +259,17 @@ func (s *Service) queuePendingPayloadEnvelope(
 		return pubsub.ValidationIgnore, nil
 	}
 	if !rootExists {
-		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
+		inner = make(map[uint64]interfaces.ROSignedExecutionPayloadEnvelope)
 		s.pendingPayloadEnvelopes[root] = inner
 	} else {
 		for existingBuilderIdx, existing := range inner {
-			if existing == nil || existing.Message == nil || existing.Message.Payload == nil {
+			existingEnv, err := existing.Envelope()
+			if err != nil {
 				delete(inner, existingBuilderIdx)
 				log.Debug("Removed malformed pending payload envelope")
 				continue
 			}
-			if existing.Message.Payload.SlotNumber != signedEnvelope.Message.Payload.SlotNumber {
+			if existingEnv.Slot() != env.Slot() {
 				log.Debug("Ignoring payload envelope with mismatched slot")
 				return pubsub.ValidationIgnore, nil
 			}

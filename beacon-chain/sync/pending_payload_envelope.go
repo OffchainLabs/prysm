@@ -5,8 +5,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/async"
 	"github.com/OffchainLabs/prysm/v7/config/params"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -40,12 +38,7 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, root [32]by
 	delete(s.pendingPayloadEnvelopes, root)
 	s.pendingEnvelopeLock.Unlock()
 
-	for _, signedEnvelope := range inner {
-		e, err := blocks.WrappedROSignedExecutionPayloadEnvelope(signedEnvelope)
-		if err != nil {
-			log.WithError(err).Debug("Could not wrap pending signed execution payload envelope")
-			continue
-		}
+	for _, e := range inner {
 		env, err := e.Envelope()
 		if err != nil {
 			log.WithError(err).Debug("Could not get pending execution payload envelope")
@@ -67,7 +60,7 @@ func (s *Service) processPendingPayloadEnvelope(ctx context.Context, root [32]by
 			continue
 		}
 		s.setSeenPayloadEnvelope(root, env.BuilderIndex())
-		if err := s.cfg.p2p.Broadcast(ctx, signedEnvelope); err != nil {
+		if err := s.cfg.p2p.Broadcast(ctx, e.Proto()); err != nil {
 			log.WithError(err).Warn("Could not broadcast pending payload envelope")
 		}
 	}
@@ -99,8 +92,8 @@ func (s *Service) prunePendingPayloadEnvelopes() {
 
 	finalizedEpoch := s.cfg.chain.FinalizedCheckpt().Epoch
 	for root, inner := range s.pendingPayloadEnvelopes {
-		for _, env := range inner {
-			if env.Message != nil && env.Message.Payload != nil && slots.ToEpoch(primitives.Slot(env.Message.Payload.SlotNumber)) < finalizedEpoch {
+		for _, signed := range inner {
+			if env, err := signed.Envelope(); err == nil && slots.ToEpoch(env.Slot()) < finalizedEpoch {
 				delete(s.pendingPayloadEnvelopes, root)
 			}
 			break // only need one envelope per root; admission enforces current-slot
