@@ -6,6 +6,7 @@ linters:
     - errcheck
     - ineffassign
     - govet
+    - unparam
     - unused
   disable:
     - staticcheck
@@ -16,6 +17,19 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
+    rules:
+      # Unused ctx params are kept for tracing and future cancellation.
+      - linters:
+          - unparam
+        text: "(ctx|cliCtx) is unused"
+      # Anonymous funcs often have a signature fixed by a map or field type.
+      - linters:
+          - unparam
+        text: '\$[0-9]+ - '
+      # Test helpers and dev tools are out of scope.
+      - linters:
+          - unparam
+        path: ^(testing|tools)/
     paths:
       - validator/web/site_data.go
       - .*_test.go
