@@ -33,6 +33,7 @@ go_test(
     deps = [
         "//beacon-chain/forkchoice/types:go_default_library",
         "//config/fieldparams:go_default_library",
+        "//consensus-types/forkchoice:go_default_library",
         "//consensus-types/primitives:go_default_library",
         "//testing/require:go_default_library",
     ],
