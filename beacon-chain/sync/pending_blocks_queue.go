@@ -20,7 +20,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz/equality"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	prysmTrace "github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/libp2p/go-libp2p/core"
 	"github.com/pkg/errors"
@@ -519,29 +518,25 @@ func (s *Service) fetchAndQueuePayloadEnvelopesForRoots(
 	}
 
 	for _, env := range envelopes {
-		// The pending queue holds Gloas envelopes only.
-		gloasEnv, ok := env.Proto().(*ethpb.SignedExecutionPayloadEnvelope)
-		if !ok {
-			continue
-		}
-		s.queuePendingPayloadEnvelopeFromRootRequest(gloasEnv)
+		s.queuePendingPayloadEnvelopeFromRootRequest(env)
 	}
 }
 
 // Signature is not verified here, processing revalidates fully and the slot bound plus caps bound memory.
-func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *ethpb.SignedExecutionPayloadEnvelope) {
-	if signedEnvelope == nil || signedEnvelope.Message == nil || signedEnvelope.Message.Payload == nil {
+func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope interfaces.ROSignedExecutionPayloadEnvelope) {
+	env, err := signedEnvelope.Envelope()
+	if err != nil {
 		return
 	}
 	// A future slot would never fall below the finalized epoch, defeating pruning and pinning memory.
-	slot := primitives.Slot(signedEnvelope.Message.Payload.SlotNumber)
+	slot := env.Slot()
 	if slot > s.cfg.clock.CurrentSlot() {
 		log.WithField("envelopeSlot", slot).Debug("Ignoring fetched payload envelope with future slot")
 		return
 	}
 
-	root := bytesutil.ToBytes32(signedEnvelope.Message.BeaconBlockRoot)
-	builderIdx := uint64(signedEnvelope.Message.BuilderIndex)
+	root := env.BeaconBlockRoot()
+	builderIdx := uint64(env.BuilderIndex())
 
 	s.pendingEnvelopeLock.Lock()
 	defer s.pendingEnvelopeLock.Unlock()
@@ -559,7 +554,7 @@ func (s *Service) queuePendingPayloadEnvelopeFromRootRequest(signedEnvelope *eth
 		return
 	}
 	if !ok {
-		inner = make(map[uint64]*ethpb.SignedExecutionPayloadEnvelope)
+		inner = make(map[uint64]interfaces.ROSignedExecutionPayloadEnvelope)
 		s.pendingPayloadEnvelopes[root] = inner
 	}
 	inner[builderIdx] = signedEnvelope

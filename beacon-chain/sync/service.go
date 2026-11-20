@@ -214,7 +214,7 @@ type Service struct {
 	digestActions                        perDigestSet
 	subscriptionSpawner                  func(func()) // see Service.spawn for details
 	newExecutionPayloadEnvelopeVerifier  verification.NewExecutionPayloadEnvelopeVerifier
-	pendingPayloadEnvelopes              map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope
+	pendingPayloadEnvelopes              map[[32]byte]map[uint64]interfaces.ROSignedExecutionPayloadEnvelope
 	pendingEnvelopeLock                  sync.RWMutex
 	selfBuildSigFailures                 int
 	selfBuildSlot                        primitives.Slot
@@ -240,7 +240,7 @@ func NewService(ctx context.Context, opts ...Option) *Service {
 		reconstructionRandGen:      rand.NewGenerator(),
 		payloadAttestationCache:    &cache.PayloadAttestationCache{},
 		proposerPreferencesCache:   cache.NewProposerPreferencesCache(),
-		pendingPayloadEnvelopes:    make(map[[32]byte]map[uint64]*ethpb.SignedExecutionPayloadEnvelope),
+		pendingPayloadEnvelopes:    make(map[[32]byte]map[uint64]interfaces.ROSignedExecutionPayloadEnvelope),
 		selfBuildSeenProposers:     make(map[primitives.ValidatorIndex]struct{}),
 		pendingPayloadAttestations: make(map[[32]byte][]*ethpb.PayloadAttestationMessage),
 	}
