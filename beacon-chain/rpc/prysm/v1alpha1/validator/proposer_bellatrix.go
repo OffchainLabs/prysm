@@ -129,9 +129,8 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 				if !ok {
 					log.Warnf("Bid type %T does not implement builder.BidDeneb", bid)
 					return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
-				} else {
-					builderKzgCommitments = bidDeneb.BlobKzgCommitments()
 				}
+				builderKzgCommitments = bidDeneb.BlobKzgCommitments()
 			}
 
 			var executionRequests *enginev1.ExecutionRequests
@@ -140,16 +139,14 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 				if !ok {
 					log.Warnf("Bid type %T does not implement builder.BidElectra", bid)
 					return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
-				} else {
-					executionRequests = bidElectra.ExecutionRequests()
 				}
+				executionRequests = bidElectra.ExecutionRequests()
 			}
 			if err := setBuilderExecution(blk, builderPayload, builderKzgCommitments, executionRequests); err != nil {
 				log.WithError(err).Warn("Proposer: failed to set builder payload")
 				return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
-			} else {
-				return bid.Value(), nil, nil
 			}
+			return bid.Value(), nil, nil
 		}
 		if !higherValueBuilder {
 			log.WithFields(logrus.Fields{
@@ -171,9 +168,8 @@ func setExecutionData(ctx context.Context, blk interfaces.SignedBeaconBlock, loc
 		if err := setBuilderExecution(blk, builderPayload, nil, nil); err != nil {
 			log.WithError(err).Warn("Proposer: failed to set builder payload")
 			return local.Bid, local.BlobsBundler, setLocalExecution(blk, local)
-		} else {
-			return bid.Value(), nil, nil
 		}
+		return bid.Value(), nil, nil
 	}
 }
 

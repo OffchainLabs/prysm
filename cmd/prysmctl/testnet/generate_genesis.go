@@ -299,11 +299,9 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 			if gen.BaseFee == nil {
 				return nil, errors.New("baseFeePerGas must be set in genesis.json for Post-Merge networks (after Altair)")
 			}
-		} else {
-			if gen.BaseFee == nil {
-				gen.BaseFee = big.NewInt(1000000000) // 1 Gwei default
-				log.WithField("baseFeePerGas", "1000000000").Warn("BaseFeePerGas not specified in genesis.json, using default value of 1 Gwei")
-			}
+		} else if gen.BaseFee == nil {
+			gen.BaseFee = big.NewInt(1000000000) // 1 Gwei default
+			log.WithField("baseFeePerGas", "1000000000").Warn("BaseFeePerGas not specified in genesis.json, using default value of 1 Gwei")
 		}
 	} else {
 		gen = interop.GethTestnetGenesis(time.Unix(int64(f.GenesisTime), 0), params.BeaconConfig())

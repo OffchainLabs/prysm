@@ -359,10 +359,9 @@ func (s *Server) SubmitContributionAndProofs(w http.ResponseWriter, r *http.Requ
 					Message: rpcError.Err.Error(),
 				})
 				continue
-			} else {
-				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
-				return
 			}
+			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+			return
 		}
 	}
 
@@ -431,10 +430,9 @@ func (s *Server) SubmitAggregateAndProofsV2(w http.ResponseWriter, r *http.Reque
 					Message: rpcError.Err.Error(),
 				})
 				continue
-			} else {
-				httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
-				return
 			}
+			httputil.HandleError(w, rpcError.Err.Error(), core.ErrorReasonToHTTP(rpcError.Reason))
+			return
 		}
 	}
 

@@ -268,13 +268,12 @@ func attRewardsBalancesAndVals(
 	}
 	if len(valIndices) == len(allVals) {
 		return bal, allVals, valIndices, true
-	} else {
-		filteredVals := make([]precompute.Validator, len(valIndices))
-		for i, valIx := range valIndices {
-			filteredVals[i] = allVals[valIx]
-		}
-		return bal, filteredVals, valIndices, true
 	}
+	filteredVals := make([]precompute.Validator, len(valIndices))
+	for i, valIx := range valIndices {
+		filteredVals[i] = allVals[valIx]
+	}
+	return bal, filteredVals, valIndices, true
 }
 
 // idealAttRewards returns rewards for hypothetical, perfectly voting validators

@@ -106,9 +106,8 @@ var Commands = []*cli.Command{
 						return fmt.Errorf("both the `--%s` and `--%s` flags are required to run this command. \n"+
 							"By providing these flags the user has read and accepts the TERMS AND CONDITIONS: https://github.com/OffchainLabs/prysm/blob/master/TERMS_OF_SERVICE.md "+
 							"and confirms the action of setting withdrawals addresses", cmd.AcceptTosFlag.Name, ConfirmFlag.Name)
-					} else {
-						return nil
 					}
+					return nil
 				},
 				Action: func(cliCtx *cli.Context) error {
 					if cliCtx.Bool(VerifyOnlyFlag.Name) {

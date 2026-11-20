@@ -100,9 +100,8 @@ func versionHeaderFromRequest(body []byte) (string, error) {
 		return version.String(version.Bellatrix), nil
 	} else if ce >= params.BeaconConfig().AltairForkEpoch {
 		return version.String(version.Altair), nil
-	} else {
-		return version.String(version.Phase0), nil
 	}
+	return version.String(version.Phase0), nil
 }
 
 // validateVersionHeader checks if the version header is required and retrieves it

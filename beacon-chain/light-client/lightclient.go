@@ -210,11 +210,9 @@ func NewLightClientUpdateFromBeaconState(
 			if err = result.SetFinalizedHeader(finalizedLightClientHeader); err != nil {
 				return nil, errors.Wrap(err, "could not set finalized header")
 			}
-		} else {
+		} else if !bytes.Equal(attestedState.FinalizedCheckpoint().Root, make([]byte, 32)) {
 			// assert attested_state.finalized_checkpoint.root == Bytes32()
-			if !bytes.Equal(attestedState.FinalizedCheckpoint().Root, make([]byte, 32)) {
-				return nil, fmt.Errorf("invalid finalized header root %v", attestedState.FinalizedCheckpoint().Root)
-			}
+			return nil, fmt.Errorf("invalid finalized header root %v", attestedState.FinalizedCheckpoint().Root)
 		}
 
 		// update.finality_branch = FinalityBranch(

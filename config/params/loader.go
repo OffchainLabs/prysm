@@ -100,9 +100,8 @@ func UnmarshalConfig(yamlFile []byte, conf *BeaconChainConfig) (*BeaconChainConf
 		var typeError *yaml.TypeError
 		if !errors.As(err, &typeError) {
 			return nil, errors.Wrap(err, "Failed to parse chain config yaml file.")
-		} else {
-			log.WithError(err).Error("There were some issues parsing the config from a yaml file")
 		}
+		log.WithError(err).Error("There were some issues parsing the config from a yaml file")
 	}
 	if !hasConfigName {
 		conf.ConfigName = DevnetName

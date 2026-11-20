@@ -201,10 +201,9 @@ func waitForMatchingHeads(ctx context.Context, clients ...eth.BeaconChainClient)
 		if err := g.Wait(); err != nil {
 			return err
 		}
-		if err := compareChainHeads(chainHeads); err == nil {
+		lastErr = compareChainHeads(chainHeads)
+		if lastErr == nil {
 			return nil
-		} else {
-			lastErr = err
 		}
 
 		select {

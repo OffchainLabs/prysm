@@ -138,18 +138,17 @@ func (v *validator) SignValidatorRegistrationRequest(ctx context.Context, signer
 	signedReg, ok := v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)]
 	if ok && isValidatorRegistrationSame(signedReg.Message, newValidatorRegistration) {
 		return signedReg, true, nil
-	} else {
-		sig, err := signValidatorRegistration(ctx, signer, newValidatorRegistration)
-		if err != nil {
-			return nil, false, err
-		}
-		newRequest := &ethpb.SignedValidatorRegistrationV1{
-			Message:   newValidatorRegistration,
-			Signature: sig,
-		}
-		v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)] = newRequest
-		return newRequest, false, nil
 	}
+	sig, err := signValidatorRegistration(ctx, signer, newValidatorRegistration)
+	if err != nil {
+		return nil, false, err
+	}
+	newRequest := &ethpb.SignedValidatorRegistrationV1{
+		Message:   newValidatorRegistration,
+		Signature: sig,
+	}
+	v.signedValidatorRegistrations[bytesutil.ToBytes48(newValidatorRegistration.Pubkey)] = newRequest
+	return newRequest, false, nil
 }
 
 func isValidatorRegistrationSame(cachedVR *ethpb.ValidatorRegistrationV1, newVR *ethpb.ValidatorRegistrationV1) bool {
