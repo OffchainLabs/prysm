@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"slices"
 	"strconv"
@@ -61,11 +62,7 @@ func (s *Server) GetCustody(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	custodyColumns := make([]uint64, 0, len(custodyColumnsMap))
-	for column := range custodyColumnsMap {
-		custodyColumns = append(custodyColumns, column)
-	}
-	slices.Sort(custodyColumns)
+	custodyColumns := slices.Sorted(maps.Keys(custodyColumnsMap))
 
 	minGroupCountToReconstruct, err := peerdas.MinimumCustodyGroupCountToReconstruct()
 	if err != nil {

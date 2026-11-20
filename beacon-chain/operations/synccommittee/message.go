@@ -1,6 +1,8 @@
 package synccommittee
 
 import (
+	"slices"
+
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/queue"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -30,13 +32,9 @@ func (s *Store) SaveSyncCommitteeMessage(msg *ethpb.SyncCommitteeMessage) error 
 			return errors.New("not typed []ethpb.SyncCommitteeMessage")
 		}
 
-		idx := -1
-		for i, msg := range messages {
-			if msg.ValidatorIndex == copied.ValidatorIndex {
-				idx = i
-				break
-			}
-		}
+		idx := slices.IndexFunc(messages, func(m *ethpb.SyncCommitteeMessage) bool {
+			return m.ValidatorIndex == copied.ValidatorIndex
+		})
 		if idx >= 0 {
 			// Override the existing messages with a new one
 			messages[idx] = copied

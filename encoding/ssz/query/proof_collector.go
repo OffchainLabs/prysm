@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math/bits"
 	"reflect"
 	"runtime"
@@ -92,11 +93,7 @@ func (pc *proofCollector) toProof() (*fastssz.Proof, error) {
 		return nil, errors.New("no leaves collected: add target leaves before merkleization")
 	}
 
-	leafGindices := make([]uint64, 0, len(pc.leaves))
-	for g := range pc.leaves {
-		leafGindices = append(leafGindices, g)
-	}
-	slices.Sort(leafGindices)
+	leafGindices := slices.Sorted(maps.Keys(pc.leaves))
 
 	// single proof resides in leafGindices[0]
 	targetGindex := leafGindices[0]
