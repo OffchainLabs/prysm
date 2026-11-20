@@ -2,10 +2,10 @@ package stateutil
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/hash/htr"
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
@@ -89,54 +89,44 @@ func (cv *CompactValidator) ToProto() *ethpb.Validator {
 
 // Root computes the hash tree root of a CompactValidator.
 func (cv *CompactValidator) Root() ([32]byte, error) {
-	fieldRoots, err := cv.fieldRoots()
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("fieldRoots: %w", err)
-	}
-
-	return ssz.BitwiseMerkleize(fieldRoots, uint64(len(fieldRoots)), uint64(len(fieldRoots)))
+	// Allocate a 2D fixed byte array per validator.
+	var dst [validatorFieldRoots][32]byte
+	cv.fieldRootsInto(&dst)
+	return ssz.BitwiseMerkleize(dst[:], validatorFieldRoots, validatorFieldRoots)
 }
 
-// fieldRoots computes the field roots of a CompactValidator
-// for hash tree root computation.
-func (cv *CompactValidator) fieldRoots() ([][32]byte, error) {
-	// Public key root (merkleize 48-byte pubkey).
-	pubKeyRoot, err := merkleizePubkey(cv.PublicKey[:])
-	if err != nil {
-		return nil, err
+// fieldRootsInto writes the field roots of cv into dst.
+// Receive a pointer of array to avoid extra allocations, and check the length of the array as well.
+func (cv *CompactValidator) fieldRootsInto(dst *[validatorFieldRoots][32]byte) {
+	// Pubkey root, using dst[0:3] as scratch:
+	//
+	//   dst[0]        dst[1]               dst[2]
+	//   [pk[0:32]]    [pk[32:48] | 0..0]   [ ]             1. copy pubkey
+	//   [pk[0:32]]    [pk[32:48] | 0..0]   [H(dst[0:2])]   2. hash
+	//   [pkRoot  ]    [withdrawal creds]   [eff. balance]  3. final
+
+	// 1. Copy pubkey.
+	copy(dst[0][:], cv.PublicKey[:32])
+	dst[1] = [32]byte{}
+	copy(dst[1][:], cv.PublicKey[32:])
+
+	// 2. Hash the pubkey chunks into dst[2].
+	htr.HashChunks(dst[2:3], dst[0:2])
+
+	// 3. Copy the pubkey root to dst[0] for the final layout.
+	dst[0] = dst[2]
+
+	// From here on, fill in the remaining fields.
+	dst[1] = cv.WithdrawalCredentials
+	for i := 2; i < validatorFieldRoots; i++ {
+		dst[i] = [32]byte{}
 	}
-
-	// Withdrawal credentials (already 32 bytes).
-	withdrawCreds := cv.WithdrawalCredentials
-
-	// Effective balance.
-	var effectiveBalanceBuf [32]byte
-	binary.LittleEndian.PutUint64(effectiveBalanceBuf[:8], cv.EffectiveBalance)
-
-	// Slashed.
-	var slashBuf [32]byte
+	binary.LittleEndian.PutUint64(dst[2][:8], cv.EffectiveBalance)
 	if cv.Slashed {
-		slashBuf[0] = 1
+		dst[3][0] = 1
 	}
-
-	// Activation eligibility epoch.
-	var activationEligibilityBuf [32]byte
-	binary.LittleEndian.PutUint64(activationEligibilityBuf[:8], uint64(cv.ActivationEligibilityEpoch))
-
-	// Activation epoch.
-	var activationBuf [32]byte
-	binary.LittleEndian.PutUint64(activationBuf[:8], uint64(cv.ActivationEpoch))
-
-	// Exit epoch.
-	var exitBuf [32]byte
-	binary.LittleEndian.PutUint64(exitBuf[:8], uint64(cv.ExitEpoch))
-
-	// Withdrawable epoch.
-	var withdrawalBuf [32]byte
-	binary.LittleEndian.PutUint64(withdrawalBuf[:8], uint64(cv.WithdrawableEpoch))
-
-	return [][32]byte{
-		pubKeyRoot, withdrawCreds, effectiveBalanceBuf, slashBuf,
-		activationEligibilityBuf, activationBuf, exitBuf, withdrawalBuf,
-	}, nil
+	binary.LittleEndian.PutUint64(dst[4][:8], uint64(cv.ActivationEligibilityEpoch))
+	binary.LittleEndian.PutUint64(dst[5][:8], uint64(cv.ActivationEpoch))
+	binary.LittleEndian.PutUint64(dst[6][:8], uint64(cv.ExitEpoch))
+	binary.LittleEndian.PutUint64(dst[7][:8], uint64(cv.WithdrawableEpoch))
 }

@@ -247,6 +247,17 @@ func (s *Slice[V]) Value(obj Identifiable) []V {
 	}
 }
 
+// NonOverriddenItems returns the shared items if no object overrides them.
+// Do not modify the result.
+func (s *Slice[V]) NonOverriddenItems() ([]V, bool) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	if len(s.individualItems) != 0 || len(s.appendedItems) != 0 {
+		return nil, false
+	}
+	return s.sharedItems, true
+}
+
 // At returns the item at the requested index for the input object.
 // Appended items' indices are always larger than shared/individual items' indices.
 // We first check if the index is within the length of shared items.

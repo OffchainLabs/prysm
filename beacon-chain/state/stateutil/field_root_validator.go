@@ -11,18 +11,17 @@ import (
 	"github.com/OffchainLabs/prysm/v7/encoding/ssz"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
-	// number of field roots for the validator object.
+	// Number of fields in the validator object.
 	validatorFieldRoots = 8
 
-	// Depth of tree representation of an individual
-	// validator.
-	// NumOfRoots = 2 ^ (TreeDepth)
-	// 8 = 2 ^ 3
+	// Depth of an individual validator tree.
 	validatorTreeDepth = 3
+
+	// Leaves per validator tree.
+	validatorLeaves = 1 << validatorTreeDepth
 )
 
 // ValidatorRegistryRoot computes the HashTreeRoot Merkleization of
@@ -36,22 +35,14 @@ func ValidatorRegistryRoot(stateVersion int, vals []CompactValidator) ([32]byte,
 }
 
 func validatorRegistryRootProgressive(vals []CompactValidator) ([32]byte, error) {
-	roots, err := OptimizedValidatorRoots(vals)
-	if err != nil {
-		return [32]byte{}, err
-	}
-
-	body := ssz.MerkleizeProgressiveChunks(roots)
+	body := ssz.MerkleizeProgressiveChunks(OptimizedValidatorRoots(vals))
 	var length [32]byte
 	binary.LittleEndian.PutUint64(length[:8], uint64(len(vals)))
 	return ssz.MixInLength(body, length[:]), nil
 }
 
 func validatorRegistryRoot(validators []CompactValidator) ([32]byte, error) {
-	roots, err := OptimizedValidatorRoots(validators)
-	if err != nil {
-		return [32]byte{}, err
-	}
+	roots := OptimizedValidatorRoots(validators)
 
 	validatorsRootsRoot, err := ssz.BitwiseMerkleize(roots, uint64(len(roots)), fieldparams.ValidatorRegistryLimit)
 	if err != nil {
@@ -69,54 +60,58 @@ func validatorRegistryRoot(validators []CompactValidator) ([32]byte, error) {
 	return res, nil
 }
 
-func hashValidatorHelper(validators []CompactValidator, roots [][32]byte, j int, groupSize int, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for i := range groupSize {
-		fRoots, err := validators[j*groupSize+i].fieldRoots()
-		if err != nil {
-			logrus.WithError(err).Error("Could not get validator field roots")
-			return
-		}
-		for k, root := range fRoots {
-			roots[(j*groupSize+i)*validatorFieldRoots+k] = root
-		}
-	}
+// OptimizedValidatorRoots returns the hash tree root of each compact validator.
+func OptimizedValidatorRoots(validators []CompactValidator) [][32]byte {
+	return merkleizeInPlace(len(validators), validatorTreeDepth, func(i int, leaves [][32]byte) {
+		// Cannot panic: len(leaves) >= validatorFieldRoots.
+		validators[i].fieldRootsInto((*[validatorFieldRoots][32]byte)(leaves))
+	})
 }
 
-// OptimizedValidatorRoots uses an optimized routine with gohashtree in order to
-// derive a list of validator roots from a list of compact validator objects.
-func OptimizedValidatorRoots(validators []CompactValidator) ([][32]byte, error) {
+// merkleizeInPlace returns the roots of n trees of the given depth. fill
+// writes the leaves of tree i. Leaves that fill does not write stay zero.
+//
+// Each group hashes its trees by level in place. After all groups finish,
+// the roots move to the front (n=5, 2 groups):
+//
+//	leaves:    | t0 | t1 | t2 | t3 | t4 |   each ti is 2^depth leaves
+//	           \--- group 0 ---/\ grp 1 /
+//	by level:  | r0 r1 r2 ...  | r3 r4 ...|
+//	moved:     | r0 r1 r2 r3 r4 ...       |  -> roots[:n:n]
+func merkleizeInPlace(n, depth int, fill func(i int, leaves [][32]byte)) [][32]byte {
 	// Exit early if no validators are provided.
-	if len(validators) == 0 {
-		return [][32]byte{}, nil
+	if n == 0 {
+		return [][32]byte{}
 	}
-	wg := sync.WaitGroup{}
-	n := runtime.GOMAXPROCS(0)
-	rootsSize := len(validators) * validatorFieldRoots
-	groupSize := len(validators) / n
+
+	leaves := 1 << depth
+	rootsSize := n * leaves
 	roots := make([][32]byte, rootsSize)
-	wg.Add(n - 1)
-	for j := 0; j < n-1; j++ {
-		go hashValidatorHelper(validators, roots, j, groupSize, &wg)
-	}
-	for i := (n - 1) * groupSize; i < len(validators); i++ {
-		fRoots, err := validators[i].fieldRoots()
-		if err != nil {
-			return [][32]byte{}, errors.Wrap(err, "could not compute validators merkleization")
-		}
-		for k, root := range fRoots {
-			roots[i*validatorFieldRoots+k] = root
-		}
+	procs := runtime.GOMAXPROCS(0)
+	groupSize := (n + procs - 1) / procs
+
+	var wg sync.WaitGroup
+	for start := 0; start < n; start += groupSize {
+		end := min(start+groupSize, n)
+		wg.Go(func() {
+			for i := start; i < end; i++ {
+				fill(i, roots[i*leaves:(i+1)*leaves])
+			}
+			// Hash each level into the front half of the previous one.
+			// The group's roots end up at the front of r.
+			r := roots[start*leaves : end*leaves]
+			for range depth {
+				htr.HashChunks(r[:len(r)/2], r)
+				r = r[:len(r)/2]
+			}
+		})
 	}
 	wg.Wait()
 
-	// A validator's tree can represented with a depth of 3. As log2(8) = 3
-	// Using this property we can lay out all the individual fields of a
-	// validator and hash them in single level using our vectorized routine.
-	for range validatorTreeDepth {
-		// Overwrite input lists as we are hashing by level
-		// and only need the highest level to proceed.
-		roots = htr.VectorizedSha256(roots)
+	// Move each group's roots to roots[start:end]. Group 0's are already in place.
+	for start := groupSize; start < n; start += groupSize {
+		end := min(start+groupSize, n)
+		copy(roots[start:end], roots[start*leaves:start*leaves+end-start])
 	}
-	return roots, nil
+	return roots[:n:n]
 }
