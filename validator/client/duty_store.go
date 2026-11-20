@@ -212,22 +212,11 @@ func (s roDutySnapshot) currentDuty(pk pubkey) (*ethpb.ValidatorDuty, bool) {
 	return s.d.currentDuty(pk)
 }
 
-func (s roDutySnapshot) proposerSlots(idx primitives.ValidatorIndex) []primitives.Slot {
-	if !s.d.initialized {
-		return nil
-	}
-	return slices.Clone(s.d.proposerSlots[idx])
-}
-
 func (s roDutySnapshot) ptcSlots(idx primitives.ValidatorIndex) []primitives.Slot {
 	if !s.d.initialized {
 		return nil
 	}
 	return slices.Clone(s.d.ptcSlots[idx])
-}
-
-func (s roDutySnapshot) isSyncCommittee(idx primitives.ValidatorIndex) bool {
-	return s.d.isSyncCommittee(idx)
 }
 
 func (s roDutySnapshot) isNextSyncCommittee(idx primitives.ValidatorIndex) bool {

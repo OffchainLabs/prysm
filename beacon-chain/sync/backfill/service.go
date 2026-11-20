@@ -30,7 +30,6 @@ type Service struct {
 	store           *Store
 	syncNeeds       das.SyncNeeds
 	syncNeedsWaiter func() (das.SyncNeeds, error)
-	ms              minimumSlotter
 	cw              startup.ClockWaiter
 	verifierWaiter  InitializerWaiter
 	nWorkers        int
@@ -61,7 +60,6 @@ type PeerAssigner interface {
 	Assign(filter peers.AssignmentFilter) ([]peer.ID, error)
 }
 
-type minimumSlotter func(primitives.Slot) primitives.Slot
 type batchImporter func(ctx context.Context, current primitives.Slot, b batch, su *Store) (*dbval.BackfillStatus, error)
 
 // ServiceOption represents a functional option for the backfill service constructor.

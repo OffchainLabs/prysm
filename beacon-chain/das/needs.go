@@ -36,7 +36,6 @@ type SyncNeeds struct {
 	fulu    primitives.Slot
 	gloas   primitives.Slot
 
-	oldestSlotFlagPtr  *primitives.Slot
 	validOldestSlotPtr *primitives.Slot
 	archiveOriginSlot  *primitives.Slot
 	blockRetention     primitives.Epoch

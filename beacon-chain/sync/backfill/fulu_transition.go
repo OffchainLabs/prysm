@@ -10,7 +10,6 @@ import (
 )
 
 var errMissingAvailabilityChecker = errors.Wrap(errUnrecoverable, "batch is missing required availability checker")
-var errUnsafeRange = errors.Wrap(errUnrecoverable, "invalid slice indices")
 
 type checkMultiplexer struct {
 	blobCheck         das.AvailabilityChecker

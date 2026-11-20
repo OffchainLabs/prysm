@@ -194,7 +194,6 @@ go_test(
         "decode_pubsub_test.go",
         "error_test.go",
         "fork_watcher_test.go",
-        "kzg_batch_verifier_test.go",
         "late_payload_request_test.go",
         "light_client_gloas_test.go",
         "metrics_test.go",

@@ -11,7 +11,6 @@ import (
 var (
 	errNilGloasDataColumn       = errors.New("received nil gloas data column sidecar")
 	errNotFuluDataColumn        = errors.New("data column sidecar is not a fulu type")
-	errNotGloasDataColumn       = errors.New("data column sidecar is not a gloas type")
 	errGloasColumnNoCommitments = errors.New("gloas column has no commitments set")
 )
 

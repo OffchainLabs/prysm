@@ -52,9 +52,7 @@ const (
 	// lightClientFinalityUpdateWeight specifies the scoring weight that we apply to
 	// our light client finality update topic.
 	lightClientFinalityUpdateWeight = 0.05
-	// signedProposerPreferencesWeight specifies the scoring weight that we apply to
-	// our signed proposer preferences topic.
-	signedProposerPreferencesWeight = 0.05
+
 	// maxInMeshScore describes the max score a peer can attain from being in the mesh.
 	maxInMeshScore = 10
 	// maxFirstDeliveryScore describes the max score a peer can obtain from first deliveries.
