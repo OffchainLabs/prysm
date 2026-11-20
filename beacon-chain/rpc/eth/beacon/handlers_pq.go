@@ -9,10 +9,13 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/network/httputil"
 	eth "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -171,19 +174,19 @@ func (s *Server) envelopePQ(ctx context.Context, root [32]byte) (*eth.SignedExec
 	if err != nil {
 		return nil, err
 	}
-	pq, err := s.BeaconDB.ExecutionPayloadEnvelopePQ(ctx, root)
+	record, err := s.BeaconDB.ExecutionPayloadEnvelopePQ(ctx, root)
 	if err != nil {
 		return nil, err
 	}
 	return &eth.SignedExecutionPayloadEnvelopePQ{
 		Message: &eth.ExecutionPayloadEnvelopePQ{
 			Payload:               full.Message.Payload,
-			ExecutionRequests:     pq.Message.ExecutionRequests,
-			BuilderIndex:          pq.Message.BuilderIndex,
-			BeaconBlockRoot:       pq.Message.BeaconBlockRoot,
-			ParentBeaconBlockRoot: pq.Message.ParentBeaconBlockRoot,
+			ExecutionRequests:     record.Message.ExecutionRequests,
+			BuilderIndex:          record.Message.BuilderIndex,
+			BeaconBlockRoot:       record.Message.BeaconBlockRoot,
+			ParentBeaconBlockRoot: record.Message.ParentBeaconBlockRoot,
 		},
-		Signature: pq.Signature,
+		Signature: record.Signature,
 	}, nil
 }
 
@@ -231,4 +234,70 @@ func setValidatorPQFields(st state.ReadOnlyBeaconState, c *structs.ValidatorCont
 	if root, err := st.VrfRootAtIndex(idx); err == nil {
 		c.Validator.VrfRoot = hexutil.Encode(root[:])
 	}
+}
+
+// PQ blocks carry no payload attestations, so messages go to gossip and fork choice only.
+func (s *Server) submitPayloadAttestationsPQ(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	var (
+		msgs     []*eth.PayloadAttestationMessagePQ
+		failures []*server.IndexedError
+		err      error
+	)
+	if httputil.IsRequestSsz(r) {
+		msgs, failures, err = server.DecodeSSZList[eth.PayloadAttestationMessagePQ](r.Body)
+	} else {
+		msgs, failures, err = server.DecodeJSONList(r.Body, (*structs.PayloadAttestationMessage).ToConsensusPQ)
+	}
+	if err != nil {
+		writeDecodeError(w, err)
+		return
+	}
+	if len(msgs) == 0 && len(failures) == 0 {
+		httputil.HandleError(w, "No data submitted", http.StatusBadRequest)
+		return
+	}
+	currentSlot := s.TimeFetcher.CurrentSlot()
+	for i, msg := range msgs {
+		if msg == nil || msg.Data == nil {
+			continue
+		}
+		if err := s.submitPayloadAttestationPQ(ctx, msg, currentSlot); err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: err.Error()})
+		}
+	}
+	if len(failures) > 0 {
+		httputil.WriteError(w, &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  server.ErrIndexedValidationFail,
+			Failures: failures,
+		})
+	}
+}
+
+func (s *Server) submitPayloadAttestationPQ(ctx context.Context, msg *eth.PayloadAttestationMessagePQ, currentSlot primitives.Slot) error {
+	if msg.Data.Slot != currentSlot {
+		return errors.Errorf("payload attestation slot %d does not match current slot %d", msg.Data.Slot, currentSlot)
+	}
+	st, err := s.PayloadAttestationReceiver.PtcLookupState(ctx, bytesutil.ToBytes32(msg.Data.BeaconBlockRoot), msg.Data.Slot)
+	if err != nil {
+		return errors.Wrap(err, "could not find state for payload attestation")
+	}
+	if st == nil {
+		return errors.New("could not find state for payload attestation")
+	}
+	if _, err := gloas.PayloadCommitteeIndices(ctx, st, msg.Data.Slot, msg.ValidatorIndex); err != nil {
+		return errors.Wrap(err, "could not determine PTC committee index")
+	}
+	if err := pq.VerifyPayloadAttestationMessage(st, msg); err != nil {
+		return errors.Wrap(err, "incorrect payload attestation signature")
+	}
+	if err := s.Broadcaster.Broadcast(ctx, msg); err != nil {
+		return errors.Wrap(err, "could not broadcast payload attestation")
+	}
+	// Fork choice reads only the index and data, so a BLS shaped copy carries them.
+	return s.PayloadAttestationReceiver.ReceivePayloadAttestationMessage(ctx, &eth.PayloadAttestationMessage{
+		ValidatorIndex: msg.ValidatorIndex,
+		Data:           msg.Data,
+		Signature:      make([]byte, fieldparams.BLSSignatureLength),
+	})
 }

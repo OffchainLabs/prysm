@@ -980,6 +980,11 @@ func (s *Server) SubmitPayloadAttestations(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if v, err := version.FromString(versionHeader); err == nil && v >= version.PQ {
+		s.submitPayloadAttestationsPQ(ctx, w, r)
+		return
+	}
+
 	var consensusMsgs []*eth.PayloadAttestationMessage
 	var failures []*server.IndexedError
 	var decodeErr error

@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stateutil"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -174,4 +175,53 @@ func (s *Server) submitAggregateAndProofsPQ(w http.ResponseWriter, r *http.Reque
 
 func slotIsPQ(slot primitives.Slot) bool {
 	return isPQEpoch(slots.ToEpoch(slot))
+}
+
+// Self-build needs no preferences on the node, so they are checked and gossiped only.
+func (s *Server) submitProposerPreferencesPQ(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var (
+		prefs    []*eth.SignedProposerPreferencesPQ
+		failures []*server.IndexedError
+		err      error
+	)
+	if httputil.IsRequestSsz(r) {
+		prefs, failures, err = server.DecodeSSZList[eth.SignedProposerPreferencesPQ](r.Body)
+	} else {
+		prefs, failures, err = server.DecodeJSONList(r.Body, (*structs.SignedProposerPreferences).ToConsensusPQ)
+	}
+	if err != nil {
+		httputil.HandleError(w, "Could not decode request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	st, err := s.HeadFetcher.HeadStateReadOnly(ctx)
+	if err != nil {
+		httputil.HandleError(w, "Could not get head state: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	currentEpoch := slots.ToEpoch(s.TimeFetcher.CurrentSlot())
+	for i, signed := range prefs {
+		if signed == nil || signed.Message == nil {
+			continue
+		}
+		epoch := slots.ToEpoch(signed.Message.ProposalSlot)
+		if epoch < currentEpoch || epoch > currentEpoch+1 {
+			failures = append(failures, &server.IndexedError{Index: i, Message: "proposal slot must be in the current or next epoch"})
+			continue
+		}
+		if err := pq.VerifyProposerPreferences(st, signed); err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: "invalid signature: " + err.Error()})
+			continue
+		}
+		if err := s.Broadcaster.Broadcast(ctx, signed); err != nil {
+			failures = append(failures, &server.IndexedError{Index: i, Message: "could not broadcast: " + err.Error()})
+		}
+	}
+	if len(failures) > 0 {
+		httputil.WriteError(w, &server.IndexedErrorContainer{
+			Code:     http.StatusBadRequest,
+			Message:  "One or more proposer preferences failed",
+			Failures: failures,
+		})
+	}
 }

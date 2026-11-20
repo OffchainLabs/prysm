@@ -30,6 +30,7 @@ go_library(
         "//beacon-chain/core/feed/operation:go_default_library",
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/core/pq:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/db:go_default_library",
         "//beacon-chain/db/filters:go_default_library",

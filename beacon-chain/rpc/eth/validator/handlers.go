@@ -267,6 +267,11 @@ func (s *Server) SubmitSignedProposerPreferences(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if v >= version.PQ {
+		s.submitProposerPreferencesPQ(w, r)
+		return
+	}
+
 	var (
 		prefs     []*ethpbalpha.SignedProposerPreferences
 		failures  []*server.IndexedError
