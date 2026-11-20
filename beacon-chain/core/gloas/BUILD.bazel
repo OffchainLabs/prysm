@@ -6,6 +6,7 @@ go_library(
         "attestation.go",
         "bid.go",
         "builder_deposit_request.go",
+        "builder_deposit_request_pq.go",
         "builder_exit.go",
         "deposit_request.go",
         "log.go",

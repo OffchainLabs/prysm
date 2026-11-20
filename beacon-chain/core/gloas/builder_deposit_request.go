@@ -2,6 +2,7 @@ package gloas
 
 import (
 	"context"
+	"github.com/OffchainLabs/prysm/v7/runtime/version"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
@@ -24,6 +25,9 @@ const (
 func ProcessBuilderDepositRequests(ctx context.Context, st state.BeaconState, requests []*enginev1.BuilderDepositRequest) error {
 	// Topups to an existing builder skip signature verification per spec, so only batch-verify
 	// deposits that would register a new builder.
+	if st.Version() >= version.PQ {
+		return processBuilderDepositRequestsPQ(ctx, st, requests)
+	}
 	newDeposits := make([]*enginev1.BuilderDepositRequest, 0, len(requests))
 	newIdx := make([]int, 0, len(requests))
 	for i, request := range requests {
