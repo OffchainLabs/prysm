@@ -369,8 +369,7 @@ func missingBlobRequest(blk blocks.ROBlock, store *filesystem.BlobStorage) (p2pt
 	}
 	cmts, err := blk.Block().Body().BlobKzgCommitments()
 	if err != nil {
-		log.WithField("root", r).Error("Error reading commitments from checkpoint sync origin block")
-		return nil, err
+		return nil, fmt.Errorf("could not read commitments from checkpoint sync origin block %#x: %w", r, err)
 	}
 	if len(cmts) == 0 {
 		return nil, nil
