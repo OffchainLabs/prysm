@@ -1153,15 +1153,13 @@ func TestFieldTrie_readOverlayNodeZeroHash(t *testing.T) {
 	// for this index, and the base doesn't have it, so readOverlayNode should
 	// return ZeroHashes[0].
 	outOfBoundsIdx := overlay.base.levelSize(0) + 100
-	node, err := overlay.readOverlayNode(0, outOfBoundsIdx)
-	require.NoError(t, err)
+	node := overlay.readOverlayNode(0, outOfBoundsIdx)
 	require.Equal(t, trie.ZeroHashes[0], node)
 
 	// Same check at a higher level.
 	depth := overlay.base.depth()
 	outOfBoundsIdx = overlay.base.levelSize(depth-1) + 10
-	node, err = overlay.readOverlayNode(depth-1, outOfBoundsIdx)
-	require.NoError(t, err)
+	node = overlay.readOverlayNode(depth-1, outOfBoundsIdx)
 	require.Equal(t, trie.ZeroHashes[depth-1], node)
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+//nolint:unparam // Test-only setter; tests pass a zero cpRoot.
 func (s *Store) setUnrealizedJustifiedCheckpoint(blockRoot [32]byte, epoch primitives.Epoch, cpRoot [32]byte) error {
 	en, ok := s.emptyNodeByRoot[blockRoot]
 	if !ok || en == nil {

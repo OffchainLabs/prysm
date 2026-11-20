@@ -26,10 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var (
-	errInvalidPayloadBodyResponse = errors.New("engine api payload body response is invalid")
-	ErrEmptyBlockHash             = errors.New("Block hash is empty 0x0000...")
-)
+var errInvalidPayloadBodyResponse = errors.New("engine api payload body response is invalid")
 
 // Reconstructor defines a service responsible for reconstructing full beacon chain objects by utilizing the execution API and making requests through the execution client.
 type Reconstructor interface {

@@ -16,10 +16,9 @@ import (
 )
 
 var (
-	ErrNilSignedBlockOrEmptyCellsAndProofs = errors.New("nil signed block or empty cells and proofs")
-	ErrSizeMismatch                        = errors.New("mismatch in the number of blob KZG commitments and cellsAndProofs")
-	ErrNotEnoughDataColumnSidecars         = errors.New("not enough columns")
-	ErrDataColumnSidecarsNotSortedByIndex  = errors.New("data column sidecars are not sorted by index")
+	ErrSizeMismatch                       = errors.New("mismatch in the number of blob KZG commitments and cellsAndProofs")
+	ErrNotEnoughDataColumnSidecars        = errors.New("not enough columns")
+	ErrDataColumnSidecarsNotSortedByIndex = errors.New("data column sidecars are not sorted by index")
 )
 
 var (

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
@@ -17,11 +16,6 @@ const signatureVerificationInterval = 5 * time.Millisecond
 type signatureVerifier struct {
 	set     *bls.SignatureBatch
 	resChan chan error
-}
-
-type kzgVerifier struct {
-	dataColumns []blocks.RODataColumn
-	resChan     chan error
 }
 
 // A routine that runs in the background to perform batch

@@ -81,14 +81,14 @@ func (s *LazilyPersistentStoreBlob) Persist(current primitives.Slot, sidecars ..
 // BlobSidecars already in the db are assumed to have been previously verified against the block.
 func (s *LazilyPersistentStoreBlob) IsDataAvailable(ctx context.Context, current primitives.Slot, blks ...blocks.ROBlock) error {
 	for _, b := range blks {
-		if err := s.checkOne(ctx, current, b); err != nil {
+		if err := s.checkOne(ctx, b); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, current primitives.Slot, b blocks.ROBlock) error {
+func (s *LazilyPersistentStoreBlob) checkOne(ctx context.Context, b blocks.ROBlock) error {
 	blockCommitments, err := commitmentsToCheck(b, s.shouldRetain)
 	if err != nil {
 		return errors.Wrapf(err, "could not check data availability for block %#x", b.Root())

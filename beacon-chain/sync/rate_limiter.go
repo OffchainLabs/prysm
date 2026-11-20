@@ -144,6 +144,8 @@ func (l *limiter) validateRequest(stream network.Stream, amt uint64) error {
 }
 
 // This is used to validate all incoming rpc streams from external peers.
+//
+//nolint:unparam // amt keeps the same (stream, amt) shape as validateRequest.
 func (l *limiter) validateRawRpcRequest(stream network.Stream, amt uint64) error {
 	remotePeer := stream.Conn().RemotePeer()
 	remaining, err := l.remaining(rpcLimiterTopic, remotePeer)

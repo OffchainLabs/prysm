@@ -244,9 +244,8 @@ func (s *LazilyPersistentStoreColumn) columnsNotStored(sidecars []blocks.RODataC
 }
 
 type custodyRequirement struct {
-	nodeID  enode.ID
-	cgc     uint64 // custody group count
-	indices peerdas.ColumnIndices
+	nodeID enode.ID
+	cgc    uint64 // custody group count
 }
 
 func (c *custodyRequirement) required() (peerdas.ColumnIndices, error) {

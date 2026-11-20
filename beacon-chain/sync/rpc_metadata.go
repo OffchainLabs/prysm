@@ -183,7 +183,7 @@ func (s *Service) sendMetaDataRequest(ctx context.Context, peerID peer.ID) (meta
 
 	digest := params.ForkDigest(currentEpoch)
 	// Instantiate zero value of the metadata.
-	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, digest[:], s.cfg.clock)
+	msg, err := extractDataTypeFromTypeMap(types.MetaDataMap, digest[:])
 	if err != nil {
 		return nil, errors.Wrap(err, "extract data type from type map")
 	}

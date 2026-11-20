@@ -7,11 +7,8 @@ import (
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	validatorpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/validator-client"
-	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 )
-
-var ErrIncompatibleFork = errors.New("Can't convert to fork-specific interface")
 
 // ReadOnlySignedBeaconBlock is an interface describing the method set of
 // a signed beacon block.

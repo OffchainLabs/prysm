@@ -283,7 +283,7 @@ func (vs *Server) buildBlockFulu(ctx context.Context, sBlk interfaces.SignedBeac
 
 	wg.Wait()
 
-	sr, _, err := vs.computePostBlockStateAndRoot(ctx, sBlk)
+	sr, err := vs.computePostBlockStateRoot(ctx, sBlk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
@@ -646,19 +646,18 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 	}, nil
 }
 
-// computePostBlockStateAndRoot computes the state root after a block has been processed through a state transition and
-// returns both the state root bytes and the full post-block state.
-func (vs *Server) computePostBlockStateAndRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, state.BeaconState, error) {
+// computePostBlockStateRoot computes the state root after a block has been processed through a state transition.
+func (vs *Server) computePostBlockStateRoot(ctx context.Context, block interfaces.SignedBeaconBlock) ([]byte, error) {
 	st, err := vs.computePostBlockState(ctx, block)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	root, err := st.HashTreeRoot(ctx)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not compute state root")
+		return nil, errors.Wrap(err, "could not compute state root")
 	}
 	log.WithField("beaconStateRoot", fmt.Sprintf("%#x", root)).Debugf("Computed state root")
-	return root[:], st, nil
+	return root[:], nil
 }
 
 // computePostBlockState computes the post-block state by running the state transition.

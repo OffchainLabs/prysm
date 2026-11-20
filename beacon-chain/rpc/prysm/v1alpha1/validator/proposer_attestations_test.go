@@ -1007,21 +1007,17 @@ func Test_filterCurrentEpochAttestationByTarget(t *testing.T) {
 			},
 		},
 	}
-	got, err := s.filterCurrentEpochAttestationByTarget(a, targetRoot, 1, epoch)
-	require.NoError(t, err)
+	got := s.filterCurrentEpochAttestationByTarget(a, targetRoot, 1, epoch)
 	require.Equal(t, true, got)
 
-	got, err = s.filterCurrentEpochAttestationByTarget(a, [32]byte{}, 1, epoch)
-	require.NoError(t, err)
+	got = s.filterCurrentEpochAttestationByTarget(a, [32]byte{}, 1, epoch)
 	require.Equal(t, false, got)
 
-	got, err = s.filterCurrentEpochAttestationByTarget(a, targetRoot, 2, epoch)
-	require.NoError(t, err)
+	got = s.filterCurrentEpochAttestationByTarget(a, targetRoot, 2, epoch)
 	require.Equal(t, false, got)
 
 	a.Data.Target.Epoch = 2
-	got, err = s.filterCurrentEpochAttestationByTarget(a, targetRoot, 1, epoch)
-	require.NoError(t, err)
+	got = s.filterCurrentEpochAttestationByTarget(a, targetRoot, 1, epoch)
 	require.Equal(t, false, got)
 }
 
@@ -1039,31 +1035,27 @@ func Test_filterPreviousEpochAttestationByTarget(t *testing.T) {
 			},
 		},
 	}
-	got, err := s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
+	got := s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
 		Epoch: 1,
 		Root:  targetRoot[:],
 	}, epoch)
-	require.NoError(t, err)
 	require.Equal(t, true, got)
 
-	got, err = s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
+	got = s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
 		Epoch: 1,
 	}, epoch)
-	require.NoError(t, err)
 	require.Equal(t, false, got)
 
-	got, err = s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
+	got = s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
 		Epoch: 2,
 		Root:  targetRoot[:],
 	}, epoch)
-	require.NoError(t, err)
 	require.Equal(t, false, got)
 
-	got, err = s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
+	got = s.filterPreviousEpochAttestationByTarget(a, &ethpb.Checkpoint{
 		Epoch: 3,
 		Root:  targetRoot[:],
 	}, epoch)
-	require.NoError(t, err)
 	require.Equal(t, false, got)
 }
 

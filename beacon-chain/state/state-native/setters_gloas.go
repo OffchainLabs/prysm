@@ -836,9 +836,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 			continue
 		}
 
-		if err := b.applyDepositForNewBuilder(deposit, &insertionCursor); err != nil {
-			return err
-		}
+		b.applyDepositForNewBuilder(deposit, &insertionCursor)
 	}
 
 	b.sharedFieldReferences[types.PendingDeposits].MinusRef()
@@ -850,7 +848,7 @@ func (b *BeaconState) OnboardBuildersFromPendingDeposits() error {
 }
 
 // applyDepositForNewBuilder onboards a single pending deposit as a new builder, used by onboard_builders_from_pending_deposits.
-func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit, insertionCursor *primitives.BuilderIndex) error {
+func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit, insertionCursor *primitives.BuilderIndex) {
 	valid, err := helpers.IsValidDepositSignature(&ethpb.Deposit_Data{
 		PublicKey:             deposit.PublicKey,
 		WithdrawalCredentials: deposit.WithdrawalCredentials,
@@ -859,21 +857,20 @@ func (b *BeaconState) applyDepositForNewBuilder(deposit *ethpb.PendingDeposit, i
 	})
 	if err != nil {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not verify signature")
-		return nil
+		return
 	}
 	if !valid {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).Debug("Skipping builder deposit with invalid signature")
-		return nil
+		return
 	}
 	pubkey := bytesutil.ToBytes48(deposit.PublicKey)
 	depositEpoch := slots.ToEpoch(deposit.Slot)
 	index, err := b.addBuilderFromDepositAtEpoch(pubkey, params.BeaconConfig().PayloadBuilderVersion, bytesutil.ToBytes32(deposit.WithdrawalCredentials), deposit.Amount, depositEpoch, *insertionCursor)
 	if err != nil {
 		log.WithField("pubkey", fmt.Sprintf("%x", deposit.PublicKey)).WithError(err).Debug("Skipping builder deposit: could not add builder")
-		return nil
+		return
 	}
 	*insertionCursor = index + 1
-	return nil
 }
 
 // SetBuilders replaces the entire builders registry.

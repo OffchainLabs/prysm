@@ -68,6 +68,8 @@ func (k *keySets) replace(src keySource, keys []pubkey) (bool, []pubkey) {
 }
 
 // get returns a copy of src's set. The copy is safe for the caller to mutate.
+//
+//nolint:unparam // Keyed accessor that mirrors set(src, ...); only file keys are read today.
 func (k *keySets) get(src keySource) map[pubkey]struct{} {
 	k.mu.RLock()
 	defer k.mu.RUnlock()

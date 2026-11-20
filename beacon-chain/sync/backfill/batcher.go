@@ -7,7 +7,6 @@ import (
 )
 
 var errMaxBatches = errors.New("backfill batch requested in excess of max outstanding batches")
-var errCannotDecreaseMinimum = errors.New("the minimum backfill slot can only be increased, not decreased")
 
 type batchSequencer struct {
 	batcher      batcher

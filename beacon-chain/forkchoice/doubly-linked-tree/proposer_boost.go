@@ -7,7 +7,7 @@ import (
 
 // applyProposerBoostScore applies the current proposer boost scores to the
 // relevant nodes.
-func (f *ForkChoice) applyProposerBoostScore() error {
+func (f *ForkChoice) applyProposerBoostScore() {
 	s := f.store
 	proposerScore := uint64(0)
 	s.removePreviousProposerBoost()
@@ -16,7 +16,6 @@ func (f *ForkChoice) applyProposerBoostScore() error {
 	}
 	s.previousProposerBoostRoot = s.proposerBoostRoot
 	s.previousProposerBoostScore = proposerScore
-	return nil
 }
 
 func (s *Store) removePreviousProposerBoost() {

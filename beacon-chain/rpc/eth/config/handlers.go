@@ -66,12 +66,7 @@ func GetSpec(w http.ResponseWriter, r *http.Request) {
 	_, span := trace.StartSpan(r.Context(), "config.GetSpec")
 	defer span.End()
 
-	data, err := prepareConfigSpec()
-	if err != nil {
-		httputil.HandleError(w, "Could not prepare config spec: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	httputil.WriteJson(w, &structs.GetSpecResponse{Data: data})
+	httputil.WriteJson(w, &structs.GetSpecResponse{Data: prepareConfigSpec()})
 }
 
 func convertValueForJSON(v reflect.Value, tag string) any {
@@ -160,7 +155,7 @@ func convertValueForJSON(v reflect.Value, tag string) any {
 	}
 }
 
-func prepareConfigSpec() (map[string]any, error) {
+func prepareConfigSpec() map[string]any {
 	data := make(map[string]any)
 	config := *params.BeaconConfig()
 
@@ -205,7 +200,7 @@ func prepareConfigSpec() (map[string]any, error) {
 	data["MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedExecutionPayloadBidSizeHeze)), "MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_HEZE")
 	data["MAX_SIGNED_INCLUSION_LIST_SIZE"] = convertValueForJSON(reflect.ValueOf(uint64(fieldparams.MaxSignedInclusionListSize)), "MAX_SIGNED_INCLUSION_LIST_SIZE")
 
-	return data, nil
+	return data
 }
 
 func shouldSkip(tField reflect.StructField) bool {

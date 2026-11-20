@@ -763,17 +763,12 @@ func TestFindPeersWithSubnets_NodeDeduplication(t *testing.T) {
 			mockIter := testp2p.NewMockIterator(tt.nodes)
 			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
 
-			digest, err := s.currentForkDigest()
-			require.NoError(t, err)
-
 			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
 
 			result, err := s.findPeersWithSubnets(
 				ctxWithTimeout,
 				AttestationSubnetTopicFormat,
-				digest,
-				1,
 				tt.defectiveSubnets,
 			)
 
@@ -983,17 +978,12 @@ func TestFindPeersWithSubnets_FilterPeerRemoval(t *testing.T) {
 			mockIter := testp2p.NewMockIterator(tt.nodes)
 			s.dv5Listener = testp2p.NewMockListener(localNode, mockIter)
 
-			digest, err := s.currentForkDigest()
-			require.NoError(t, err)
-
 			ctxWithTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
 
 			result, err := s.findPeersWithSubnets(
 				ctxWithTimeout,
 				AttestationSubnetTopicFormat,
-				digest,
-				1,
 				tt.defectiveSubnets,
 			)
 
@@ -1105,9 +1095,6 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 	localNode := createTestNodeRandom(t)
 	service.dv5Listener = testp2p.NewMockListener(localNode, iter)
 
-	digest, err := service.currentForkDigest()
-	require.NoError(t, err)
-
 	// Run findPeersWithSubnets - node1_seq1 gets processed first, then callback marks peer bad, then node1_seq2 fails
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
@@ -1115,8 +1102,6 @@ func TestFindPeersWithSubnets_received_bad_existing_node(t *testing.T) {
 	result, err := service.findPeersWithSubnets(
 		ctxWithTimeout,
 		AttestationSubnetTopicFormat,
-		digest,
-		1,
 		map[uint64]int{1: 2}, // Need 2 peers for subnet 1
 	)
 
