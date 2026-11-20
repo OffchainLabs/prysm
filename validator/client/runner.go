@@ -181,6 +181,10 @@ func onAccountsChanged(ctx context.Context, v *validator, current [][48]byte) {
 	ctx, span := prysmTrace.StartSpan(ctx, "validator.accountsChanged")
 	defer span.End()
 
+	if err := v.loadPQKeys(ctx); err != nil {
+		log.WithError(err).Error("Could not derive the post-quantum keys of the reloaded keys")
+	}
+
 	anyActive, err := v.HandleKeyReload(ctx, current)
 	if err != nil {
 		log.WithError(err).Error("Could not properly handle reloaded keys")

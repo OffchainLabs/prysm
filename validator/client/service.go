@@ -9,6 +9,7 @@ import (
 	grpcutil "github.com/OffchainLabs/prysm/v7/api/grpc"
 	"github.com/OffchainLabs/prysm/v7/api/rest"
 	"github.com/OffchainLabs/prysm/v7/async/event"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/proposer"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -55,6 +56,7 @@ type ValidatorService struct {
 	distributed             bool
 	disableDutiesPolling    bool
 	stateless               bool
+	vrfStateURL             string
 	closeClientFunc         func() // validator client stop function is used here
 }
 
@@ -85,6 +87,7 @@ type Config struct {
 	Distributed             bool
 	DisableDutiesPolling    bool
 	Stateless               bool
+	VRFStateURL             string // Location of the VRF state of the PQ fork: an HTTP(S) URL, a file URI or a path.
 	CloseClientFunc         func()
 }
 
@@ -109,6 +112,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		distributed:             cfg.Distributed,
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
 		stateless:               cfg.Stateless,
+		vrfStateURL:             cfg.VRFStateURL,
 		closeClientFunc:         cfg.CloseClientFunc,
 		maxHealthChecks:         cfg.MaxHealthChecks,
 		dutyAwareShutdown:       newDutyAwareShutdownTracker(),
@@ -185,7 +189,17 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	validatorClient := NewValidatorClient(v.conn, iface.WithStateless(v.stateless))
+	pqKeys, err := newPQKeys(v.ctx, v.vrfStateURL)
+	if err != nil {
+		log.WithError(err).Error("Could not start the validator client")
+		return
+	}
+	if pqKeys != nil && !features.Get().EnableBeaconRESTApi {
+		log.Error("The PQ fork requires the beacon REST API: set --enable-beacon-rest-api")
+		return
+	}
+
+	validatorClient := NewValidatorClient(v.conn, iface.WithStateless(v.stateless), iface.WithPQKeys(pqKeys))
 	hm := newHealthMonitor(v.ctx, v.cancel, v.maxHealthChecks, validatorClient)
 
 	v.validator = &validator{
@@ -208,6 +222,7 @@ func (v *ValidatorService) Start() {
 		nodeClient:                   NewNodeClient(v.conn),
 		db:                           v.db,
 		km:                           nil,
+		pqKeys:                       pqKeys,
 		web3SignerConfig:             v.web3SignerConfig,
 		proposerSettings:             v.proposerSettings,
 		signedValidatorRegistrations: make(map[[fieldparams.BLSPubkeyLength]byte]*ethpb.SignedValidatorRegistrationV1),

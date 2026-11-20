@@ -459,6 +459,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		EmitAccountMetrics:      !cliCtx.Bool(flags.DisableAccountMetricsFlag.Name),
 		Distributed:             distributed,
 		Stateless:               stateless,
+		VRFStateURL:             cliCtx.String(flags.VRFStateURLFlag.Name),
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})

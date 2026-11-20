@@ -435,6 +435,12 @@ var (
 		Usage: "Enables stateless block production from Gloas onward: the validator requests the block and execution payload envelope together and republishes the envelope itself. Works over both the gRPC and REST validator clients. Forced on when several beacon nodes are configured, since only the node that built a block can reveal its payload.",
 		Value: false,
 	}
+	// VRFStateURLFlag is the location of the VRF state of the PQ fork, from which the validator client builds the
+	// VRF trees of its validators.
+	VRFStateURLFlag = &cli.StringFlag{
+		Name:  "vrf-state-url",
+		Usage: "PQ fork only. Location of the VRF state the genesis tool publishes: an HTTP(S) URL, a file URI or a path. Without it, the validators cannot propose.",
+	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.
 	DisableDutiesPolling = &cli.BoolFlag{
 		Name:  "disable-duties-polling",

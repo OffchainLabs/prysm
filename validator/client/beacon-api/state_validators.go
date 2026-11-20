@@ -74,6 +74,21 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 	vals []string,
 	statuses []string,
 ) (*structs.GetValidatorsResponse, error) {
+	return fetchStateValidators(ctx, c.handler, endpoint, vals, statuses, func(resp *structs.GetValidatorsResponse) bool {
+		return resp.Data != nil
+	})
+}
+
+// fetchStateValidators fetches the validators `vals`, indices or public keys, with a status in `statuses`, from the
+// state validators `endpoint`. It decodes the response as a `T`, for which `hasData` reports whether data was returned.
+func fetchStateValidators[T any](
+	ctx context.Context,
+	handler rest.Handler,
+	endpoint string,
+	vals []string,
+	statuses []string,
+	hasData func(*T) bool,
+) (*T, error) {
 	req := structs.GetValidatorsRequest{
 		Ids:      []string{},
 		Statuses: []string{},
@@ -92,10 +107,10 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to marshal request into JSON")
 	}
-	stateValidatorsJson := &structs.GetValidatorsResponse{}
+	stateValidatorsJson := new(T)
 	// First try POST endpoint to check whether it is supported by the beacon node.
-	if err = c.handler.Post(ctx, endpoint, nil, bytes.NewBuffer(reqBytes), stateValidatorsJson); err == nil {
-		if stateValidatorsJson.Data == nil {
+	if err = handler.Post(ctx, endpoint, nil, bytes.NewBuffer(reqBytes), stateValidatorsJson); err == nil {
+		if !hasData(stateValidatorsJson) {
 			return nil, errors.New("stateValidatorsJson.Data is nil")
 		}
 
@@ -103,7 +118,7 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 	}
 
 	// Re-initialise the response just in case.
-	stateValidatorsJson = &structs.GetValidatorsResponse{}
+	stateValidatorsJson = new(T)
 
 	// Seems like POST isn't supported by the beacon node, let's try the GET one.
 	queryParams := url.Values{}
@@ -116,12 +131,12 @@ func (c beaconApiStateValidatorsProvider) getStateValidatorsHelper(
 
 	query := apiutil.BuildURL(endpoint, queryParams)
 
-	err = c.handler.Get(ctx, query, stateValidatorsJson)
+	err = handler.Get(ctx, query, stateValidatorsJson)
 	if err != nil {
 		return nil, err
 	}
 
-	if stateValidatorsJson.Data == nil {
+	if !hasData(stateValidatorsJson) {
 		return nil, errors.New("stateValidatorsJson.Data is nil")
 	}
 

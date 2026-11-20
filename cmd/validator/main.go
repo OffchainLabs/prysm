@@ -89,6 +89,7 @@ var appFlags = []cli.Flag{
 	flags.BuilderMaxExecutionPaymentFlag,
 	flags.ValidatorsRegistrationBatchSizeFlag,
 	flags.EnableStatelessFlag,
+	flags.VRFStateURLFlag,
 	////////////////////
 	cmd.DisableMonitoringFlag,
 	cmd.MonitoringHostFlag,

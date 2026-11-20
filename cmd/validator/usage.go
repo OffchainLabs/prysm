@@ -124,6 +124,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.BuilderMaxExecutionPaymentFlag,
 			flags.ValidatorsRegistrationBatchSizeFlag,
 			flags.EnableStatelessFlag,
+			flags.VRFStateURLFlag,
 			flags.GraffitiFlag,
 			flags.GraffitiFileFlag,
 		},
