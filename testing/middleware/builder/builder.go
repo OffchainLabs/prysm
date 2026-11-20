@@ -1008,7 +1008,7 @@ func (p *Builder) retrievePendingBlockDeneb() (*v1.ExecutionPayloadDenebWithValu
 		return nil, err
 	}
 	if p.prevBeaconRoot == nil {
-		p.cfg.logger.Error("previous root is nil")
+		p.cfg.logger.Error("Previous root is nil")
 	}
 	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot, nil)
 	if err != nil {
@@ -1037,7 +1037,7 @@ func (p *Builder) retrievePendingBlockElectra() (*v1.ExecutionBundleElectra, err
 		return nil, err
 	}
 	if p.prevBeaconRoot == nil {
-		p.cfg.logger.Error("previous root is nil")
+		p.cfg.logger.Error("Previous root is nil")
 	}
 
 	payloadEnv, err := modifyExecutionPayload(*result.ExecutionPayload, result.BlockValue, p.prevBeaconRoot, result.Requests)
