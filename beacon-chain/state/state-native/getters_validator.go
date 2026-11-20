@@ -57,6 +57,9 @@ func (b *BeaconState) validatorsCompactVal() []stateutil.CompactValidator {
 	if b.validatorsMultiValue == nil {
 		return nil
 	}
+	if vals, ok := b.validatorsMultiValue.NonOverriddenItems(); ok {
+		return vals
+	}
 	return b.validatorsMultiValue.Value(b)
 }
 

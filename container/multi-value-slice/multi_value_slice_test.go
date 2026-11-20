@@ -106,6 +106,32 @@ func TestValue(t *testing.T) {
 	assert.Equal(t, 3, v[2])
 }
 
+func TestNonOverriddenItems(t *testing.T) {
+	obj := &testObject{id: 1}
+	t.Run("shared only", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init([]int{1, 2, 3})
+		v, ok := s.NonOverriddenItems()
+		require.Equal(t, true, ok)
+		assert.DeepEqual(t, []int{1, 2, 3}, v)
+		assert.Equal(t, &s.sharedItems[0], &v[0], "expected no copy")
+	})
+	t.Run("updated only", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init([]int{1, 2, 3})
+		require.NoError(t, s.UpdateAt(obj, 0, 9))
+		_, ok := s.NonOverriddenItems()
+		assert.Equal(t, false, ok)
+	})
+	t.Run("appended only", func(t *testing.T) {
+		s := &Slice[int]{}
+		s.Init([]int{1, 2, 3})
+		s.Append(obj, 4)
+		_, ok := s.NonOverriddenItems()
+		assert.Equal(t, false, ok)
+	})
+}
+
 func TestAt(t *testing.T) {
 	// What we want to check:
 	// - correct values are returned for first object
