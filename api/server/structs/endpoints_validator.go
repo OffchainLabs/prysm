@@ -54,6 +54,7 @@ type AttesterDuty struct {
 	CommitteesAtSlot        string `json:"committees_at_slot"`
 	ValidatorCommitteeIndex string `json:"validator_committee_index"`
 	Slot                    string `json:"slot"`
+	IsAggregator            *bool  `json:"is_aggregator,omitempty"`
 }
 
 type GetProposerDutiesResponse struct {

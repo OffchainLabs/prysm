@@ -18,6 +18,9 @@ const (
 	RootLength                            = 32                // RootLength defines the byte length of a Merkle root.
 	BLSSignatureLength                    = 96                // BLSSignatureLength defines the byte length of a BLSSignature.
 	BLSPubkeyLength                       = 48                // BLSPubkeyLength defines the byte length of a BLSSignature.
+	XMSSSignatureLength                   = 2404              // XMSSSignatureLength defines the byte length of a leanXMSS signature.
+	XMSSPubkeyLength                      = 32                // XMSSPubkeyLength defines the byte length of a leanXMSS public key.
+	VRFProofLength                        = 32                // VRFProofLength defines the number of nodes of a VRF proof (VRF_TREE_DEPTH + 1).
 	MaxTxsPerPayloadLength                = 1048576           // MaxTxsPerPayloadLength defines the maximum number of transactions that can be included in a payload.
 	MaxBytesPerTxLength                   = 1073741824        // MaxBytesPerTxLength defines the maximum number of bytes that can be included in a transaction.
 	FeeRecipientLength                    = 20                // FeeRecipientLength defines the byte length of a fee recipient.
