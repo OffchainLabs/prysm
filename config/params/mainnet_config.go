@@ -400,7 +400,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	MaximumGossipClockDisparity:     500,
 	MessageDomainInvalidSnappy:      [4]byte{00, 00, 00, 00},
 	MessageDomainValidSnappy:        [4]byte{01, 00, 00, 00},
-	MinEpochsForBlockRequests:       33024, // MIN_VALIDATOR_WITHDRAWABILITY_DELAY + CHURN_LIMIT_QUOTIENT / 2 (= 33024, ~5 months)
+	MinEpochsForBlockRequests:       8192, // EIP-8383: 2**13 (= 8192, ~36 days)
 	EpochsPerSubnetSubscription:     256,
 	AttestationSubnetExtraBits:      0,
 	AttestationSubnetPrefixBits:     6,
