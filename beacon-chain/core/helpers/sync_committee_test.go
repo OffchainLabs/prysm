@@ -441,6 +441,75 @@ func TestUpdateSyncCommitteeCache_BadRoot(t *testing.T) {
 	require.ErrorContains(t, "zero hash state root can't be used to update cache", err)
 }
 
+func TestUpdateSyncCommitteeCache_SkippedPeriod(t *testing.T) {
+	helpers.ClearCache()
+
+	validators := make([]*ethpb.Validator, params.BeaconConfig().SyncCommitteeSize)
+	syncCommittee := &ethpb.SyncCommittee{
+		AggregatePubkey: bytesutil.PadTo([]byte{}, params.BeaconConfig().BLSPubkeyLength),
+	}
+	for i := range validators {
+		k := make([]byte, 48)
+		copy(k, strconv.Itoa(i))
+		validators[i] = &ethpb.Validator{
+			PublicKey: k,
+		}
+		syncCommittee.Pubkeys = append(syncCommittee.Pubkeys, bytesutil.PadTo(k, 48))
+	}
+	reversedSyncCommittee := &ethpb.SyncCommittee{
+		Pubkeys:         slices.Clone(syncCommittee.Pubkeys),
+		AggregatePubkey: syncCommittee.AggregatePubkey,
+	}
+	slices.Reverse(reversedSyncCommittee.Pubkeys)
+
+	// The latest block is at the last slot of the first period, every later slot is skipped.
+	slotsPerPeriod := primitives.Slot(params.BeaconConfig().EpochsPerSyncCommitteePeriod.Mul(uint64(params.BeaconConfig().SlotsPerEpoch)))
+	header := &ethpb.BeaconBlockHeader{
+		Slot:       slotsPerPeriod - 1,
+		ParentRoot: bytesutil.PadTo([]byte{'a'}, 32),
+		StateRoot:  bytesutil.PadTo([]byte{'b'}, 32),
+		BodyRoot:   bytesutil.PadTo([]byte{'c'}, 32),
+	}
+	headerRoot, err := header.HashTreeRoot()
+	require.NoError(t, err)
+	blockRoots := make([][]byte, params.BeaconConfig().SlotsPerHistoricalRoot)
+	for i := range blockRoots {
+		blockRoots[i] = headerRoot[:]
+	}
+	state, err := state_native.New(&ethpb.BeaconStateAltair{
+		Validators:        validators,
+		BlockRoots:        blockRoots,
+		LatestBlockHeader: header,
+	})
+	require.NoError(t, err)
+
+	// Cross the boundary into the second period, then the boundary into the third period.
+	require.NoError(t, state.SetSlot(slotsPerPeriod-1))
+	require.NoError(t, state.SetCurrentSyncCommittee(syncCommittee))
+	require.NoError(t, state.SetNextSyncCommittee(reversedSyncCommittee))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), state))
+	require.NoError(t, state.SetSlot(slotsPerPeriod))
+	secondPeriodRoot, err := helpers.SyncPeriodBoundaryRoot(state)
+	require.NoError(t, err)
+
+	require.NoError(t, state.SetSlot(2*slotsPerPeriod-1))
+	require.NoError(t, state.SetCurrentSyncCommittee(reversedSyncCommittee))
+	require.NoError(t, state.SetNextSyncCommittee(syncCommittee))
+	require.NoError(t, helpers.UpdateSyncCommitteeCache(t.Context(), state))
+	require.NoError(t, state.SetSlot(2*slotsPerPeriod))
+	thirdPeriodRoot, err := helpers.SyncPeriodBoundaryRoot(state)
+	require.NoError(t, err)
+
+	// Each period has its own entry, under the key the readers use.
+	require.DeepNotEqual(t, secondPeriodRoot, thirdPeriodRoot)
+	index, err := helpers.SyncCommitteeCache().CurrentPeriodIndexPosition(secondPeriodRoot, 0)
+	require.NoError(t, err)
+	require.DeepEqual(t, []primitives.CommitteeIndex{0}, index)
+	index, err = helpers.SyncCommitteeCache().CurrentPeriodIndexPosition(thirdPeriodRoot, 0)
+	require.NoError(t, err)
+	require.DeepEqual(t, []primitives.CommitteeIndex{primitives.CommitteeIndex(len(validators) - 1)}, index)
+}
+
 func TestIsCurrentEpochSyncCommittee_SameBlockRoot(t *testing.T) {
 	helpers.ClearCache()
 
