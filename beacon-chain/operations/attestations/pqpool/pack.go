@@ -37,8 +37,35 @@ type candidate struct {
 	size       int
 }
 
-// Pack builds the attestations for a block at the slot of st, and the proof of their signatures.
+type pendingProof struct {
+	child      int
+	signatures [][]byte
+}
+
+type Packing struct {
+	Atts       []ethpb.Att
+	Validators uint64
+	// Voters whose target vote is not on chain yet, the measure one packing beats another by.
+	Gain      int
+	slot      primitives.Slot
+	reference primitives.Slot
+	children  []pq.ProofChild
+	pending   []pendingProof
+}
+
 func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.SingleAttestationPQ, aggregates []*Aggregate) ([]ethpb.Att, []byte, error) {
+	packing, err := Select(ctx, st, singles, aggregates)
+	if err != nil {
+		return nil, nil, err
+	}
+	proof, err := packing.Merge(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return packing.Atts, proof, nil
+}
+
+func Select(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.SingleAttestationPQ, aggregates []*Aggregate) (*Packing, error) {
 	cfg := params.BeaconConfig()
 	slot := st.Slot()
 	currentEpoch := slots.ToEpoch(slot)
@@ -48,11 +75,11 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 	}
 	currentParticipation, err := st.CurrentEpochParticipation()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	previousParticipation, err := st.PreviousEpochParticipation()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	participation := func(data *ethpb.AttestationData) []byte {
 		if data.Slot+cfg.MinAttestationInclusionDelayPQ > slot {
@@ -95,7 +122,7 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 		}
 		g, err := groupFor(single.Data)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if g.signatures[single.CommitteeId] == nil {
 			g.signatures[single.CommitteeId] = make(map[primitives.ValidatorIndex][]byte)
@@ -108,7 +135,7 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 		}
 		g, err := groupFor(aggregate.Att.Data)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		ci := aggregate.Att.GetCommitteeIndex()
 		g.aggregates[ci] = append(g.aggregates[ci], aggregate)
@@ -137,8 +164,8 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 	var atts []ethpb.Att
 	var proofs []pq.ProofChild
 	var validators uint64
-	var provedHere int
-	var proveTime time.Duration
+	var pending []pendingProof
+	var gain int
 	for _, g := range ordered {
 		if uint64(len(atts)) >= cfg.MaxAttestationsPQ || budget == 0 {
 			break
@@ -183,21 +210,13 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 		}
 		statements, err := pq.AttestationStatements(ctx, st, att)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		for i, c := range chosen {
 			validators += c.bits.Count()
+			gain += c.fresh
 			if c.proof == nil {
-				start := time.Now()
-				job := timing.NewJob(ctx, "fallback", uint64(slot), uint64(reference))
-				c.proof, err = job.Run(map[string]any{"signatures": len(c.signatures)}, func() ([]byte, error) {
-					return pq.Proofs.Prove(statements[i:i+1], [][][]byte{c.signatures})
-				})
-				if err != nil {
-					return nil, nil, err
-				}
-				provedHere++
-				proveTime += time.Since(start)
+				pending = append(pending, pendingProof{child: len(proofs), signatures: c.signatures})
 			}
 			proofs = append(proofs, pq.ProofChild{Statements: statements[i : i+1], Proof: c.proof})
 		}
@@ -205,32 +224,46 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 		budget -= used
 	}
 
+	return &Packing{Atts: atts, Validators: validators, Gain: gain, slot: slot, reference: reference, children: proofs, pending: pending}, nil
+}
+
+func (p *Packing) Merge(ctx context.Context) ([]byte, error) {
+	var proveTime time.Duration
+	for _, pending := range p.pending {
+		child := &p.children[pending.child]
+		if child.Proof != nil {
+			continue
+		}
+		start := time.Now()
+		job := timing.NewJob(ctx, "fallback", uint64(p.slot), uint64(p.reference))
+		proof, err := job.Run(map[string]any{"signatures": len(pending.signatures)}, func() ([]byte, error) {
+			return pq.Proofs.Prove(child.Statements, [][][]byte{pending.signatures})
+		})
+		if err != nil {
+			return nil, err
+		}
+		child.Proof = proof
+		proveTime += time.Since(start)
+	}
 	start := time.Now()
-	job := timing.NewJob(ctx, "initial", uint64(slot), uint64(reference))
-	proof, err := job.Run(map[string]any{"input_proof_count": len(proofs), "records": len(atts), "claims": validators}, func() ([]byte, error) {
-		return pq.Proofs.Merge(proofs)
+	job := timing.NewJob(ctx, "initial", uint64(p.slot), uint64(p.reference))
+	proof, err := job.Run(map[string]any{"input_proof_count": len(p.children), "records": len(p.Atts), "claims": p.Validators}, func() ([]byte, error) {
+		return pq.Proofs.Merge(p.children)
 	})
 	if err != nil {
-		return nil, nil, err
-	}
-	if job.Production() {
-		outcome := "candidate"
-		if len(atts) == 0 {
-			outcome = "no_candidate"
-		}
-		job.Emit("proposal_snapshot", outcome, map[string]any{"proof_id": timing.ProofID(proof), "records": len(atts), "claims": validators})
+		return nil, err
 	}
 	log.WithFields(logrus.Fields{
-		"slot":                slot,
-		"attestations":        len(atts),
-		"committeeProofs":     len(proofs),
-		"validators":          validators,
-		"provedByProposer":    provedHere,
+		"slot":                p.slot,
+		"attestations":        len(p.Atts),
+		"committeeProofs":     len(p.children),
+		"validators":          p.Validators,
+		"provedByProposer":    len(p.pending),
 		"proposerProveTime":   proveTime,
 		"mergeTime":           time.Since(start),
 		"blockProofSizeBytes": len(proof),
 	}).Info("Merged attestation proofs for PQ block")
-	return atts, proof, nil
+	return proof, nil
 }
 
 func bestCandidate(committee []primitives.ValidatorIndex, signatures map[primitives.ValidatorIndex][]byte, aggregates []*Aggregate, fresh func(primitives.ValidatorIndex) bool) *candidate {

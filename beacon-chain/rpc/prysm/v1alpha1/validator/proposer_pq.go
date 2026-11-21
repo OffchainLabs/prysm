@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations/pqpool"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -27,7 +26,7 @@ func (vs *Server) buildBlockPQ(ctx context.Context, sBlk interfaces.SignedBeacon
 		return nil, status.Errorf(codes.Internal, "Could not get parent execution requests: %v", err)
 	}
 	sBlk.SetParentExecutionRequestsPQ(parentRequests)
-	atts, proof, err := pqpool.Pack(ctx, head, vs.PQAttPool.All(), vs.PQAttPool.Aggregates())
+	atts, proof, err := vs.packPQ(ctx, sBlk.Block().Slot(), sBlk.Block().ParentRoot(), head)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not pack attestations: %v", err)
 	}

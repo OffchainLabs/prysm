@@ -182,8 +182,15 @@ func WithExperiment(ctx context.Context, e *Experiment) context.Context {
 	return context.WithValue(ctx, experimentKey{}, e)
 }
 
+type roundKey struct{}
+
+func WithRound(ctx context.Context, round int) context.Context {
+	return context.WithValue(ctx, roundKey{}, round)
+}
+
 type Job struct {
 	s          *session
+	round      int
 	id         uint64
 	work       string
 	slot       uint64
@@ -202,7 +209,12 @@ func NewJob(ctx context.Context, work string, slot, reference uint64) *Job {
 		// Every job of an experiment is placed on the timeline of its anchor slot.
 		reference = e.ID
 	}
-	return &Job{s: s, id: s.nextJob.Add(1), work: work, slot: slot, reference: reference, experiment: e, enqueued: time.Now()}
+	round, _ := ctx.Value(roundKey{}).(int)
+	round = max(round, 1)
+	if work == "initial" && round > 1 {
+		work = "improvement"
+	}
+	return &Job{s: s, round: round, id: s.nextJob.Add(1), work: work, slot: slot, reference: reference, experiment: e, enqueued: time.Now()}
 }
 
 func (j *Job) Production() bool {
@@ -232,7 +244,7 @@ func (j *Job) Emit(kind, outcome string, fields map[string]any) {
 	fields["work"] = j.work
 	fields["slot"] = j.slot
 	fields["reference_slot"] = j.reference
-	fields["round"] = 1
+	fields["round"] = j.round
 	fields["previous_recursive_depth"] = 0
 	fields["enqueued_wall_ns"] = j.enqueued.UnixNano()
 	if e := j.experiment; e != nil {

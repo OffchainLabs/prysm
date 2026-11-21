@@ -73,6 +73,7 @@ type Server struct {
 	PQAttPool                        *pqpool.Pool
 	pqEnvelopes                      pqEnvelopeCache
 	pqAggregates                     pqAggregateCache
+	pqPrepared                       pqPreparedProposal
 	PayloadAttestationPool           payloadattestation.PoolManager
 	SlashingsPool                    slashings.PoolManager
 	ExitPool                         voluntaryexits.PoolManager

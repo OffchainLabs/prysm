@@ -9,7 +9,6 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq/timing"
-	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -24,8 +23,7 @@ const collectionCutoffBPS = primitives.BP(4000)
 var scenarios = [3]string{"committee_only", "proposer_only", "combined"}
 
 type ObserverHead interface {
-	HeadRoot(ctx context.Context) ([]byte, error)
-	HeadState(ctx context.Context) (state.BeaconState, error)
+	ChainHead
 	HeadStateReadOnly(ctx context.Context) (state.ReadOnlyBeaconState, error)
 }
 
@@ -100,8 +98,7 @@ func (o *Observer) run() {
 		AttestationDue:        cfg.SlotComponentDuration(cfg.AttestationDueBPSAtSlot(pqStart)),
 		CommitteeCollection:   cfg.SlotComponentDuration(collectionCutoffBPS),
 		AggregateDue:          cfg.SlotComponentDuration(cfg.AggregateDueBPSGloas),
-		// The proposer merges when it builds the block, there is no earlier merge round.
-		InitialMerge: 2 * cfg.SlotDuration(),
+		InitialMerge:          InitialMergeDelay,
 	})
 	if err != nil {
 		log.WithError(err).Error("Could not start the PQ timing export")
@@ -270,63 +267,47 @@ func (o *Observer) mergeProposal(e *experiment, target primitives.Slot) {
 	if err != nil {
 		return
 	}
+	scoped := e.Experiment
+	scoped.Deadline = start
+	ctx := timing.WithExperiment(o.ctx, &scoped)
+	announced := false
+	preparer := &Preparer{
+		Head:        o.cfg.Head,
+		Pool:        o.cfg.Pool,
+		GenesisTime: o.clock.GenesisTime(),
+		Wanted: func(context.Context, state.ReadOnlyBeaconState) bool {
+			if !announced {
+				o.cutoff(e, target, "initial", time.Now())
+				announced = true
+			}
+			return true
+		},
+		OnReady: func(ctx context.Context, st state.ReadOnlyBeaconState, prepared *Prepared) {
+			verifyStart := time.Now()
+			if err := pq.VerifyAttestationProof(ctx, st, prepared.Atts, prepared.Proof); err != nil {
+				o.outcome(e, target, "initial", "invalid_proof", err)
+				return
+			}
+			timing.NewJob(timing.WithRound(ctx, prepared.Round), "initial", uint64(target), uint64(e.anchor)).Emit("candidate_ready", "ready", map[string]any{
+				"proof_id": timing.ProofID(prepared.Proof), "claims": prepared.Validators, "records": len(prepared.Atts), "recursive_depth": prepared.Round,
+				"backend_call": true, "verification_duration_ns": time.Since(verifyStart).Nanoseconds(),
+			})
+		},
+	}
+	prepared := preparer.Run(ctx, target)
 	if !o.waitUntil(start) {
 		return
 	}
-	o.cutoff(e, target, "initial", start)
-	scoped := e.Experiment
-	scoped.Deadline = start.Add(params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().AttestationDueBPSAtSlot(target)))
-	ctx := timing.WithExperiment(o.ctx, &scoped)
-	snapshot := func(outcome string, fields map[string]any) {
-		fields["nominal_snapshot_wall_ns"] = start.UnixNano()
-		timing.NewJob(ctx, "initial", uint64(target), uint64(e.anchor)).Emit("proposal_snapshot", outcome, fields)
+	fields := map[string]any{"nominal_snapshot_wall_ns": start.UnixNano()}
+	outcome := "no_candidate"
+	round := 1
+	if prepared != nil {
+		outcome, round = "ready", prepared.Round
+		fields["proof_id"], fields["claims"], fields["records"] = timing.ProofID(prepared.Proof), prepared.Validators, len(prepared.Atts)
+		fields["recursive_depth"], fields["backend_call_count"] = prepared.Round, prepared.Round
+		fields["parent_root"] = hexRoot(prepared.ParentRoot[:])
 	}
-	root, err := o.cfg.Head.HeadRoot(ctx)
-	if err != nil {
-		o.outcome(e, target, "initial", "missing_context", err)
-		return
-	}
-	st, err := o.cfg.Head.HeadState(ctx)
-	if err != nil {
-		o.outcome(e, target, "initial", "missing_context", err)
-		return
-	}
-	if st.Slot() < target {
-		if st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, root, target); err != nil {
-			o.outcome(e, target, "initial", "missing_context", err)
-			return
-		}
-	}
-	atts, proof, err := Pack(ctx, st, o.cfg.Pool.All(), o.cfg.Pool.Aggregates())
-	if err != nil {
-		o.outcome(e, target, "initial", "failed", err)
-		snapshot("no_candidate", map[string]any{"parent_root": hexRoot(root)})
-		return
-	}
-	if len(atts) == 0 {
-		o.outcome(e, target, "initial", "no_useful_inputs", nil)
-		snapshot("no_candidate", map[string]any{"parent_root": hexRoot(root)})
-		return
-	}
-	verifyStart := time.Now()
-	if err := pq.VerifyAttestationProof(ctx, st, atts, proof); err != nil {
-		o.outcome(e, target, "initial", "invalid_proof", err)
-		snapshot("no_candidate", map[string]any{"parent_root": hexRoot(root)})
-		return
-	}
-	var claims uint64
-	for _, att := range atts {
-		claims += att.GetAggregationBits().Count()
-	}
-	ready := map[string]any{
-		"proof_id": timing.ProofID(proof), "claims": claims, "records": len(atts), "recursive_depth": 1, "backend_call": true,
-		"verification_duration_ns": time.Since(verifyStart).Nanoseconds(),
-	}
-	timing.NewJob(ctx, "initial", uint64(target), uint64(e.anchor)).Emit("candidate_ready", "ready", ready)
-	snapshot("ready", map[string]any{
-		"proof_id": timing.ProofID(proof), "claims": claims, "records": len(atts), "recursive_depth": 1, "backend_call_count": 1,
-		"parent_root": hexRoot(root),
-	})
+	timing.NewJob(timing.WithRound(ctx, round), "initial", uint64(target), uint64(e.anchor)).Emit("proposal_snapshot", outcome, fields)
 }
 
 func sequenceID(id uint64) string {
