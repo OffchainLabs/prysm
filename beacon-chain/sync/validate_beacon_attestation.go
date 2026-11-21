@@ -78,6 +78,9 @@ func (s *Service) validateCommitteeIndexBeaconAttestation(
 	}
 
 	data := att.GetData()
+	if single, ok := att.(*eth.SingleAttestationPQ); ok {
+		recordPQReceipt(ctx, msg, "individual", data, single.CommitteeId, 1, single.SizeSSZ())
+	}
 
 	// Do not process slot 0 attestations.
 	if data.Slot == 0 {

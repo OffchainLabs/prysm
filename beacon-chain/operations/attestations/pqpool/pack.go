@@ -11,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq/timing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -125,6 +126,10 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 		return slices.Compare(a.data.BeaconBlockRoot, b.data.BeaconBlockRoot)
 	})
 
+	reference := primitives.Slot(0)
+	if slot > cfg.MinAttestationInclusionDelayPQ {
+		reference = slot - cfg.MinAttestationInclusionDelayPQ
+	}
 	budget := maxProofSize
 	if pq.Proofs.Succinct() {
 		budget = math.MaxInt
@@ -184,7 +189,10 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 			validators += c.bits.Count()
 			if c.proof == nil {
 				start := time.Now()
-				c.proof, err = pq.Proofs.Prove(statements[i:i+1], [][][]byte{c.signatures})
+				job := timing.NewJob(ctx, "fallback", uint64(slot), uint64(reference))
+				c.proof, err = job.Run(map[string]any{"signatures": len(c.signatures)}, func() ([]byte, error) {
+					return pq.Proofs.Prove(statements[i:i+1], [][][]byte{c.signatures})
+				})
 				if err != nil {
 					return nil, nil, err
 				}
@@ -198,9 +206,19 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 	}
 
 	start := time.Now()
-	proof, err := pq.Proofs.Merge(proofs)
+	job := timing.NewJob(ctx, "initial", uint64(slot), uint64(reference))
+	proof, err := job.Run(map[string]any{"input_proof_count": len(proofs), "records": len(atts), "claims": validators}, func() ([]byte, error) {
+		return pq.Proofs.Merge(proofs)
+	})
 	if err != nil {
 		return nil, nil, err
+	}
+	if job.Production() {
+		outcome := "candidate"
+		if len(atts) == 0 {
+			outcome = "no_candidate"
+		}
+		job.Emit("proposal_snapshot", outcome, map[string]any{"proof_id": timing.ProofID(proof), "records": len(atts), "claims": validators})
 	}
 	log.WithFields(logrus.Fields{
 		"slot":                slot,
@@ -310,7 +328,10 @@ func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles [
 		return nil, err
 	}
 	start := time.Now()
-	proof, err := pq.Proofs.Prove(statements, [][][]byte{c.signatures})
+	job := timing.NewJob(ctx, "committee", uint64(slot), uint64(slot))
+	proof, err := job.Run(map[string]any{"committee": uint64(index), "signatures": len(c.signatures), "committee_size": len(committee)}, func() ([]byte, error) {
+		return pq.Proofs.Prove(statements, [][][]byte{c.signatures})
+	})
 	if err != nil {
 		return nil, err
 	}

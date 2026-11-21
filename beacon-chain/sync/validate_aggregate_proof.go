@@ -63,6 +63,9 @@ func (s *Service) validateAggregateAndProof(ctx context.Context, pid peer.ID, ms
 		return pubsub.ValidationReject, err
 	}
 	data := aggregate.GetData()
+	if signedPQ, ok := m.(*ethpb.SignedAggregateAttestationAndProofPQ); ok {
+		recordPQReceipt(ctx, msg, "aggregate", data, aggregate.GetCommitteeIndex(), aggregate.GetAggregationBits().Count(), signedPQ.SizeSSZ())
+	}
 	// Do not process slot 0 aggregates.
 	if data.Slot == 0 {
 		return pubsub.ValidationIgnore, nil

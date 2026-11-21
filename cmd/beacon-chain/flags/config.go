@@ -54,7 +54,7 @@ func Init(c *GlobalFlags) {
 func ConfigureGlobalFlags(ctx *cli.Context) error {
 	cfg := &GlobalFlags{}
 
-	if ctx.Bool(SubscribeToAllSubnets.Name) {
+	if ctx.Bool(SubscribeToAllSubnets.Name) || ctx.Bool(PQMeasurement.Name) {
 		log.Warning("Subscribing to all attestation subnets")
 		cfg.SubscribeToAllSubnets = true
 	}

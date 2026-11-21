@@ -14,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/altair"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/peerdas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq/timing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/partialdatacolumnbroadcaster"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers"
@@ -546,12 +547,14 @@ func (s *Service) wrapAndReportValidation(topic string, v wrappedVal) (string, p
 				return pubsub.ValidationIgnore
 			}
 		}
+		ctx, receipt := timing.WithReceipt(ctx)
 		b, err := v(ctx, pid, msg)
 		// We do not penalize peers if we are hitting pubsub timeouts
 		// trying to process those messages.
 		if b == pubsub.ValidationReject && ctx.Err() != nil {
 			b = pubsub.ValidationIgnore
 		}
+		receipt.Validated(pqValidationOutcome(b))
 		if b == pubsub.ValidationReject {
 			fields := logrus.Fields{
 				"topic":        topic,

@@ -157,6 +157,8 @@ var appFlags = []cli.Flag{
 	genesis.BeaconAPIURL,
 	flags.SlasherDirFlag,
 	flags.PQProverSocket,
+	flags.PQMeasurement,
+	flags.PQTimingOutput,
 	flags.SlasherFlag,
 	flags.JwtId,
 	flags.DisableGetBlobsV2,

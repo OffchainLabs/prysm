@@ -445,6 +445,10 @@ func registerServices(cliCtx *cli.Context, beacon *BeaconNode, synchronizer *sta
 		return errors.Wrap(err, "could not register sync service")
 	}
 
+	if err := beacon.registerPQTimingService(); err != nil {
+		return errors.Wrap(err, "could not register PQ timing service")
+	}
+
 	log.Debugln("Registering Slashing Pool Service")
 	if err := beacon.registerSlashingPoolService(); err != nil {
 		return errors.Wrap(err, "could not register slashing pool service")

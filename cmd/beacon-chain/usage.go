@@ -217,6 +217,8 @@ var appHelpFlagGroups = []flagGroup{
 			flags.HistoricalSlasherNode,
 			flags.SlasherDirFlag,
 			flags.PQProverSocket,
+			flags.PQMeasurement,
+			flags.PQTimingOutput,
 			flags.SlasherFlag,
 		},
 	},

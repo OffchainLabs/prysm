@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "log.go",
+        "observer.go",
         "pack.go",
         "pool.go",
     ],
@@ -13,6 +14,9 @@ go_library(
         "//beacon-chain/core/blocks:go_default_library",
         "//beacon-chain/core/helpers:go_default_library",
         "//beacon-chain/core/pq:go_default_library",
+        "//beacon-chain/core/pq/timing:go_default_library",
+        "//beacon-chain/core/transition:go_default_library",
+        "//beacon-chain/startup:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",

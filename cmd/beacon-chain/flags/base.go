@@ -366,6 +366,14 @@ var (
 		Name:  "pq-prover-socket",
 		Usage: "Unix socket of the leanVM sidecar that builds and verifies attestation proofs on a PQ network. Without it the spec reference proofs are used, which only work if every client on the network does the same.",
 	}
+	PQMeasurement = &cli.BoolFlag{
+		Name:  "pq-measurement",
+		Usage: "Runs PQ timing experiments on a beacon node with no validators. It joins every attestation subnet, proves one committee and merges one block proof every three slots from live gossip, and never publishes the result.",
+	}
+	PQTimingOutput = &cli.StringFlag{
+		Name:  "pq-timing-output",
+		Usage: "Directory for local PQ timing events, one folder per run. With --pq-measurement it defaults to pq-timing under the data directory.",
+	}
 	// SlasherDirFlag defines a path on disk where the slasher database is stored.
 	SlasherDirFlag = &cli.StringFlag{
 		Name:  "slasher-datadir",
