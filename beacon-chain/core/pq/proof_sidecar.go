@@ -9,6 +9,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/pq/leanvmsidecar"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -91,6 +92,7 @@ func encodeClaims(claims [][]byte) []byte {
 
 func (s *sidecar) aggregate(children []leanvmsidecar.Proven, signatures [][]byte, expected []byte) ([]byte, error) {
 	var proven leanvmsidecar.Proven
+	start := time.Now()
 	err := s.prove.call(func(c *leanvmsidecar.Client) error {
 		var err error
 		proven, err = c.Aggregate(children, signatures, nil, nil, nil, sidecarLogInvRate)
@@ -102,6 +104,12 @@ func (s *sidecar) aggregate(children []leanvmsidecar.Proven, signatures [][]byte
 	if !bytes.Equal(proven.Claims, expected) {
 		return nil, errors.New("sidecar proved other claims than asked")
 	}
+	logrus.WithFields(logrus.Fields{
+		"children":   len(children),
+		"signatures": len(signatures),
+		"proofSize":  len(proven.Proof),
+		"duration":   time.Since(start),
+	}).Debug("Proved with the leanVM sidecar")
 	return proven.Proof, nil
 }
 
@@ -190,16 +198,24 @@ func (s *sidecar) Verify(statements []Statement, proof []byte) error {
 		return errors.Wrap(ErrInvalidAttestationProof, "empty proof or empty claims")
 	}
 	var ok bool
+	start := time.Now()
 	err := s.verify.call(func(c *leanvmsidecar.Client) error {
 		var err error
 		ok, err = c.Verify(encodeClaims(claims), proof)
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "sidecar could not verify")
+		return errors.Wrap(ErrProofBackendUnavailable, err.Error())
 	}
 	if !ok {
 		return ErrInvalidAttestationProof
 	}
+	logrus.WithFields(logrus.Fields{
+		"claims":    len(claims),
+		"proofSize": len(proof),
+		"duration":  time.Since(start),
+	}).Debug("Verified with the leanVM sidecar")
 	return nil
 }
+
+func (*sidecar) Succinct() bool { return true }

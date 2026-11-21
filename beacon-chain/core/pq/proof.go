@@ -15,6 +15,8 @@ import (
 
 var ErrInvalidAttestationProof = errors.New("invalid attestation proof")
 
+var ErrProofBackendUnavailable = errors.New("proof backend unavailable")
+
 // Spec: XMSSAggregateStatement
 type Statement struct {
 	Pubkeys   [][]byte
@@ -33,6 +35,8 @@ type ProofBackend interface {
 	Prove(statements []Statement, signatures [][][]byte) ([]byte, error)
 	Merge(children []ProofChild) ([]byte, error)
 	Verify(statements []Statement, proof []byte) error
+	// A succinct proof does not grow with the signatures it covers, so packing needs no size budget.
+	Succinct() bool
 }
 
 // Every client on a network must use the same backend.
@@ -171,3 +175,5 @@ func VerifySingleAttestation(st state.ReadOnlyBeaconState, att *ethpb.SingleAtte
 	pubkey := st.PubkeyAtIndex(att.AttesterIndex)
 	return VerifyXMSS(pubkey[:], leafIndex, message, att.Signature)
 }
+
+func (concatenation) Succinct() bool { return false }

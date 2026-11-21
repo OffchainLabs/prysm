@@ -220,6 +220,9 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	if signedPQ, ok := signed.(*ethpb.SignedAggregateAttestationAndProofPQ); ok {
 		if err := pq.VerifyAggregateAndProof(ctx, bs, signedPQ); err != nil {
 			tracing.AnnotateError(span, err)
+			if errors.Is(err, pq.ErrProofBackendUnavailable) {
+				return pubsub.ValidationIgnore, err
+			}
 			return pubsub.ValidationReject, err
 		}
 		return pubsub.ValidationAccept, nil

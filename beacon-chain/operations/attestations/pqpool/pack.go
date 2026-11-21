@@ -3,7 +3,9 @@ package pqpool
 import (
 	"cmp"
 	"context"
+	"math"
 	"slices"
+	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
@@ -14,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 )
 
 // Spec: MAX_STARK_PROOF_SIZE
@@ -123,8 +126,14 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 	})
 
 	budget := maxProofSize
+	if pq.Proofs.Succinct() {
+		budget = math.MaxInt
+	}
 	var atts []ethpb.Att
 	var proofs []pq.ProofChild
+	var validators uint64
+	var provedHere int
+	var proveTime time.Duration
 	for _, g := range ordered {
 		if uint64(len(atts)) >= cfg.MaxAttestationsPQ || budget == 0 {
 			break
@@ -172,11 +181,15 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 			return nil, nil, err
 		}
 		for i, c := range chosen {
+			validators += c.bits.Count()
 			if c.proof == nil {
+				start := time.Now()
 				c.proof, err = pq.Proofs.Prove(statements[i:i+1], [][][]byte{c.signatures})
 				if err != nil {
 					return nil, nil, err
 				}
+				provedHere++
+				proveTime += time.Since(start)
 			}
 			proofs = append(proofs, pq.ProofChild{Statements: statements[i : i+1], Proof: c.proof})
 		}
@@ -184,10 +197,21 @@ func Pack(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.Si
 		budget -= used
 	}
 
+	start := time.Now()
 	proof, err := pq.Proofs.Merge(proofs)
 	if err != nil {
 		return nil, nil, err
 	}
+	log.WithFields(logrus.Fields{
+		"slot":                slot,
+		"attestations":        len(atts),
+		"committeeProofs":     len(proofs),
+		"validators":          validators,
+		"provedByProposer":    provedHere,
+		"proposerProveTime":   proveTime,
+		"mergeTime":           time.Since(start),
+		"blockProofSizeBytes": len(proof),
+	}).Info("Merged attestation proofs for PQ block")
 	return atts, proof, nil
 }
 
@@ -285,9 +309,18 @@ func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles [
 	if err != nil {
 		return nil, err
 	}
+	start := time.Now()
 	proof, err := pq.Proofs.Prove(statements, [][][]byte{c.signatures})
 	if err != nil {
 		return nil, err
 	}
+	log.WithFields(logrus.Fields{
+		"slot":           slot,
+		"committeeIndex": index,
+		"signatures":     len(c.signatures),
+		"committeeSize":  len(committee),
+		"proveTime":      time.Since(start),
+		"proofSizeBytes": len(proof),
+	}).Info("Aggregated PQ attestation signatures")
 	return &Aggregate{Att: att, Proof: proof}, nil
 }
