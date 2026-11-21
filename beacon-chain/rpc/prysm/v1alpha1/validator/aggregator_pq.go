@@ -83,16 +83,11 @@ func (vs *Server) SubmitSignedAggregateAndProofPQ(ctx context.Context, signed *e
 
 // The REST aggregate endpoint names the data root, not the aggregator.
 func (vs *Server) AggregateAttestationPQ(ctx context.Context, slot primitives.Slot, index primitives.CommitteeIndex, dataRoot [32]byte) (*ethpb.AttestationPQ, []byte, error) {
-	st, err := vs.HeadFetcher.HeadStateReadOnly(ctx)
+	// Every aggregator of a committee asks for the same aggregate, so it is proven once.
+	vs.RegisterAggregationDutyPQ(slot, index)
+	aggregate, err := vs.precomputedAggregatePQ(ctx, slot, index)
 	if err != nil {
-		return nil, nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
-	}
-	aggregate := vs.precomputedAggregatePQ(ctx, slot, index)
-	if aggregate == nil {
-		aggregate, err = pqpool.BuildAggregate(ctx, st, vs.PQAttPool.All(), slot, index)
-		if err != nil {
-			return nil, nil, status.Errorf(codes.Internal, "Could not build aggregate: %v", err)
-		}
+		return nil, nil, status.Errorf(codes.Internal, "Could not build aggregate: %v", err)
 	}
 	if aggregate == nil {
 		return nil, nil, status.Error(codes.NotFound, "No attestations to aggregate")

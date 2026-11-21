@@ -9,6 +9,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/pkg/errors"
 )
 
 // Spec: AGGREGATION_CUTOFF_BPS at 4595f0fc9, position 0 only since duties carry no position yet.
@@ -42,8 +43,10 @@ func (vs *Server) RegisterAggregationDutyPQ(slot primitives.Slot, index primitiv
 		c.mu.Unlock()
 		return
 	}
+	// Duties are registered an epoch ahead, so old entries are measured against the clock.
+	current := vs.TimeFetcher.CurrentSlot()
 	for k := range c.entries {
-		if k.slot+2 < slot {
+		if k.slot+2 < current {
 			delete(c.entries, k)
 		}
 	}
@@ -77,17 +80,17 @@ func (vs *Server) RegisterAggregationDutyPQ(slot primitives.Slot, index primitiv
 	}()
 }
 
-func (vs *Server) precomputedAggregatePQ(ctx context.Context, slot primitives.Slot, index primitives.CommitteeIndex) *pqpool.Aggregate {
+func (vs *Server) precomputedAggregatePQ(ctx context.Context, slot primitives.Slot, index primitives.CommitteeIndex) (*pqpool.Aggregate, error) {
 	vs.pqAggregates.mu.Lock()
 	entry, ok := vs.pqAggregates.entries[pqAggregateKey{slot: slot, index: index}]
 	vs.pqAggregates.mu.Unlock()
 	if !ok {
-		return nil
+		return nil, errors.New("aggregate was not registered")
 	}
 	select {
 	case <-entry.done:
-		return entry.aggregate
+		return entry.aggregate, entry.err
 	case <-ctx.Done():
-		return nil
+		return nil, ctx.Err()
 	}
 }
