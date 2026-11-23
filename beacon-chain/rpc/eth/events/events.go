@@ -583,6 +583,10 @@ func (s *Server) lazyReaderForEvent(ctx context.Context, event *feed.Event, topi
 				att := structs.AttGloasFromConsensus(att)
 				return jsonMarshalReader(eventName, att)
 			}, nil
+		case *eth.AttestationPQ:
+			return func() io.Reader {
+				return jsonMarshalReader(eventName, structs.AttPQFromConsensus(att))
+			}, nil
 		default:
 			return nil, errors.Wrapf(errUnhandledEventData, "Unexpected type %T for the .Attestation field of AggregatedAttReceivedData", v.Attestation)
 		}
