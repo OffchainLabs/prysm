@@ -54,30 +54,45 @@ var _ VRFStateSource = (*vrfStateSource)(nil)
 
 // NewVRFStateSource returns the source of the VRF state at `location`: an HTTP(S) URL, a file URI, or a path.
 func NewVRFStateSource(location string) (VRFStateSource, error) {
+	httpURL, path, err := parseLocation("VRF state", location)
+	if err != nil {
+		return nil, err
+	}
+
+	if path != "" {
+		return &vrfStateSource{path: path}, nil
+	}
+
+	return &vrfStateSource{url: httpURL, client: &http.Client{Timeout: vrfStateHTTPTimeout}}, nil
+}
+
+// parseLocation returns the HTTP(S) URL or the path of the file `location` is: an HTTP(S) URL, a file URI, or a path.
+// `name` names what is at `location` in the errors.
+func parseLocation(name, location string) (httpURL, path string, err error) {
 	if location == "" {
-		return nil, errors.New("empty VRF state location")
+		return "", "", fmt.Errorf("empty %s location", name)
 	}
 
 	if !strings.Contains(location, "://") {
-		return &vrfStateSource{path: location}, nil
+		return "", location, nil
 	}
 
 	parsed, err := url.Parse(location)
 	if err != nil {
-		return nil, fmt.Errorf("parse VRF state URL: %w", err)
+		return "", "", fmt.Errorf("parse %s URL: %w", name, err)
 	}
 
 	switch parsed.Scheme {
 	case "http", "https":
-		return &vrfStateSource{url: location, client: &http.Client{Timeout: vrfStateHTTPTimeout}}, nil
+		return location, "", nil
 	case "file":
 		if parsed.Path == "" {
-			return nil, fmt.Errorf("file URI %s without a path", location)
+			return "", "", fmt.Errorf("file URI %s without a path", location)
 		}
 
-		return &vrfStateSource{path: parsed.Path}, nil
+		return "", parsed.Path, nil
 	default:
-		return nil, fmt.Errorf("VRF state URL scheme %q is neither http, https nor file", parsed.Scheme)
+		return "", "", fmt.Errorf("%s URL scheme %q is neither http, https nor file", name, parsed.Scheme)
 	}
 }
 

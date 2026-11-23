@@ -460,6 +460,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		Distributed:             distributed,
 		Stateless:               stateless,
 		VRFStateURL:             cliCtx.String(flags.VRFStateURLFlag.Name),
+		XMSSCacheURL:            cliCtx.String(flags.XMSSCacheURLFlag.Name),
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})

@@ -3,6 +3,7 @@ package iface
 import (
 	"context"
 
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
@@ -22,6 +23,9 @@ type (
 		// IsAggregatorPQ returns whether the beacon node selected the validator of index `index` as an aggregator
 		// at `slot`, in its attester duties. In the PQ fork, there is no selection proof.
 		IsAggregatorPQ(slot primitives.Slot, index primitives.ValidatorIndex) bool
+
+		// XMSSPubkeys returns the XMSS public keys of the validators of the head state, by validator index.
+		XMSSPubkeys(ctx context.Context) (map[primitives.ValidatorIndex][fieldparams.XMSSPubkeyLength]byte, error)
 
 		// SubmitAttestationsPQ submits signed attestations.
 		SubmitAttestationsPQ(ctx context.Context, attestations []*ethpb.SingleAttestationPQ) error

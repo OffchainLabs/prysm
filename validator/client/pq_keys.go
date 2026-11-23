@@ -50,6 +50,29 @@ func newPQKeys(ctx context.Context, vrfStateURL string) (*pqkeys.Registry, error
 	return pqkeys.NewRegistry(ctx, source), nil
 }
 
+// useXMSSCache makes `keys` load the XMSS keys from the leanXMSS tree caches at `location`, which may be empty.
+// The registry finds the cache of a key by the index of its validator, which it asks `client` for.
+// It never fails: without the caches, the registry builds the keys from their seeds.
+func useXMSSCache(keys *pqkeys.Registry, client iface.ValidatorClient, location string) {
+	if keys == nil || location == "" {
+		return
+	}
+
+	pqClient, ok := client.(iface.PQValidatorClient)
+	if !ok {
+		log.Warnf("The validator client cannot list the validators of the PQ fork: ignoring --%s", flags.XMSSCacheURLFlag.Name)
+		return
+	}
+
+	cache, err := pqkeys.NewXMSSCache(location, pqClient.XMSSPubkeys)
+	if err != nil {
+		log.WithError(err).Warnf("Ignoring --%s: the XMSS keys are built from their seeds", flags.XMSSCacheURLFlag.Name)
+		return
+	}
+
+	keys.SetXMSSCache(cache)
+}
+
 // loadPQKeys derives the post-quantum keys of the validators of the keymanager that are not derived yet.
 // It does nothing outside the PQ fork.
 func (v *validator) loadPQKeys(ctx context.Context) error {

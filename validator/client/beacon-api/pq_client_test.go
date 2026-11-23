@@ -56,6 +56,48 @@ func TestBeaconApiValidatorClient_SubmitAttestationsPQ(t *testing.T) {
 	require.NoError(t, c.SubmitAttestationsPQ(t.Context(), []*ethpb.SingleAttestationPQ{attestation}))
 }
 
+func TestBeaconApiValidatorClient_XMSSPubkeys(t *testing.T) {
+	first, second := [fieldparams.XMSSPubkeyLength]byte{0x01}, [fieldparams.XMSSPubkeyLength]byte{0x02}
+	vrfRoot := hexutil.Encode(make([]byte, fieldparams.RootLength))
+
+	t.Run("by validator index", func(t *testing.T) {
+		handler := mock.NewMockHandler(gomock.NewController(t))
+		expectPost(t, handler, "/eth/v1/beacon/states/head/validators", nil, []*structs.ValidatorContainerPQ{
+			testValidatorPQ("0", hexutil.Encode(first[:]), vrfRoot),
+			testValidatorPQ("7", hexutil.Encode(second[:]), vrfRoot),
+		})
+
+		c := &beaconApiValidatorClient{handler: handler}
+		pubkeys, err := c.XMSSPubkeys(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, 2, len(pubkeys))
+		require.Equal(t, first, pubkeys[0])
+		require.Equal(t, second, pubkeys[7])
+	})
+
+	t.Run("invalid public key", func(t *testing.T) {
+		handler := mock.NewMockHandler(gomock.NewController(t))
+		expectPost(t, handler, "/eth/v1/beacon/states/head/validators", nil, []*structs.ValidatorContainerPQ{
+			testValidatorPQ("0", "0x01", vrfRoot),
+		})
+
+		c := &beaconApiValidatorClient{handler: handler}
+		_, err := c.XMSSPubkeys(t.Context())
+		require.ErrorContains(t, "decode XMSS public key 0x01", err)
+	})
+
+	t.Run("invalid index", func(t *testing.T) {
+		handler := mock.NewMockHandler(gomock.NewController(t))
+		expectPost(t, handler, "/eth/v1/beacon/states/head/validators", nil, []*structs.ValidatorContainerPQ{
+			testValidatorPQ("x", hexutil.Encode(first[:]), vrfRoot),
+		})
+
+		c := &beaconApiValidatorClient{handler: handler}
+		_, err := c.XMSSPubkeys(t.Context())
+		require.ErrorContains(t, "parse validator index x", err)
+	})
+}
+
 func TestBeaconApiValidatorClient_AggregatePQ(t *testing.T) {
 	data := testAttestationData()
 	aggregate := &ethpb.AttestationPQ{

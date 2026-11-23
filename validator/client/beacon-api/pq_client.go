@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 
 	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/api/server/structs"
+	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
@@ -18,6 +21,7 @@ import (
 )
 
 const (
+	pqHeadValidatorsEndpoint      = "/eth/v1/beacon/states/head/validators"
 	pqAttestationsEndpoint        = "/eth/v2/beacon/pool/attestations"
 	pqAggregateEndpoint           = "/eth/v2/validator/aggregate_attestation"
 	pqAggregateAndProofsEndpoint  = "/eth/v2/validator/aggregate_and_proofs"
@@ -59,6 +63,37 @@ func (c *beaconApiValidatorClient) IsAggregatorPQ(slot primitives.Slot, index pr
 	}
 
 	return c.pqAggregators.isAggregator(slot, index)
+}
+
+// XMSSPubkeys returns the XMSS public keys of the validators of the head state, by validator index.
+func (c *beaconApiValidatorClient) XMSSPubkeys(ctx context.Context) (map[primitives.ValidatorIndex][fieldparams.XMSSPubkeyLength]byte, error) {
+	resp, err := fetchStateValidators(ctx, c.handler, pqHeadValidatorsEndpoint, nil, nil, func(resp *structs.GetValidatorsResponsePQ) bool {
+		return resp.Data != nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetch the validators: %w", err)
+	}
+
+	pubkeys := make(map[primitives.ValidatorIndex][fieldparams.XMSSPubkeyLength]byte, len(resp.Data))
+	for _, container := range resp.Data {
+		if container == nil || container.Validator == nil {
+			return nil, errors.New("nil validator in response")
+		}
+
+		index, err := strconv.ParseUint(container.Index, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse validator index %s: %w", container.Index, err)
+		}
+
+		pubkey, err := bytesutil.DecodeHexWithLength(container.Validator.Pubkey, fieldparams.XMSSPubkeyLength)
+		if err != nil {
+			return nil, fmt.Errorf("decode XMSS public key %s: %w", container.Validator.Pubkey, err)
+		}
+
+		pubkeys[primitives.ValidatorIndex(index)] = [fieldparams.XMSSPubkeyLength]byte(pubkey)
+	}
+
+	return pubkeys, nil
 }
 
 // SubmitAttestationsPQ submits `attestations` to the attestation pool of the beacon node.

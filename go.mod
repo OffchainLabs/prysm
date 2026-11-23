@@ -313,6 +313,8 @@ replace github.com/json-iterator/go => github.com/prestonvanloon/go v1.1.7-0.201
 
 replace github.com/tyler-smith/go-bip39 => ./third_party/go-bip39
 
+replace github.com/nalepae/go-leanxmss => github.com/barnabasbusa/go-leanxmss v0.0.0-20261123104307-12f555d73752
+
 tool (
 	github.com/OffchainLabs/methodical-ssz/cmd/ssz
 	github.com/prysmaticlabs/protoc-gen-go-cast

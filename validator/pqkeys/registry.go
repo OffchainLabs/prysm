@@ -3,6 +3,8 @@ package pqkeys
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -24,8 +26,9 @@ type (
 	// the validator client sees the VRF root of the validator in the state (`SetVRFRoot`), in the background: the tree
 	// needs the record of this root in the VRF state.
 	Registry struct {
-		ctx    context.Context // Bounds the building of the VRF trees.
-		source VRFStateSource  // Nil if the validator client has no VRF state.
+		ctx       context.Context // Bounds the building of the VRF trees.
+		source    VRFStateSource  // Nil if the validator client has no VRF state.
+		xmssCache *XMSSCache      // Nil if the validator client has no leanXMSS tree caches. Set before the first `Load`.
 
 		mu         sync.RWMutex
 		keysByBLS  map[blsPubkey]*Keys
@@ -64,8 +67,15 @@ func NewRegistry(ctx context.Context, source VRFStateSource) *Registry {
 	}
 }
 
+// SetXMSSCache makes the registry load the XMSS keys from the leanXMSS tree caches of `cache` when it can, instead of
+// building their trees. It is not safe for concurrent use with `Load`: call it before.
+func (r *Registry) SetXMSSCache(cache *XMSSCache) {
+	r.xmssCache = cache
+}
+
 // Load derives the keys of the validators whose BLS secret keys are `secretKeys`, and adds them to the registry.
 // It skips the validators already in the registry: deriving keys takes a few CPU seconds per validator.
+// It loads the keys it can from the leanXMSS tree caches, if any, and derives the others.
 func (r *Registry) Load(ctx context.Context, secretKeys []bls.SecretKey) error {
 	missing := make([]bls.SecretKey, 0, len(secretKeys))
 	secretKeyByBLS := make(map[blsPubkey]bls.SecretKey, len(secretKeys))
@@ -87,10 +97,23 @@ func (r *Registry) Load(ctx context.Context, secretKeys []bls.SecretKey) error {
 
 	start := time.Now()
 
-	keysByBLS, err := r.deriveKeys(ctx, missing)
+	keysByBLS := make(map[blsPubkey]*Keys, len(missing))
+	if r.xmssCache != nil {
+		keysByBLS = r.xmssCache.keys(ctx, missing)
+		missing = slices.DeleteFunc(missing, func(secretKey bls.SecretKey) bool {
+			_, ok := keysByBLS[blsPubkey(secretKey.PublicKey().Marshal())]
+			return ok
+		})
+	}
+
+	cached := len(keysByBLS)
+
+	derived, err := r.deriveKeys(ctx, missing)
 	if err != nil {
 		return fmt.Errorf("derive keys: %w", err)
 	}
+
+	maps.Copy(keysByBLS, derived)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -114,7 +137,8 @@ func (r *Registry) Load(ctx context.Context, secretKeys []bls.SecretKey) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		"derived": len(keysByBLS),
+		"derived": len(keysByBLS) - cached,
+		"cached":  cached,
 		"total":   len(r.keysByBLS),
 		"elapsed": time.Since(start),
 	}).Info("Derived post-quantum keys")

@@ -80,6 +80,33 @@ The Kurtosis setup of Lighthouse sets `xmss_pubkey_url`. On such a devnet, the
 genesis keys come from the precomputed file. A validator client finds its
 validators only if this file was made with the derivation above.
 
+## XMSS keys from tree caches
+
+`leanxmss.NewKeyFromSeed` builds the top tree of the key, and the first
+signature in a bottom tree builds that tree: about a second per validator at
+start-up. With `--xmss-cache-url`, the validator client loads the keys from
+precomputed leanXMSS tree caches instead, with
+`leanxmss.NewKeyFromCache(seed, publicKey, record)`.
+
+The tree caches are a file of one record of 14,696 bytes per validator index:
+the bytes of `cache_to_bytes` of leanVM v0.15.0 for the key of the validator,
+with the top tree (4,096 bytes), then the bottom trees 0 and 24576 (5,300 bytes
+each), which hold the first attestation leaves and the first slot leaves. The
+flag takes an HTTP(S) URL, a file URI or a path. The validator client reads the
+record of validator `i` only, bytes `i * 14696` to `(i + 1) * 14696 - 1`, with
+a range request for a URL.
+
+A record does not say which key it is of, and loading it needs the public key
+of the key. The validator client asks the beacon node for the validators of the
+head state, and takes the one whose XMSS public key ends with the public
+parameter of the key, `leanxmss.PublicParamFromSeed(seed)`, which costs two
+hashes. `leanxmss.NewKeyFromCache` then checks the record against this public
+key.
+
+The tree caches are optional and never trusted. A key whose validator is not in
+the state, whose record cannot be read or whose record does not match its public
+key is built from its seed, as without the flag.
+
 ## Tests
 
 `Derive` matches the test vector of Lighthouse's
