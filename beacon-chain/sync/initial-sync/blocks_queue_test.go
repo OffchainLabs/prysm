@@ -972,6 +972,7 @@ func TestBlocksQueue_onProcessSkippedEvent(t *testing.T) {
 		fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 			chain: mc,
 			p2p:   p,
+			clock: startup.NewClock(makeGenesisTime(320), [32]byte{}),
 		})
 		queue := newBlocksQueue(ctx, &blocksQueueConfig{
 			blocksFetcher:       fetcher,
@@ -1092,7 +1093,7 @@ func TestBlocksQueue_stuckInUnfavourableFork(t *testing.T) {
 			Epoch: finalizedEpoch,
 			Root:  fmt.Appendf(nil, "finalized_root %d", finalizedEpoch),
 		},
-		Genesis:        time.Now(),
+		Genesis:        makeGenesisTime(primitives.Slot(len(chain2))),
 		ValidatorsRoot: [32]byte{},
 	}
 
@@ -1511,6 +1512,7 @@ func TestBlocksQueue_waitHighestExpectedSlot_ExtendsTargetWithinCurrentEpoch(t *
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 		chain: mc,
 		p2p:   p2p,
+		clock: startup.NewClock(makeGenesisTime(latestPeerHead), [32]byte{}),
 	})
 	fetcher.mode = modeNonConstrained
 

@@ -387,7 +387,8 @@ func (f *blocksFetcher) bestNonFinalizedSlot() primitives.Slot {
 		}
 	}
 
-	return targetSlot
+	// Peers may claim a head past the current slot, where no block exists yet to sync to.
+	return min(targetSlot, f.clock.CurrentSlot())
 }
 
 // calculateHeadAndTargetEpochs return node's current head epoch, along with the best known target
