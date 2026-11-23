@@ -520,6 +520,16 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Accepted aggregate was not sent to the slasher")
 	}
+
+	// An aggregate with no bit that was not already sent must not reach the slasher again.
+	res, err = r.validateAggregatedAtt(t.Context(), signedAggregateAndProof)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+	select {
+	case <-slasherAtts:
+		t.Fatal("Aggregate with no new bit was sent to the slasher")
+	case <-time.After(500 * time.Millisecond):
+	}
 }
 
 func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
@@ -947,4 +957,43 @@ func TestValidateAggregateAndProof_UnknownBlockRecordsSender(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 1, len(r.blkRootToPendingAtts[root]))
 	require.DeepEqual(t, map[peer.ID]bool{sender: true}, r.pendingAttSenders[root])
+}
+
+func TestHasNewSlasherBits(t *testing.T) {
+	agg := func(set ...uint64) *ethpb.Attestation {
+		bits := bitfield.NewBitlist(8)
+		for _, i := range set {
+			bits.SetBitAt(i, true)
+		}
+		return &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{}), AggregationBits: bits}
+	}
+
+	t.Run("new bits only", func(t *testing.T) {
+		s := &Service{}
+		s.initCaches()
+		for _, tc := range []struct {
+			name      string
+			agg       *ethpb.Attestation
+			committee primitives.CommitteeIndex
+			want      bool
+		}{
+			{name: "first aggregate", agg: agg(0, 1), want: true},
+			{name: "same bits", agg: agg(0, 1), want: false},
+			{name: "subset", agg: agg(1), want: false},
+			{name: "overlap with a new bit", agg: agg(1, 2), want: true},
+			{name: "covered by the union", agg: agg(0, 2), want: false},
+			{name: "other committee", agg: agg(0), committee: 1, want: true},
+		} {
+			require.Equal(t, tc.want, s.hasNewSlasherBits(tc.agg, tc.committee), tc.name)
+		}
+	})
+
+	t.Run("caller mutation does not change the record", func(t *testing.T) {
+		s := &Service{}
+		s.initCaches()
+		a := agg(0)
+		require.Equal(t, true, s.hasNewSlasherBits(a, 0))
+		a.AggregationBits.SetBitAt(1, true)
+		require.Equal(t, true, s.hasNewSlasherBits(agg(1), 0))
+	})
 }

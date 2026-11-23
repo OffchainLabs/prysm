@@ -1,10 +1,12 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
@@ -243,7 +245,7 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	set.Join(selectionSigSet).Join(aggregatorSigSet).Join(attSigSet)
 
 	result, err = s.validateWithBatchVerifier(ctx, "aggregate", set)
-	if result == pubsub.ValidationAccept && s.slasherEnabled {
+	if result == pubsub.ValidationAccept && s.slasherEnabled && s.hasNewSlasherBits(aggregate, committeeIndex) {
 		// Convert now: the attestation cache may mutate the aggregate's bits and signature after acceptance.
 		indexedAtt, convErr := attestation.ConvertToIndexed(ctx, aggregate, committee)
 		if convErr != nil {
@@ -254,6 +256,44 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 		}
 	}
 	return result, err
+}
+
+type slasherAggregateKey struct {
+	dataRoot       [32]byte
+	committeeIndex primitives.CommitteeIndex
+}
+
+// hasNewSlasherBits records the aggregate's bits and returns true if it has a bit not yet sent to the slasher
+// for the same key (data and committee).
+func (s *Service) hasNewSlasherBits(aggregate ethpb.Att, committeeIndex primitives.CommitteeIndex) bool {
+	dataRoot, err := aggregate.GetData().HashTreeRoot()
+	if err != nil {
+		// Assume new to the slasher when this happens.
+		return true
+	}
+
+	key := slasherAggregateKey{dataRoot: dataRoot, committeeIndex: committeeIndex}
+	bits := aggregate.GetAggregationBits()
+	v, ok := s.slasherSentAggBitsCache.Get(key)
+	if !ok {
+		// Copy, because the attestation cache can mutate the bits after acceptance.
+		s.slasherSentAggBitsCache.Add(key, bitfield.Bitlist(bytes.Clone(bits)))
+		return true
+	}
+
+	sent := v.(bitfield.Bitlist)
+	union, err := sent.Or(bits)
+	if err != nil {
+		// Assume new to the slasher when this happens.
+		return true
+	}
+
+	if union.Count() == sent.Count() {
+		// No new bits to send.
+		return false
+	}
+	s.slasherSentAggBitsCache.Add(key, union)
+	return true
 }
 
 // Returns true if the node has received aggregate for the aggregator with index and target epoch.
