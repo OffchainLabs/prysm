@@ -40,8 +40,6 @@ func (s *Service) pruneExpiredExperimental() {
 			}
 			numExpired := s.cfg.Cache.PruneBefore(expirySlot)
 			s.updateMetricsExperimental(numExpired)
-			// Fork choice attestations are saved to the pool in this mode too.
-			s.pruneExpiredForkchoiceAtts()
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
 			return
