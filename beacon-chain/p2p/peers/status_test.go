@@ -1055,6 +1055,24 @@ func TestBestFinalized_returnsMaxValue(t *testing.T) {
 	assert.Equal(t, maxPeers, len(pids), "Wrong number of peers returned")
 }
 
+func TestBestFinalized_MajorityAtEpochZero(t *testing.T) {
+	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
+		PeerLimit: 30,
+		ScorerParams: &scorers.Config{
+			BadResponsesScorerConfig: &scorers.BadResponsesScorerConfig{Threshold: 2},
+		},
+	})
+	for _, epoch := range []primitives.Epoch{0, 0, 5} {
+		p.SetChainState(addPeer(t, p, peers.Connected), &pb.StatusV2{FinalizedEpoch: epoch})
+	}
+
+	// Peers are visited in map order, so repeat to cover the possible orders.
+	for range 20 {
+		epoch, _ := p.BestFinalized(0)
+		require.Equal(t, primitives.Epoch(0), epoch)
+	}
+}
+
 func TestStatus_BestNonFinalized(t *testing.T) {
 	p := peers.NewStatus(t.Context(), &peers.StatusConfig{
 		PeerLimit: 30,

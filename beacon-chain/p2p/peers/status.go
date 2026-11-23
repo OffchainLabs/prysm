@@ -746,10 +746,6 @@ func (p *Status) BestFinalized(ourFinalized primitives.Epoch) (primitives.Epoch,
 		views[pid] = view
 
 		votes[view.FinalizedEpoch]++
-		if winner == 0 {
-			winner = view.FinalizedEpoch
-			continue
-		}
 		e, v := view.FinalizedEpoch, votes[view.FinalizedEpoch]
 		if v > votes[winner] || v == votes[winner] && e > winner {
 			winner = e

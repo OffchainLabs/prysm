@@ -1099,3 +1099,29 @@ func TestService_ProcessFetchedData(t *testing.T) {
 		})
 	}
 }
+
+func TestService_syncToFinalizedEpoch_MajorityTarget(t *testing.T) {
+	hook := logTest.NewGlobal()
+	p := p2pt.NewTestP2P(t)
+	// Three peers agree on finalized epoch 2, one claims epoch 5.
+	connectPeers(t, p, []*peerData{
+		{finalizedEpoch: 2, headSlot: 100},
+		{finalizedEpoch: 2, headSlot: 100},
+		{finalizedEpoch: 2, headSlot: 100},
+		{finalizedEpoch: 5, headSlot: 200},
+	}, p.Peers())
+	headSlot := params.BeaconConfig().SlotsPerEpoch * 2
+	beaconDB := dbtest.SetupDB(t)
+	s := NewService(t.Context(), &Config{
+		P2P:           p,
+		DB:            beaconDB,
+		Chain:         &mock.ChainService{MockHeadSlot: &headSlot, FinalizedCheckPoint: &eth.Checkpoint{Epoch: 2}, DB: beaconDB},
+		StateNotifier: &mock.MockStateNotifier{},
+	})
+	s.clock = startup.NewClock(time.Now(), [32]byte{})
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	require.NoError(t, s.syncToFinalizedEpoch(ctx))
+	require.LogsContain(t, hook, "Already synced to finalized epoch")
+}
