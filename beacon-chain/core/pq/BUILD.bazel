@@ -7,6 +7,7 @@ go_library(
         "aggregation_committee.go",
         "attestation.go",
         "bid.go",
+        "log.go",
         "proof.go",
         "proof_sidecar.go",
         "ptc.go",

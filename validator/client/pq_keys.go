@@ -1,9 +1,12 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"path/filepath"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db/signingprotection"
@@ -25,8 +29,11 @@ var errPQRequiresLocalKeys = errors.New("the PQ fork requires a local or derived
 
 // newPQKeys returns the registry of the post-quantum keys of the validators if the chain is in the PQ fork, and nil
 // otherwise. Only a PQ fork at genesis is supported: the validator client never changes keys.
-// The registry reads the VRF state at `vrfStateURL`, which may be empty, until `ctx` is done.
-func newPQKeys(ctx context.Context, vrfStateURL string) (*pqkeys.Registry, error) {
+// The registry reads the VRF state at `vrfStateURL`, which may be empty, until `ctx` is done. It loads the trees of the
+// XMSS keys from their tree caches in `dataDir`, then from the published tree cache at `xmssCacheURL`, which may be
+// empty, and builds the keys without valid trees. It finds the records of the published tree cache with the XMSS
+// public keys of the validator registry, from `chainClient`.
+func newPQKeys(ctx context.Context, vrfStateURL, xmssCacheURL, dataDir string, chainClient iface.ChainClient) (*pqkeys.Registry, error) {
 	config := params.BeaconConfig()
 
 	switch config.PQForkEpoch {
@@ -37,17 +44,101 @@ func newPQKeys(ctx context.Context, vrfStateURL string) (*pqkeys.Registry, error
 		return nil, fmt.Errorf("the PQ fork is scheduled at epoch %d: only a PQ fork at genesis is supported", config.PQForkEpoch)
 	}
 
+	var xmssSource pqkeys.XMSSCacheSource
+	if xmssCacheURL != "" {
+		source, err := pqkeys.NewXMSSCacheSource(xmssCacheURL)
+		if err != nil {
+			return nil, fmt.Errorf("XMSS cache: %w", err)
+		}
+
+		xmssSource = source
+	}
+
+	cacheDir := ""
+	if dataDir != "" {
+		cacheDir = filepath.Join(dataDir, pqkeys.XMSSCacheDirName)
+	}
+
+	var vrfSource pqkeys.VRFStateSource
 	if vrfStateURL == "" {
 		log.Warnf("No VRF state: set --%s, or the validators cannot propose in the PQ fork", flags.VRFStateURLFlag.Name)
-		return pqkeys.NewRegistry(ctx, nil), nil
 	}
 
-	source, err := pqkeys.NewVRFStateSource(vrfStateURL)
-	if err != nil {
-		return nil, fmt.Errorf("VRF state: %w", err)
+	if vrfStateURL != "" {
+		source, err := pqkeys.NewVRFStateSource(vrfStateURL)
+		if err != nil {
+			return nil, fmt.Errorf("VRF state: %w", err)
+		}
+
+		vrfSource = source
 	}
 
-	return pqkeys.NewRegistry(ctx, source), nil
+	registry := pqkeys.NewRegistry(ctx, vrfSource)
+	registry.UseXMSSLoader(pqkeys.NewXMSSLoader(cacheDir, xmssSource, registryXMSSPubkeys(chainClient)))
+
+	return registry, nil
+}
+
+// registryXMSSPubkeys returns the function listing the XMSS public keys of the validator registry from the head state
+// of `chainClient`. The registry only grows: the validators of the genesis keep their indices and public keys.
+func registryXMSSPubkeys(chainClient iface.ChainClient) pqkeys.XMSSPubkeysFunc {
+	return func(ctx context.Context, count int) ([][fieldparams.XMSSPubkeyLength]byte, error) {
+		pubkeys := make([][fieldparams.XMSSPubkeyLength]byte, 0, count)
+
+		// The beacon REST API, which the PQ fork requires, returns all of them in one page.
+		request := &ethpb.ListValidatorsRequest{PageSize: int32(min(count, math.MaxInt32))} // #nosec G115 -- Capped.
+
+		for len(pubkeys) < count {
+			response, err := chainClient.Validators(ctx, request)
+			if err != nil {
+				return nil, fmt.Errorf("list validators: %w", err)
+			}
+
+			for _, container := range response.ValidatorList {
+				if len(pubkeys) == count {
+					break
+				}
+
+				if container.Validator == nil || uint64(container.Index) != uint64(len(pubkeys)) {
+					return nil, fmt.Errorf("validator at index %d missing from the list", len(pubkeys))
+				}
+
+				pubkey, err := registryXMSSPubkey(container.Validator.PublicKey)
+				if err != nil {
+					return nil, fmt.Errorf("validator %d: %w", container.Index, err)
+				}
+
+				pubkeys = append(pubkeys, pubkey)
+			}
+
+			if response.NextPageToken == "" || len(response.ValidatorList) == 0 {
+				break
+			}
+
+			request.PageToken = response.NextPageToken
+		}
+
+		return pubkeys, nil
+	}
+}
+
+// registryXMSSPubkey returns the XMSS public key of a validator from its public key in the beacon API: the XMSS key
+// alone, or the 48 bytes of the registry, 16 zero bytes then the XMSS key.
+func registryXMSSPubkey(pubkey []byte) ([fieldparams.XMSSPubkeyLength]byte, error) {
+	const prefixLength = fieldparams.BLSPubkeyLength - fieldparams.XMSSPubkeyLength
+
+	switch len(pubkey) {
+	case fieldparams.XMSSPubkeyLength:
+		return [fieldparams.XMSSPubkeyLength]byte(pubkey), nil
+	case fieldparams.BLSPubkeyLength:
+		if !bytes.Equal(pubkey[:prefixLength], make([]byte, prefixLength)) {
+			return [fieldparams.XMSSPubkeyLength]byte{}, fmt.Errorf("public key %#x is not an XMSS public key", pubkey)
+		}
+
+		return [fieldparams.XMSSPubkeyLength]byte(pubkey[prefixLength:]), nil
+	default:
+		return [fieldparams.XMSSPubkeyLength]byte{}, fmt.Errorf("public key of %d bytes", len(pubkey))
+	}
 }
 
 // loadPQKeys derives the post-quantum keys of the validators of the keymanager that are not derived yet.
@@ -135,6 +226,9 @@ func (v *validator) syncPQSigner(ctx context.Context) error {
 		}
 
 		v.preparePQKey(keys.XMSS)
+		if err := keys.PersistXMSS(); err != nil {
+			log.WithError(err).WithField("pubkey", fmt.Sprintf("%#x", blsKey)).Warn("Could not keep the XMSS trees on disk: the next start builds them again")
+		}
 	}
 
 	return nil

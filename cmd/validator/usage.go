@@ -125,6 +125,7 @@ var appHelpFlagGroups = []flagGroup{
 			flags.ValidatorsRegistrationBatchSizeFlag,
 			flags.EnableStatelessFlag,
 			flags.VRFStateURLFlag,
+			flags.XMSSCacheURLFlag,
 			flags.GraffitiFlag,
 			flags.GraffitiFileFlag,
 		},

@@ -301,8 +301,10 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 		return errors.Wrap(err, "could not get legacy database location")
 	}
 
-	// Check if minimal slashing protection is requested.
-	isMinimalSlashingProtectionRequested := cliCtx.Bool(features.EnableMinimalSlashingProtection.Name)
+	// The PQ devnet always uses the minimal slashing protection database, whatever --enable-minimal-slashing-protection
+	// says: the XMSS signing protection database lives in the directory of the minimal one, so the complete one would
+	// be seen next to a minimal one, and the validator client would refuse to restart.
+	isMinimalSlashingProtectionRequested := true
 
 	if clearFlag || forceClearFlag {
 		var err error
@@ -460,6 +462,7 @@ func (c *ValidatorClient) registerValidatorService(cliCtx *cli.Context) error {
 		Distributed:             distributed,
 		Stateless:               stateless,
 		VRFStateURL:             cliCtx.String(flags.VRFStateURLFlag.Name),
+		XMSSCacheURL:            cliCtx.String(flags.XMSSCacheURLFlag.Name),
 		CloseClientFunc:         c.Close,
 		MaxHealthChecks:         cliCtx.Int(flags.MaxHealthChecksFlag.Name),
 	})

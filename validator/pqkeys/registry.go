@@ -64,6 +64,12 @@ func NewRegistry(ctx context.Context, source VRFStateSource) *Registry {
 	}
 }
 
+// UseXMSSLoader makes the registry get the XMSS keys from `loader`, which reads their trees from the tree caches
+// instead of building them when it can. Call it before Load.
+func (r *Registry) UseXMSSLoader(loader *XMSSLoader) {
+	r.deriveKeys = loader.DeriveAll
+}
+
 // Load derives the keys of the validators whose BLS secret keys are `secretKeys`, and adds them to the registry.
 // It skips the validators already in the registry: deriving keys takes a few CPU seconds per validator.
 func (r *Registry) Load(ctx context.Context, secretKeys []bls.SecretKey) error {

@@ -80,6 +80,58 @@ The Kurtosis setup of Lighthouse sets `xmss_pubkey_url`. On such a devnet, the
 genesis keys come from the precomputed file. A validator client finds its
 validators only if this file was made with the derivation above.
 
+## XMSS tree caches
+
+Building an XMSS key from its seed builds its top tree: about 0.6 s on all CPUs,
+10 minutes for 1,000 keys. Signing in a new bottom tree builds it, at the same
+cost. The validator client avoids both with tree caches.
+
+At start, it gets the trees of each key from the first of these steps that
+works, in this order:
+
+1. **On disk.** It first tries the trees of the key in
+   `<datadir>/xmss-cache`. If the file is missing or invalid, it goes to step 2.
+2. **Published, with `--xmss-cache-url`.** It then tries the published tree
+   cache. If the flag is not set, the beacon node cannot list the validators,
+   the key has no record, or the record is unreadable or invalid, it goes to
+   step 3.
+3. **From the seed.** It builds the trees itself, which takes the CPU time
+   above.
+
+After step 2 or 3, it writes the trees to `<datadir>/xmss-cache`. The next
+start then stops at step 1.
+
+### On disk
+
+It keeps the trees of each key in
+`<datadir>/xmss-cache/<BLS public key>.cache`: a magic, the XMSS public key,
+the trees in the leanXMSS tree cache format, and an HMAC-SHA256 tag keyed by a
+key derived from the XMSS seed. The tag makes the stored public key
+trustworthy: a file it did not write cannot pass. It writes the file after
+preparing the bottom trees of the current duties, when they changed.
+
+### Published
+
+It reads the record of the key in the tree cache Lighthouse reads with its own
+`--xmss-cache-url`, with an HTTP range request or a file seek: 14,696 bytes, the
+top tree and bottom trees 0 and 24,576. The records follow the validator
+indices of the devnet-0 genesis, and hold no public key.
+
+The first time a key is not on disk, it lists the XMSS public keys of the
+validator registry from the beacon node, once. The key of the validator at
+index `i` is the public key the record `i` is checked against. It finds the
+record of a key by the public parameter of its seed, which costs two hashes,
+and the last 16 bytes of each public key of the registry. If the beacon node
+cannot list the validators, it builds the keys, and lists them again at the
+next load.
+
+### Checks
+
+go-leanxmss checks the trees against the public key: a cache that loads gives
+valid signatures, and a corrupt or foreign one falls back to the next step. The
+trees hold no secret. Loading a key from a tree cache takes well under a
+millisecond.
+
 ## Tests
 
 `Derive` matches the test vector of Lighthouse's

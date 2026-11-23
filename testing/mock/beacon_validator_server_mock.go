@@ -103,6 +103,21 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) DomainData(arg0, arg1 any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DomainData", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).DomainData), arg0, arg1)
 }
 
+// GetAggregateAndProofPQ mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetAggregateAndProofPQ(arg0 context.Context, arg1 *eth.AggregateAndProofPQRequest) (*eth.AggregateAttestationAndProofPQ, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAggregateAndProofPQ", arg0, arg1)
+	ret0, _ := ret[0].(*eth.AggregateAttestationAndProofPQ)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAggregateAndProofPQ indicates an expected call of GetAggregateAndProofPQ.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetAggregateAndProofPQ(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAggregateAndProofPQ", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetAggregateAndProofPQ), arg0, arg1)
+}
+
 // GetAttestationData mocks base method.
 func (m *MockBeaconNodeValidatorServer) GetAttestationData(arg0 context.Context, arg1 *eth.AttestationDataRequest) (*eth.AttestationData, error) {
 	m.ctrl.T.Helper()
@@ -191,6 +206,21 @@ func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadEnvelope(arg0 context
 func (mr *MockBeaconNodeValidatorServerMockRecorder) GetExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetExecutionPayloadEnvelope), arg0, arg1)
+}
+
+// GetExecutionPayloadEnvelopePQ mocks base method.
+func (m *MockBeaconNodeValidatorServer) GetExecutionPayloadEnvelopePQ(arg0 context.Context, arg1 *eth.ExecutionPayloadEnvelopeRequest) (*eth.ExecutionPayloadEnvelopePQ, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExecutionPayloadEnvelopePQ", arg0, arg1)
+	ret0, _ := ret[0].(*eth.ExecutionPayloadEnvelopePQ)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExecutionPayloadEnvelopePQ indicates an expected call of GetExecutionPayloadEnvelopePQ.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) GetExecutionPayloadEnvelopePQ(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutionPayloadEnvelopePQ", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).GetExecutionPayloadEnvelopePQ), arg0, arg1)
 }
 
 // GetExecutionPayloadEnvelopeV2 mocks base method.
@@ -388,6 +418,21 @@ func (mr *MockBeaconNodeValidatorServerMockRecorder) ProposeAttestationElectra(a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestationElectra", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).ProposeAttestationElectra), arg0, arg1)
 }
 
+// ProposeAttestationPQ mocks base method.
+func (m *MockBeaconNodeValidatorServer) ProposeAttestationPQ(arg0 context.Context, arg1 *eth.SingleAttestationPQ) (*eth.AttestResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProposeAttestationPQ", arg0, arg1)
+	ret0, _ := ret[0].(*eth.AttestResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ProposeAttestationPQ indicates an expected call of ProposeAttestationPQ.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) ProposeAttestationPQ(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProposeAttestationPQ", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).ProposeAttestationPQ), arg0, arg1)
+}
+
 // ProposeBeaconBlock mocks base method.
 func (m *MockBeaconNodeValidatorServer) ProposeBeaconBlock(arg0 context.Context, arg1 *eth.GenericSignedBeaconBlock) (*eth.ProposeResponse, error) {
 	m.ctrl.T.Helper()
@@ -431,6 +476,21 @@ func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelope(arg0 con
 func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnvelope(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelope", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelope), arg0, arg1)
+}
+
+// PublishExecutionPayloadEnvelopePQ mocks base method.
+func (m *MockBeaconNodeValidatorServer) PublishExecutionPayloadEnvelopePQ(arg0 context.Context, arg1 *eth.SignedExecutionPayloadEnvelopePQ) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishExecutionPayloadEnvelopePQ", arg0, arg1)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishExecutionPayloadEnvelopePQ indicates an expected call of PublishExecutionPayloadEnvelopePQ.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) PublishExecutionPayloadEnvelopePQ(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishExecutionPayloadEnvelopePQ", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).PublishExecutionPayloadEnvelopePQ), arg0, arg1)
 }
 
 // PublishExecutionPayloadEnvelopeV2 mocks base method.
@@ -548,6 +608,21 @@ func (m *MockBeaconNodeValidatorServer) SubmitPayloadAttestation(arg0 context.Co
 func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitPayloadAttestation(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitPayloadAttestation", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitPayloadAttestation), arg0, arg1)
+}
+
+// SubmitSignedAggregateAndProofPQ mocks base method.
+func (m *MockBeaconNodeValidatorServer) SubmitSignedAggregateAndProofPQ(arg0 context.Context, arg1 *eth.SignedAggregateAttestationAndProofPQ) (*eth.SignedAggregateSubmitResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubmitSignedAggregateAndProofPQ", arg0, arg1)
+	ret0, _ := ret[0].(*eth.SignedAggregateSubmitResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubmitSignedAggregateAndProofPQ indicates an expected call of SubmitSignedAggregateAndProofPQ.
+func (mr *MockBeaconNodeValidatorServerMockRecorder) SubmitSignedAggregateAndProofPQ(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitSignedAggregateAndProofPQ", reflect.TypeOf((*MockBeaconNodeValidatorServer)(nil).SubmitSignedAggregateAndProofPQ), arg0, arg1)
 }
 
 // SubmitSignedAggregateSelectionProof mocks base method.

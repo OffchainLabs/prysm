@@ -57,6 +57,7 @@ type ValidatorService struct {
 	disableDutiesPolling    bool
 	stateless               bool
 	vrfStateURL             string
+	xmssCacheURL            string
 	closeClientFunc         func() // validator client stop function is used here
 }
 
@@ -88,6 +89,7 @@ type Config struct {
 	DisableDutiesPolling    bool
 	Stateless               bool
 	VRFStateURL             string // Location of the VRF state of the PQ fork: an HTTP(S) URL, a file URI or a path.
+	XMSSCacheURL            string // Location of the published XMSS tree cache of the PQ fork: an HTTP(S) URL, a file URI or a path.
 	CloseClientFunc         func()
 }
 
@@ -113,6 +115,7 @@ func NewValidatorService(ctx context.Context, cfg *Config) (*ValidatorService, e
 		disableDutiesPolling:    cfg.DisableDutiesPolling,
 		stateless:               cfg.Stateless,
 		vrfStateURL:             cfg.VRFStateURL,
+		xmssCacheURL:            cfg.XMSSCacheURL,
 		closeClientFunc:         cfg.CloseClientFunc,
 		maxHealthChecks:         cfg.MaxHealthChecks,
 		dutyAwareShutdown:       newDutyAwareShutdownTracker(),
@@ -189,7 +192,8 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
-	pqKeys, err := newPQKeys(v.ctx, v.vrfStateURL)
+	chainClient := NewChainClient(v.conn)
+	pqKeys, err := newPQKeys(v.ctx, v.vrfStateURL, v.xmssCacheURL, v.db.DatabasePath(), chainClient)
 	if err != nil {
 		log.WithError(err).Error("Could not start the validator client")
 		return
@@ -218,7 +222,7 @@ func (v *ValidatorService) Start() {
 		graffitiOrderedIndex:         graffitiOrderedIndex,
 		conn:                         v.conn,
 		validatorClient:              validatorClient,
-		chainClient:                  NewChainClient(v.conn),
+		chainClient:                  chainClient,
 		nodeClient:                   NewNodeClient(v.conn),
 		db:                           v.db,
 		km:                           nil,

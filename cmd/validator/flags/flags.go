@@ -441,6 +441,12 @@ var (
 		Name:  "vrf-state-url",
 		Usage: "PQ fork only. Location of the VRF state the genesis tool publishes: an HTTP(S) URL, a file URI or a path. Without it, the validators cannot propose.",
 	}
+	// XMSSCacheURLFlag is the location of the published XMSS tree cache of the devnet-0 keys, from which the validator
+	// client loads the trees of the XMSS keys of its validators instead of building them.
+	XMSSCacheURLFlag = &cli.StringFlag{
+		Name:  "xmss-cache-url",
+		Usage: "PQ fork only. Location of the pregenerated XMSS signing trees of the devnet-0 keys: an HTTP(S) URL, a file URI or a path.",
+	}
 	// DisableDutiesPolling disables the polling of duties on dependent root changes.
 	DisableDutiesPolling = &cli.BoolFlag{
 		Name:  "disable-duties-polling",

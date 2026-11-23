@@ -90,6 +90,7 @@ var appFlags = []cli.Flag{
 	flags.ValidatorsRegistrationBatchSizeFlag,
 	flags.EnableStatelessFlag,
 	flags.VRFStateURLFlag,
+	flags.XMSSCacheURLFlag,
 	////////////////////
 	cmd.DisableMonitoringFlag,
 	cmd.MonitoringHostFlag,
