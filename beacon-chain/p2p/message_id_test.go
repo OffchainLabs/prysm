@@ -1,12 +1,15 @@
 package p2p_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/encoder"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/crypto/hash"
@@ -62,6 +65,30 @@ func TestMessageIDFunction_HashesCorrectlyAltair(t *testing.T) {
 	hashedData = hash.Hash(combinedObj)
 	msgID = string(hashedData[:20])
 	assert.Equal(t, msgID, p2p.MsgID(nMsg), "Got incorrect msg id")
+}
+
+func TestMsgID_OverlongSnappy(t *testing.T) {
+	prevMaxPayloadSize := encoder.MaxPayloadSize
+	encoder.MaxPayloadSize = 1000
+	t.Cleanup(func() { encoder.MaxPayloadSize = prevMaxPayloadSize })
+	d, err := signing.ComputeForkDigest(params.BeaconConfig().AltairForkVersion, params.BeaconConfig().GenesisValidatorsRoot[:])
+	assert.NoError(t, err)
+	tpc := fmt.Sprintf(p2p.BlockSubnetTopicFormat, d)
+
+	// Encoding every byte as its own literal is valid snappy, but longer than gossip allows here.
+	data := bytes.Repeat([]byte{'x'}, 700)
+	overlong := binary.AppendUvarint(nil, uint64(len(data)))
+	for _, b := range data {
+		overlong = append(overlong, 0x00, b)
+	}
+	pMsg := &pubsubpb.Message{Data: overlong, Topic: &tpc}
+
+	// It must get the invalid snappy ID of its raw data, not the ID of the valid encoding.
+	combinedObj := append(params.BeaconConfig().MessageDomainInvalidSnappy[:], bytesutil.Uint64ToBytesLittleEndian(uint64(len(tpc)))...)
+	combinedObj = append(combinedObj, tpc...)
+	combinedObj = append(combinedObj, overlong...)
+	hashedData := hash.Hash(combinedObj)
+	assert.Equal(t, string(hashedData[:20]), p2p.MsgID(pMsg), "Got incorrect msg id")
 }
 
 func TestMessageIDFunction_HashesCorrectlyBellatrix(t *testing.T) {
