@@ -63,7 +63,7 @@ func (vs *Server) getSyncAggregate(ctx context.Context, slot primitives.Slot, ro
 	// Contributions have to match the input root
 	proposerContributions := proposerSyncContributions(poolContributions).filterByBlockRoot(root)
 
-	aggregatedContributions, err := vs.aggregatedSyncCommitteeMessages(ctx, slot, root, poolContributions, headState)
+	aggregatedContributions, err := vs.aggregatedSyncCommitteeMessages(ctx, slot, root, proposerContributions, headState)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get aggregated sync committee messages")
 	}
