@@ -368,3 +368,37 @@ func TestAggregateAndSaveForkChoiceAtts_Experimental(t *testing.T) {
 	assert.DeepEqual(t, wanted, s.cfg.Cache.ForkchoiceAttestations())
 	assert.Equal(t, 0, len(s.cfg.Pool.ForkchoiceAttestations()))
 }
+
+func TestBatchForkChoiceAtts_ExperimentalLateBit(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableExperimentalAttestationPool: true})
+	defer resetCfg()
+
+	s, err := NewService(t.Context(), &Config{Pool: NewPool(), Cache: cache.NewAttestationCache()})
+	require.NoError(t, err)
+
+	priv, err := bls.RandKey()
+	require.NoError(t, err)
+	sig := priv.Sign([]byte("dummy_test_data"))
+	var mockRoot [32]byte
+	newAtt := func(bit uint64) *ethpb.Attestation {
+		att := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{BeaconBlockRoot: mockRoot[:], Source: &ethpb.Checkpoint{Root: mockRoot[:]}, Target: &ethpb.Checkpoint{Root: mockRoot[:]}},
+			AggregationBits: bitfield.NewBitlist(8),
+			Signature:       sig.Marshal(),
+		}
+		att.AggregationBits.SetBitAt(bit, true)
+		return att
+	}
+
+	require.NoError(t, s.cfg.Cache.Add(newAtt(0)))
+	require.NoError(t, s.batchForkChoiceAtts(t.Context()))
+	// A bit that arrives after the first batch must reach fork choice in the next batch.
+	require.NoError(t, s.cfg.Cache.Add(newAtt(1)))
+	require.NoError(t, s.batchForkChoiceAtts(t.Context()))
+
+	var maxBits uint64
+	for _, a := range s.cfg.Cache.ForkchoiceAttestations() {
+		maxBits = max(maxBits, a.GetAggregationBits().Count())
+	}
+	assert.Equal(t, uint64(2), maxBits)
+}
