@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
@@ -150,6 +151,30 @@ func TestAdd(t *testing.T) {
 		assert.Equal(t, primitives.Slot(123), group.slot)
 		require.Equal(t, 1, len(group.atts))
 		assert.DeepEqual(t, []int{0, 1}, group.atts[0].GetAggregationBits().BitIndices())
+	})
+	t.Run("first attestation is not modified by aggregation", func(t *testing.T) {
+		c := NewAttestationCache()
+		first := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 123, BeaconBlockRoot: make([]byte, 32), Source: &ethpb.Checkpoint{Root: make([]byte, 32)}, Target: &ethpb.Checkpoint{Root: make([]byte, 32)}},
+			AggregationBits: bitfield.NewBitlist(8),
+			Signature:       sig.Marshal(),
+		}
+		first.AggregationBits.SetBitAt(0, true)
+		require.NoError(t, c.Add(first))
+
+		second := &ethpb.Attestation{
+			Data:            &ethpb.AttestationData{Slot: 123, BeaconBlockRoot: make([]byte, 32), Source: &ethpb.Checkpoint{Root: make([]byte, 32)}, Target: &ethpb.Checkpoint{Root: make([]byte, 32)}},
+			AggregationBits: bitfield.NewBitlist(8),
+			Signature:       sig.Marshal(),
+		}
+		second.AggregationBits.SetBitAt(1, true)
+		require.NoError(t, c.Add(second))
+
+		all := c.GetAll()
+		require.Equal(t, 1, len(all))
+		assert.Equal(t, uint64(2), all[0].GetAggregationBits().Count())
+		assert.Equal(t, uint64(1), first.AggregationBits.Count())
+		assert.Equal(t, true, bytes.Equal(sig.Marshal(), first.Signature))
 	})
 }
 

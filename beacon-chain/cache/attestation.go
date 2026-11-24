@@ -75,7 +75,8 @@ func (c *AttestationCache) Add(att ethpb.Att) error {
 	if group == nil {
 		group = &attGroup{
 			slot: att.GetData().Slot,
-			atts: []ethpb.Att{att},
+			// Copy the attestation because unaggregated attestations are later aggregated into it in place.
+			atts: []ethpb.Att{att.Clone()},
 		}
 		c.atts[id] = group
 		return nil
