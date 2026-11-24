@@ -2,7 +2,6 @@ package validator
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
@@ -13,12 +12,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
+	"github.com/sirupsen/logrus"
 )
-
-type pqPreparedProposal struct {
-	mu     sync.Mutex
-	latest *pqpool.Prepared
-}
 
 // Merging is a proving step, so it runs before the slot and the block is not held up by it.
 func (vs *Server) PreparePQProposals() {
@@ -29,6 +24,16 @@ func (vs *Server) PreparePQProposals() {
 			return
 		}
 	}
+	builder := &pqpool.Builder{
+		Head:        vs.HeadFetcher,
+		Pool:        vs.PQAttPool,
+		GenesisTime: vs.TimeFetcher.GenesisTime(),
+		Local: func(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) bool {
+			proposer, err := helpers.BeaconProposerIndexAtSlot(ctx, st, slot)
+			return err == nil && vs.SubscribedValidatorsCache.Has(proposer)
+		},
+	}
+	vs.pqBuilder.Store(builder)
 	cfg := params.BeaconConfig()
 	ticker := slots.NewSlotTicker(vs.TimeFetcher.GenesisTime(), cfg.SlotDuration())
 	defer ticker.Done()
@@ -37,66 +42,49 @@ func (vs *Server) PreparePQProposals() {
 		case <-vs.Ctx.Done():
 			return
 		case slot := <-ticker.C():
-			target := slot + cfg.MinAttestationInclusionDelayPQ
-			if slots.ToEpoch(target) < cfg.PQForkEpoch || !vs.SubscribedValidatorsCache.Validating() {
+			if slots.ToEpoch(slot+1) < cfg.PQForkEpoch || !vs.SubscribedValidatorsCache.Validating() {
 				continue
 			}
-			go vs.preparePQProposal(target)
+			go builder.Slot(vs.Ctx, slot)
 		}
 	}
 }
 
-func (vs *Server) preparePQProposal(slot primitives.Slot) {
-	preparer := &pqpool.Preparer{
-		Head:        vs.HeadFetcher,
-		Pool:        vs.PQAttPool,
-		GenesisTime: vs.TimeFetcher.GenesisTime(),
-		Wanted: func(ctx context.Context, st state.ReadOnlyBeaconState) bool {
-			proposer, err := helpers.BeaconProposerIndexAtSlot(ctx, st, slot)
-			return err == nil && vs.SubscribedValidatorsCache.Has(proposer)
-		},
-		OnReady: func(_ context.Context, _ state.ReadOnlyBeaconState, prepared *pqpool.Prepared) {
-			vs.pqPrepared.mu.Lock()
-			vs.pqPrepared.latest = prepared
-			vs.pqPrepared.mu.Unlock()
-		},
-	}
-	preparer.Run(vs.Ctx, slot)
-}
-
-func (vs *Server) packPQ(ctx context.Context, slot primitives.Slot, parentRoot [32]byte, head state.ReadOnlyBeaconState) ([]ethpb.Att, []byte, error) {
-	vs.pqPrepared.mu.Lock()
-	prepared := vs.pqPrepared.latest
-	vs.pqPrepared.mu.Unlock()
+func (vs *Server) packPQ(ctx context.Context, slot primitives.Slot, head state.ReadOnlyBeaconState) ([]ethpb.Att, []byte, error) {
 	reference := slot - min(slot, params.BeaconConfig().MinAttestationInclusionDelayPQ)
 	snapshot := timing.NewJob(ctx, "initial", uint64(slot), uint64(reference))
-	if prepared != nil && prepared.Slot == slot && prepared.ParentRoot == parentRoot {
-		snapshot.Emit("proposal_snapshot", "candidate", map[string]any{
-			"proof_id": timing.ProofID(prepared.Proof), "records": len(prepared.Atts), "claims": prepared.Validators, "round": prepared.Round,
-		})
-		return prepared.Atts, prepared.Proof, nil
-	}
-	snapshot.Emit("proposal_snapshot", "no_candidate", nil)
 	start, err := slots.StartTime(vs.TimeFetcher.GenesisTime(), slot)
 	if err != nil {
 		return nil, nil, err
 	}
-	type result struct {
-		atts  []ethpb.Att
-		proof []byte
-		err   error
+	builder := vs.pqBuilder.Load()
+	var prepared *pqpool.Prepared
+	if builder != nil {
+		prepared = builder.Pack(ctx, slot, head, pqpool.FallbackDeadline(start, slot))
 	}
-	done := make(chan result, 1)
-	go func() {
-		atts, proof, err := pqpool.Pack(ctx, head, vs.PQAttPool.All(), vs.PQAttPool.Aggregates())
-		done <- result{atts, proof, err}
-	}()
-	select {
-	case r := <-done:
-		return r.atts, r.proof, r.err
-	case <-time.After(time.Until(pqpool.FallbackDeadline(start, slot))):
-		// A block without attestations beats a block that misses the attestation deadline.
-		log.WithField("slot", slot).Warn("PQ block proof was not ready in time, proposing without attestations")
+	if prepared == nil {
+		snapshot.Emit("proposal_snapshot", "no_candidate", nil)
+		if builder != nil && builder.Has(reference) {
+			log.WithFields(logrus.Fields{"slot": slot, "voteSlot": reference}).Info("Nothing to pack in the PQ block, the ready votes are already on chain")
+			return nil, nil, nil
+		}
+		// Proving inside the proposal slot delays the block past the attestation deadline.
+		log.WithFields(logrus.Fields{"slot": slot, "voteSlot": reference}).Warn("No PQ vote slot proof was ready, proposing without attestations")
 		return nil, nil, nil
 	}
+	snapshot.Emit("proposal_snapshot", "candidate", map[string]any{
+		"proof_id": timing.ProofID(prepared.Proof), "records": len(prepared.Atts), "claims": prepared.Validators, "round": prepared.Round,
+	})
+	log.WithFields(logrus.Fields{
+		"slot":           slot,
+		"voteSlots":      prepared.VoteSlots,
+		"attestations":   len(prepared.Atts),
+		"validators":     prepared.Validators,
+		"newVoters":      prepared.Gain,
+		"rewardScore":    prepared.Score,
+		"joined":         len(prepared.VoteSlots) > 1,
+		"joinTime":       prepared.JoinTime,
+		"sinceSlotStart": time.Since(start),
+	}).Info("Packed PQ block with vote slot proofs")
+	return prepared.Atts, prepared.Proof, nil
 }

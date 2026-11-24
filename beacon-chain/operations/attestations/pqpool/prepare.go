@@ -35,6 +35,9 @@ type Prepared struct {
 	Validators uint64
 	Gain       int
 	Round      int
+	VoteSlots  []primitives.Slot
+	Score      uint64
+	JoinTime   time.Duration
 }
 
 type Preparer struct {

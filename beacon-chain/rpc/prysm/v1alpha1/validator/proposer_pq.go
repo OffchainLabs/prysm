@@ -26,7 +26,7 @@ func (vs *Server) buildBlockPQ(ctx context.Context, sBlk interfaces.SignedBeacon
 		return nil, status.Errorf(codes.Internal, "Could not get parent execution requests: %v", err)
 	}
 	sBlk.SetParentExecutionRequestsPQ(parentRequests)
-	atts, proof, err := vs.packPQ(ctx, sBlk.Block().Slot(), sBlk.Block().ParentRoot(), head)
+	atts, proof, err := vs.packPQ(ctx, sBlk.Block().Slot(), head)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not pack attestations: %v", err)
 	}

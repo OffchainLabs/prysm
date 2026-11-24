@@ -6,6 +6,7 @@ package validator
 import (
 	"bytes"
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
@@ -73,7 +74,7 @@ type Server struct {
 	PQAttPool                        *pqpool.Pool
 	pqEnvelopes                      pqEnvelopeCache
 	pqAggregates                     pqAggregateCache
-	pqPrepared                       pqPreparedProposal
+	pqBuilder                        atomic.Pointer[pqpool.Builder]
 	PayloadAttestationPool           payloadattestation.PoolManager
 	SlashingsPool                    slashings.PoolManager
 	ExitPool                         voluntaryexits.PoolManager
