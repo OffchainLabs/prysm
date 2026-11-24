@@ -106,6 +106,7 @@ type validator struct {
 	duties                       *dutyStore
 	healthMonitor                *healthMonitor
 	nextFetchInFlight            atomic.Bool
+	pqPreparing                  atomic.Bool // Set while the XMSS bottom trees of the next epoch are built.
 	doppelGanger                 doppelGangerTracker
 	domainDataCache              *ristretto.Cache[string, proto.Message]
 	slotFeed                     *event.Feed

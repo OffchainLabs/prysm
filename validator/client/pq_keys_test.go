@@ -11,8 +11,10 @@ import (
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	validatormock "github.com/OffchainLabs/prysm/v7/testing/validator-mock"
+	"github.com/OffchainLabs/prysm/v7/validator/db/signingprotection"
 	dbTest "github.com/OffchainLabs/prysm/v7/validator/db/testing"
 	"github.com/OffchainLabs/prysm/v7/validator/pqkeys"
+	"github.com/OffchainLabs/prysm/v7/validator/xmsssigner"
 	"go.uber.org/mock/gomock"
 )
 
@@ -238,4 +240,71 @@ func (m *pqTestKeymanager) FetchValidatingPrivateKeys(ctx context.Context) ([][3
 	}
 
 	return secretKeys, nil
+}
+
+func TestXMSSLeavesToPrepare(t *testing.T) {
+	const treeLeaves = uint64(1) << xmssBottomTreeHeight
+
+	slotsPerEpoch := uint64(params.BeaconConfig().SlotsPerEpoch)
+	epochsPerSlotTree := primitives.Epoch(treeLeaves / xmsssigner.LeavesPerSlot / slotsPerEpoch)
+
+	// The slot leaves do not start at the start of a bottom tree: find the first epoch starting a slot tree.
+	firstSlotLeaf, err := xmsssigner.SlotLeafIndex(0, 0)
+	require.NoError(t, err)
+
+	firstTreeSlot := (treeLeaves - uint64(firstSlotLeaf)%treeLeaves) % treeLeaves / xmsssigner.LeavesPerSlot
+	require.Equal(t, uint64(0), firstTreeSlot%slotsPerEpoch)
+	firstTreeEpoch := primitives.Epoch(firstTreeSlot / slotsPerEpoch)
+
+	// slotLeaves returns the first and the last slot leaves of `epoch`.
+	slotLeaves := func(t *testing.T, epoch primitives.Epoch) []uint32 {
+		first, err := xmsssigner.SlotLeafIndex(primitives.Slot(uint64(epoch)*slotsPerEpoch), 0)
+		require.NoError(t, err)
+
+		last, err := xmsssigner.SlotLeafIndex(primitives.Slot((uint64(epoch)+1)*slotsPerEpoch-1), signingprotection.SlotMessage(xmsssigner.LeavesPerSlot-1))
+		require.NoError(t, err)
+
+		require.Equal(t, xmssBottomTree(first), xmssBottomTree(last))
+
+		return []uint32{first, last}
+	}
+
+	t.Run("same trees", func(t *testing.T) {
+		for _, epoch := range []primitives.Epoch{0, 1, firstTreeEpoch, firstTreeEpoch + epochsPerSlotTree - 2} {
+			leaves, err := xmssLeavesToPrepare(epoch)
+			require.NoError(t, err)
+			require.Equal(t, 0, len(leaves))
+		}
+	})
+
+	t.Run("next slot tree", func(t *testing.T) {
+		for _, epoch := range []primitives.Epoch{firstTreeEpoch - 1, firstTreeEpoch + epochsPerSlotTree - 1} {
+			leaves, err := xmssLeavesToPrepare(epoch)
+			require.NoError(t, err)
+			require.DeepEqual(t, slotLeaves(t, epoch+1), leaves)
+		}
+	})
+
+	t.Run("next attestation tree", func(t *testing.T) {
+		// The attestation leaf of epoch 2^15 is 2^16: the first leaf of a bottom tree.
+		const epoch = primitives.Epoch(1<<15 - 1)
+
+		attestation, err := xmsssigner.AttestationLeafIndex(epoch + 1)
+		require.NoError(t, err)
+		require.Equal(t, uint32(treeLeaves), attestation)
+
+		want := []uint32{attestation}
+		if (epoch+1-firstTreeEpoch)%epochsPerSlotTree == 0 {
+			want = append(want, slotLeaves(t, epoch+1)...)
+		}
+
+		leaves, err := xmssLeavesToPrepare(epoch)
+		require.NoError(t, err)
+		require.DeepEqual(t, want, leaves)
+	})
+
+	t.Run("beyond the leaves", func(t *testing.T) {
+		_, err := xmssLeavesToPrepare(primitives.Epoch(xmsssigner.AttestationLeafCount - 1))
+		require.ErrorContains(t, "beyond", err)
+	})
 }

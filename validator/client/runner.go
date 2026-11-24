@@ -135,6 +135,9 @@ func (r *runner) run(ctx context.Context) {
 				v.MaybeFetchNextDuties(ctx, slot)
 			}
 
+			// Build in the background the XMSS bottom trees the next epoch signs in for the first time.
+			v.prepareNextEpochPQKeys(ctx, slot)
+
 			// Background doppelganger check for keys quarantined by a key reload.
 			v.CheckDoppelGangerMidEpoch(ctx, slot)
 

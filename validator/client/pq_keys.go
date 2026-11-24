@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 
@@ -22,7 +23,11 @@ import (
 	"github.com/OffchainLabs/prysm/v7/validator/pqkeys"
 	"github.com/OffchainLabs/prysm/v7/validator/xmsssigner"
 	leanxmss "github.com/nalepae/go-leanxmss"
+	"github.com/sirupsen/logrus"
 )
+
+// xmssBottomTreeHeight is the height of an XMSS bottom tree: it holds 2^xmssBottomTreeHeight consecutive leaves.
+const xmssBottomTreeHeight = 16
 
 // errPQRequiresLocalKeys is returned in the PQ fork when the keymanager cannot hand out the BLS secret keys.
 var errPQRequiresLocalKeys = errors.New("the PQ fork requires a local or derived keymanager: the post-quantum keys are derived from the BLS secret keys")
@@ -257,6 +262,120 @@ func (v *validator) preparePQKey(key *leanxmss.PrivateKey) {
 			log.WithError(err).WithField("leaf", leaf).Warn("Could not prepare the XMSS bottom tree")
 		}
 	}
+}
+
+// prepareNextEpochPQKeys builds, at the start of an epoch, the XMSS bottom trees that the next epoch signs in for the
+// first time, for every XMSS key, then writes the trees to the tree caches on disk.
+// It uses a single goroutine.
+func (v *validator) prepareNextEpochPQKeys(ctx context.Context, slot primitives.Slot) {
+	if v.pqKeys == nil || !slots.IsEpochStart(slot) {
+		return
+	}
+
+	leaves, err := xmssLeavesToPrepare(slots.ToEpoch(slot))
+	if err != nil {
+		log.WithError(err).Debug("Could not compute the XMSS leaves to prepare")
+		return
+	}
+
+	if len(leaves) == 0 || !v.pqPreparing.CompareAndSwap(false, true) {
+		return
+	}
+
+	go func() {
+		defer v.pqPreparing.Store(false)
+
+		start := time.Now()
+		prepared := 0
+		for _, blsKey := range v.pqKeys.Pubkeys() {
+			if ctx.Err() != nil {
+				return
+			}
+
+			keys, ok := v.pqKeys.Keys(blsKey)
+			if !ok {
+				continue
+			}
+
+			pubkeyLog := log.WithField("pubkey", fmt.Sprintf("%#x", blsKey))
+			for _, leaf := range leaves {
+				if err := keys.XMSS.Prepare(leaf); err != nil {
+					pubkeyLog.WithError(err).WithField("leaf", leaf).Warn("Could not prepare the XMSS bottom tree")
+				}
+			}
+
+			if err := keys.PersistXMSS(); err != nil {
+				pubkeyLog.WithError(err).Warning("Could not keep the XMSS trees on disk: the next start builds them again")
+			}
+
+			prepared++
+		}
+
+		log.WithFields(logrus.Fields{
+			"keys":    prepared,
+			"leaves":  leaves,
+			"elapsed": time.Since(start),
+		}).Info("Prepared the XMSS bottom trees of the next epoch")
+	}()
+}
+
+// xmssLeavesToPrepare returns the leaves of the messages of the epoch after `epoch` whose bottom tree is not the
+// bottom tree of the same messages in `epoch`: the trees the next epoch signs in for the first time.
+func xmssLeavesToPrepare(epoch primitives.Epoch) ([]uint32, error) {
+	current, err := xmssEpochLeaves(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("leaves of epoch %d: %w", epoch, err)
+	}
+
+	next, err := xmssEpochLeaves(epoch + 1)
+	if err != nil {
+		return nil, fmt.Errorf("leaves of epoch %d: %w", epoch+1, err)
+	}
+
+	leaves := make([]uint32, 0, len(next))
+	for i := range next {
+		if xmssBottomTree(next[i]) != xmssBottomTree(current[i]) {
+			leaves = append(leaves, next[i])
+		}
+	}
+
+	return leaves, nil
+}
+
+// xmssEpochLeaves returns the leaf of the attestation targeting `epoch`, then the first and the last slot leaves of
+// `epoch`.
+func xmssEpochLeaves(epoch primitives.Epoch) ([]uint32, error) {
+	attestation, err := xmsssigner.AttestationLeafIndex(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("attestation leaf: %w", err)
+	}
+
+	firstSlot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("epoch start: %w", err)
+	}
+
+	lastSlot, err := slots.EpochEnd(epoch)
+	if err != nil {
+		return nil, fmt.Errorf("epoch end: %w", err)
+	}
+
+	first, err := xmsssigner.SlotLeafIndex(firstSlot, 0)
+	if err != nil {
+		return nil, fmt.Errorf("first slot leaf: %w", err)
+	}
+
+	last, err := xmsssigner.SlotLeafIndex(lastSlot, signingprotection.SlotMessage(xmsssigner.LeavesPerSlot-1))
+	if err != nil {
+		return nil, fmt.Errorf("last slot leaf: %w", err)
+	}
+
+	return []uint32{attestation, first, last}, nil
+}
+
+// xmssBottomTree returns the index of the XMSS bottom tree holding `leaf`.
+func xmssBottomTree(leaf uint32) uint32 {
+	return leaf >> xmssBottomTreeHeight
 }
 
 // pqClient returns the PQ part of the validator client. It returns false outside the PQ fork.
