@@ -46,7 +46,8 @@ func New(ctx context.Context, opts ...Option) (*Server, error) {
 		return nil, errors.New("router option not configured")
 	}
 	var handler http.Handler
-	defaultReadHeaderTimeout := time.Second
+	// Longer than the 90s a Go client keeps a spare connection, so the client drops an unused one first.
+	defaultReadHeaderTimeout := 2 * time.Minute
 	handler = middleware.MiddlewareChain(g.cfg.router, g.cfg.middlewares)
 	if g.cfg.timeout > 0*time.Second {
 		defaultReadHeaderTimeout = g.cfg.timeout

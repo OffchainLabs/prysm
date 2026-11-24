@@ -74,6 +74,12 @@ func NewRestConnectionProvider(endpoint string, opts ...RestConnectionProviderOp
 
 	// Build the HTTP transport chain
 	var transport http.RoundTripper = http.DefaultTransport
+	// The default of 2 makes every burst of requests dial spare connections, which the server closes unused.
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		t = t.Clone()
+		t.MaxIdleConnsPerHost = 64
+		transport = t
+	}
 
 	// Add custom headers if configured
 	if len(cfg.headers) > 0 {
