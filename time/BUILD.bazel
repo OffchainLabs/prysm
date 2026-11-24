@@ -1,8 +1,15 @@
-load("@prysm//tools/go:def.bzl", "go_library")
+load("@prysm//tools/go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
     srcs = ["utils.go"],
     importpath = "github.com/OffchainLabs/prysm/v7/time",
     visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["utils_test.go"],
+    embed = [":go_default_library"],
+    deps = ["//testing/require:go_default_library"],
 )

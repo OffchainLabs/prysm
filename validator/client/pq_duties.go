@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/OffchainLabs/prysm/v7/cmd/validator/flags"
 
@@ -140,10 +141,13 @@ func (v *validator) submitAttestationPQ(ctx context.Context, slot primitives.Slo
 		return fmt.Errorf("attestation signing root: %w", err)
 	}
 
+	signingStart := time.Now()
 	signature, err := v.pqSigner.SignAttestation(xmssKey, data.Source.Epoch, data.Target.Epoch, root)
 	if err != nil {
 		return fmt.Errorf("sign attestation: %w", err)
 	}
+
+	signingTime := time.Since(signingStart)
 
 	attestation := &ethpb.SingleAttestationPQ{
 		CommitteeId:   duty.CommitteeIndex,
@@ -160,20 +164,19 @@ func (v *validator) submitAttestationPQ(ctx context.Context, slot primitives.Slo
 		return fmt.Errorf("submit attestation: %w", err)
 	}
 
+	// Logged once per slot for all keys, by LogSubmissions.
+	if err := v.saveSubmittedAttPQ(attestation, pubKey[:], signingTime); err != nil {
+		if v.emitAccountMetrics {
+			ValidatorAttestFailVec.WithLabelValues(fmt.Sprintf("%#x", pubKey)).Inc()
+		}
+
+		return fmt.Errorf("save the submitted attestation for logging: %w", err)
+	}
+
 	if v.emitAccountMetrics {
 		ValidatorAttestSuccessVec.WithLabelValues(fmt.Sprintf("%#x", pubKey)).Inc()
 		ValidatorAttestedSlotsGaugeVec.WithLabelValues(fmt.Sprintf("%#x", pubKey)).Set(float64(slot))
 	}
-
-	log.WithFields(logrus.Fields{
-		"slot":           slot,
-		"validatorIndex": duty.ValidatorIndex,
-		"committeeIndex": duty.CommitteeIndex,
-		"blockRoot":      fmt.Sprintf("%#x", bytesutil.Trunc(data.BeaconBlockRoot)),
-		"sourceEpoch":    data.Source.Epoch,
-		"targetEpoch":    data.Target.Epoch,
-		"payloadStatus":  data.CommitteeIndex,
-	}).Info("Submitted new PQ attestation")
 
 	return nil
 }

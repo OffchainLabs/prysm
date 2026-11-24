@@ -2,6 +2,7 @@
 package time
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -18,4 +19,9 @@ func Until(t time.Time) time.Duration {
 // Now returns the current local time.
 func Now() time.Time {
 	return time.Now()
+}
+
+// PrettyMinMaxAverage returns `min`, `average` and `max` as one string, to log them in a single field.
+func PrettyMinMaxAverage(min, max, average time.Duration) string {
+	return fmt.Sprintf("[min: %v, avg: %v, max: %v]", min, average, max)
 }

@@ -10,6 +10,7 @@ import (
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/sirupsen/logrus"
 )
 
@@ -96,10 +97,6 @@ func (l *dataColumnBroadcastLogger) flush(root [fieldparams.RootLength]byte, inf
 		"root":           fmt.Sprintf("0x%s...", hex.EncodeToString(root[:])[:8]),
 		"count":          count,
 		"indices":        slice.PrettySlice(info.indices),
-		"sinceStartTime": prettyMinMaxAverage(info.minSinceStartTime, info.maxSinceStartTime, avgSinceStartTime),
+		"sinceStartTime": prysmTime.PrettyMinMaxAverage(info.minSinceStartTime, info.maxSinceStartTime, avgSinceStartTime),
 	}).Debug("Broadcasted data column sidecars summary")
-}
-
-func prettyMinMaxAverage(min, max, average time.Duration) string {
-	return fmt.Sprintf("[min: %v, avg: %v, max: %v]", min, average, max)
 }

@@ -2,6 +2,7 @@ package client
 
 import (
 	"testing"
+	"time"
 
 	field_params "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -10,6 +11,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/OffchainLabs/prysm/v7/validator/pqkeys"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
@@ -39,6 +41,30 @@ func TestLogSubmittedAtts(t *testing.T) {
 		require.NoError(t, v.saveSubmittedAtt(att, make([]byte, field_params.BLSPubkeyLength), false))
 		v.logSubmittedAtts(0)
 		assert.LogsContain(t, logHook, "committeeIndices=\"[44]\"")
+	})
+	t.Run("PQ attestations", func(t *testing.T) {
+		logHook := logTest.NewGlobal()
+		v := validator{
+			pqKeys:                    pqkeys.NewRegistry(t.Context(), nil),
+			submittedAtts:             make(map[submittedAttKey]*submittedAtt),
+			attestedSlotsByKeyByEpoch: make(map[primitives.Epoch]map[[field_params.BLSPubkeyLength]byte]primitives.Slot),
+		}
+
+		// newAtt returns a PQ attestation in committee `committee` with payload status `payloadStatus`.
+		newAtt := func(committee, payloadStatus primitives.CommitteeIndex) *ethpb.SingleAttestationPQ {
+			data := util.HydrateAttestationData(&ethpb.AttestationData{CommitteeIndex: payloadStatus})
+			return &ethpb.SingleAttestationPQ{CommitteeId: committee, Data: data}
+		}
+
+		require.NoError(t, v.saveSubmittedAttPQ(newAtt(3, 0), bytesutil.PadTo([]byte{1}, field_params.BLSPubkeyLength), 200*time.Millisecond))
+		require.NoError(t, v.saveSubmittedAttPQ(newAtt(5, 0), bytesutil.PadTo([]byte{2}, field_params.BLSPubkeyLength), 600400*time.Microsecond))
+		require.NoError(t, v.saveSubmittedAttPQ(newAtt(7, 1), bytesutil.PadTo([]byte{3}, field_params.BLSPubkeyLength), 300*time.Millisecond))
+		v.logSubmittedAtts(0)
+
+		require.Equal(t, 2, len(logHook.AllEntries()))
+		assert.LogsContain(t, logHook, "Submitted new PQ attestations")
+		assert.LogsContain(t, logHook, "committeeIndices=\"[3 5]\" package=validator/client payloadStatus=0 pubkeys=\"[0x010000000000 0x020000000000]\" signingTime=\"[min: 200ms, avg: 400ms, max: 600ms]\"")
+		assert.LogsContain(t, logHook, "committeeIndices=\"[7]\" package=validator/client payloadStatus=1 pubkeys=\"[0x030000000000]\" signingTime=\"[min: 300ms, avg: 300ms, max: 300ms]\"")
 	})
 	t.Run("electra attestations multiple saved", func(t *testing.T) {
 		logHook := logTest.NewGlobal()

@@ -1,15 +1,18 @@
 package client
 
 import (
+	"encoding/binary"
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/container/slice"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -19,12 +22,14 @@ type submittedAttData struct {
 	beaconBlockRoot []byte
 	source          *ethpb.Checkpoint
 	target          *ethpb.Checkpoint
+	payloadStatus   primitives.CommitteeIndex // Index of the attestation data. Logged in the PQ fork only.
 }
 
 type submittedAtt struct {
-	data       submittedAttData
-	pubkeys    [][]byte
-	committees []primitives.CommitteeIndex
+	data         submittedAttData
+	pubkeys      [][]byte
+	committees   []primitives.CommitteeIndex
+	signingTimes []time.Duration // Time taken to sign each attestation. Recorded in the PQ fork only.
 }
 
 // slotRootKey groups submissions made for the same slot and block root.
@@ -53,7 +58,8 @@ type submittedPayloadAttKey struct {
 //   - AttestationData.BeaconBlockRoot
 //   - AttestationData.Source.HashTreeRoot()
 //   - AttestationData.Target.HashTreeRoot()
-type submittedAttKey [96]byte
+//   - AttestationData.CommitteeIndex, the payload status, little endian, in the PQ fork only. Zero otherwise.
+type submittedAttKey [104]byte
 
 func (k *submittedAttKey) FromAttData(data *ethpb.AttestationData) error {
 	sourceRoot, err := data.Source.HashTreeRoot()
@@ -73,6 +79,18 @@ func (k *submittedAttKey) FromAttData(data *ethpb.AttestationData) error {
 // saveSubmittedAtt saves the submitted attestation data along with the attester's pubkey.
 // The purpose of this is to display combined attesting logs for all keys managed by the validator client.
 func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate bool) error {
+	return v.saveSubmittedAttWithSigningTimes(att, pubkey, isAggregate, nil)
+}
+
+// saveSubmittedAttPQ saves the submitted PQ attestation `att` of the attester whose BLS public key is `pubkey`, as
+// saveSubmittedAtt does, with `signingTime`, the time taken to sign it.
+func (v *validator) saveSubmittedAttPQ(att ethpb.Att, pubkey []byte, signingTime time.Duration) error {
+	return v.saveSubmittedAttWithSigningTimes(att, pubkey, false, []time.Duration{signingTime})
+}
+
+// saveSubmittedAttWithSigningTimes saves the submitted attestation `att` of the attester whose BLS public key is
+// `pubkey`, with `signingTimes`, the times taken to sign it. `signingTimes` is empty if they are not recorded.
+func (v *validator) saveSubmittedAttWithSigningTimes(att ethpb.Att, pubkey []byte, isAggregate bool, signingTimes []time.Duration) error {
 	v.submissionLogsLock.Lock()
 	defer v.submissionLogsLock.Unlock()
 	data := att.GetData()
@@ -86,6 +104,12 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 		target:          data.Target,
 	}
 
+	// In the PQ fork, the index of the attestation data is the payload status: group by it too.
+	if v.pqKeys != nil {
+		binary.LittleEndian.PutUint64(key[96:], uint64(data.CommitteeIndex))
+		d.payloadStatus = data.CommitteeIndex
+	}
+
 	var submittedAtts map[submittedAttKey]*submittedAtt
 	if isAggregate {
 		submittedAtts = v.submittedAggregates
@@ -96,15 +120,16 @@ func (v *validator) saveSubmittedAtt(att ethpb.Att, pubkey []byte, isAggregate b
 
 	if submittedAtts[key] == nil {
 		submittedAtts[key] = &submittedAtt{
-			d,
-			[][]byte{},
-			[]primitives.CommitteeIndex{},
+			data:       d,
+			pubkeys:    [][]byte{},
+			committees: []primitives.CommitteeIndex{},
 		}
 	}
 	submittedAtts[key] = &submittedAtt{
-		d,
-		append(submittedAtts[key].pubkeys, pubkey),
-		append(submittedAtts[key].committees, att.GetCommitteeIndex()),
+		data:         d,
+		pubkeys:      append(submittedAtts[key].pubkeys, pubkey),
+		committees:   append(submittedAtts[key].committees, att.GetCommitteeIndex()),
+		signingTimes: append(submittedAtts[key].signingTimes, signingTimes...),
 	}
 
 	return nil
@@ -224,7 +249,7 @@ func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 		for i, c := range attLog.committees {
 			committees[i] = strconv.FormatUint(uint64(c), 10)
 		}
-		log.WithFields(logrus.Fields{
+		fields := logrus.Fields{
 			"slot":               slot,
 			"sinceSlotStartTime": sinceSlotStartTime,
 			"committeeIndices":   committees,
@@ -234,7 +259,19 @@ func (v *validator) logSubmittedAtts(slot primitives.Slot) {
 			"sourceRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.source.Root)),
 			"targetEpoch":        attLog.data.target.Epoch,
 			"targetRoot":         fmt.Sprintf("%#x", bytesutil.Trunc(attLog.data.target.Root)),
-		}).Info("Submitted new attestations")
+		}
+
+		if v.pqKeys != nil {
+			fields["payloadStatus"] = attLog.data.payloadStatus
+			if len(attLog.signingTimes) > 0 {
+				fields["signingTime"] = prettySigningTimes(attLog.signingTimes)
+			}
+
+			log.WithFields(fields).Info("Submitted new PQ attestations")
+			continue
+		}
+
+		log.WithFields(fields).Info("Submitted new attestations")
 	}
 	for _, attLog := range v.submittedAggregates {
 		pubkeys := make([]string, len(attLog.pubkeys))
@@ -318,4 +355,21 @@ func (v *validator) logSubmittedSyncCommitteeContributions(slot primitives.Slot)
 	}
 
 	v.submittedSyncContributions = make(map[slotRootKey]*submittedSyncContribution)
+}
+
+// prettySigningTimes returns the minimum, the average and the maximum of the non empty `signingTimes`, rounded to the
+// millisecond, as one string.
+func prettySigningTimes(signingTimes []time.Duration) string {
+	sum := time.Duration(0)
+	for _, signingTime := range signingTimes {
+		sum += signingTime
+	}
+
+	average := sum / time.Duration(len(signingTimes))
+
+	return prysmTime.PrettyMinMaxAverage(
+		slices.Min(signingTimes).Round(time.Millisecond),
+		slices.Max(signingTimes).Round(time.Millisecond),
+		average.Round(time.Millisecond),
+	)
 }

@@ -360,8 +360,8 @@ func (s *Service) processDataColumnLogs() {
 						"root":           fmt.Sprintf("%#x", root),
 						"count":          totalReceived,
 						"indices":        slice.PrettySlice(indices),
-						"validationTime": prettyMinMaxAverage(minValidationTime, maxValidationTime, avgValidationTime),
-						"sinceStartTime": prettyMinMaxAverage(minSinceStartTime, maxSinceStartTime, avgSinceStartTime),
+						"validationTime": prysmTime.PrettyMinMaxAverage(minValidationTime, maxValidationTime, avgValidationTime),
+						"sinceStartTime": prysmTime.PrettyMinMaxAverage(minSinceStartTime, maxSinceStartTime, avgSinceStartTime),
 					}).Debug("Accepted data column sidecars summary")
 				}
 			}
@@ -369,8 +369,4 @@ func (s *Service) processDataColumnLogs() {
 			slotStats = make(map[[fieldparams.RootLength]byte][]dataColumnLogEntry)
 		}
 	}
-}
-
-func prettyMinMaxAverage(min, max, average time.Duration) string {
-	return fmt.Sprintf("[min: %v, avg: %v, max: %v]", min, average, max)
 }
