@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	attaggregation "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation/aggregation/attestations"
@@ -336,4 +338,33 @@ func TestService_seen(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestAggregateAndSaveForkChoiceAtts_Experimental(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableExperimentalAttestationPool: true})
+	defer resetCfg()
+
+	s, err := NewService(t.Context(), &Config{Pool: NewPool(), Cache: cache.NewAttestationCache()})
+	require.NoError(t, err)
+
+	priv, err := bls.RandKey()
+	require.NoError(t, err)
+	sig := priv.Sign([]byte("dummy_test_data"))
+	var mockRoot [32]byte
+	d := &ethpb.AttestationData{
+		BeaconBlockRoot: mockRoot[:],
+		Source:          &ethpb.Checkpoint{Root: mockRoot[:]},
+		Target:          &ethpb.Checkpoint{Root: mockRoot[:]},
+	}
+
+	atts := []ethpb.Att{
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b101}, Signature: sig.Marshal()},
+		&ethpb.Attestation{Data: d, AggregationBits: bitfield.Bitlist{0b110}, Signature: sig.Marshal()}}
+	require.NoError(t, s.aggregateAndSaveForkChoiceAtts(atts))
+
+	wanted, err := attaggregation.Aggregate(atts)
+	require.NoError(t, err)
+	require.Equal(t, len(wanted), len(s.cfg.Cache.ForkchoiceAttestations()))
+	assert.DeepEqual(t, wanted, s.cfg.Cache.ForkchoiceAttestations())
+	assert.Equal(t, 0, len(s.cfg.Pool.ForkchoiceAttestations()))
 }

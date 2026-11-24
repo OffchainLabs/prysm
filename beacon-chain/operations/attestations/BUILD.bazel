@@ -49,6 +49,7 @@ go_test(
         "//async:go_default_library",
         "//beacon-chain/cache:go_default_library",
         "//beacon-chain/operations/attestations/kv:go_default_library",
+        "//config/features:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",
         "//consensus-types/primitives:go_default_library",
