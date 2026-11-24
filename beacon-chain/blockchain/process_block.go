@@ -708,6 +708,9 @@ func (s *Service) pruneAttsFromPool(ctx context.Context, headState state.BeaconS
 func (s *Service) pruneCoveredAttsFromPool(ctx context.Context, headState state.BeaconState, att ethpb.Att) error {
 	switch {
 	case !att.IsAggregated():
+		if features.Get().EnableExperimentalAttestationPool {
+			return errors.Wrap(s.cfg.AttestationCache.DeleteCovered(att), "could not delete covered attestation")
+		}
 		return s.cfg.AttPool.DeleteUnaggregatedAttestation(att)
 	case att.Version() == version.Phase0:
 		if features.Get().EnableExperimentalAttestationPool {
