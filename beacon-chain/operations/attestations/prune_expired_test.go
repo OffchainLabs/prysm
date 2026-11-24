@@ -23,10 +23,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 
-	s, err := NewService(ctx, &Config{
-		Pool:          NewPool(),
-		pruneInterval: 250 * time.Millisecond,
-	})
+	s, err := NewService(ctx, &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	ad1 := util.HydrateAttestationData(&ethpb.AttestationData{})
@@ -164,9 +161,7 @@ func TestPruneExpired_ExpiredDeneb(t *testing.T) {
 }
 
 func TestPruneExpiredExperimental_ForkchoiceAtts(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	s, err := NewService(ctx, &Config{Cache: cache.NewAttestationCache(), pruneInterval: 10 * time.Millisecond})
+	s, err := NewService(t.Context(), &Config{Cache: cache.NewAttestationCache()})
 	require.NoError(t, err)
 
 	spe := params.BeaconConfig().SlotsPerEpoch
@@ -176,9 +171,12 @@ func TestPruneExpiredExperimental_ForkchoiceAtts(t *testing.T) {
 	expired := &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: spe - 1}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}
 	kept := &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: spe}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}
 	require.NoError(t, s.cfg.Cache.SaveForkchoiceAttestations([]ethpb.Att{expired, kept}))
+	require.NoError(t, s.cfg.Cache.Add(expired))
+	require.NoError(t, s.cfg.Cache.Add(&ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: 2 * spe}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}))
 
-	go s.pruneExpiredExperimental()
+	s.pruneExpiredAttsExperimental()
 
-	require.Eventually(t, func() bool { return len(s.cfg.Cache.ForkchoiceAttestations()) == 1 }, 5*time.Second, 10*time.Millisecond)
+	assert.Equal(t, 1, s.cfg.Cache.Count())
+	require.Equal(t, 1, len(s.cfg.Cache.ForkchoiceAttestations()))
 	assert.DeepEqual(t, []ethpb.Att{kept}, s.cfg.Cache.ForkchoiceAttestations())
 }

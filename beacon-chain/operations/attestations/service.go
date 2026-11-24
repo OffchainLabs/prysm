@@ -10,8 +10,6 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
-	"github.com/OffchainLabs/prysm/v7/config/features"
-	"github.com/OffchainLabs/prysm/v7/config/params"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -31,7 +29,6 @@ type Service struct {
 type Config struct {
 	Cache               *cache.AttestationCache
 	Pool                Pool
-	pruneInterval       time.Duration
 	InitialSyncComplete chan struct{}
 }
 
@@ -39,11 +36,6 @@ type Config struct {
 // be registered into a running beacon node.
 func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	cache := lruwrpr.New(forkChoiceProcessedAttsSize)
-
-	if cfg.pruneInterval == 0 {
-		// Prune expired attestations from the pool every slot interval.
-		cfg.pruneInterval = params.BeaconConfig().SlotDuration()
-	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	return &Service{
@@ -61,12 +53,7 @@ func (s *Service) Start() {
 		return
 	}
 	go s.prepareForkChoiceAtts()
-
-	if features.Get().EnableExperimentalAttestationPool {
-		go s.pruneExpiredExperimental()
-	} else {
-		go s.pruneExpired()
-	}
+	go s.pruneExpired()
 }
 
 // waitForSync waits until the beacon node is synced to the latest head.

@@ -3,6 +3,7 @@ package attestations
 import (
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
@@ -18,6 +19,10 @@ func (s *Service) pruneExpired() {
 	for {
 		select {
 		case <-slotTicker.C():
+			if features.Get().EnableExperimentalAttestationPool {
+				s.pruneExpiredAttsExperimental()
+				continue
+			}
 			s.pruneExpiredAtts()
 			s.updateMetrics()
 		case <-s.ctx.Done():
@@ -27,26 +32,16 @@ func (s *Service) pruneExpired() {
 	}
 }
 
-// pruneExpiredExperimental prunes attestations on every prune interval.
-func (s *Service) pruneExpiredExperimental() {
-	ticker := time.NewTicker(s.cfg.pruneInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			expirySlot, err := s.expirySlot()
-			if err != nil {
-				log.WithError(err).Error("Could not get expiry slot")
-				continue
-			}
-			numExpired := s.cfg.Cache.PruneBefore(expirySlot)
-			s.updateMetricsExperimental(numExpired)
-			s.pruneExpiredForkchoiceAtts(s.cfg.Cache)
-		case <-s.ctx.Done():
-			log.Debug("Context closed, exiting routine")
-			return
-		}
+// pruneExpiredAttsExperimental prunes expired attestations from the experimental attestation cache.
+func (s *Service) pruneExpiredAttsExperimental() {
+	expirySlot, err := s.expirySlot()
+	if err != nil {
+		log.WithError(err).Error("Could not get expiry slot")
+		return
 	}
+	numExpired := s.cfg.Cache.PruneBefore(expirySlot)
+	s.updateMetricsExperimental(numExpired)
+	s.pruneExpiredForkchoiceAtts(s.cfg.Cache)
 }
 
 // This prunes expired attestations from the pool.
