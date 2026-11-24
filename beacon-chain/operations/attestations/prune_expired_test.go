@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -160,4 +161,24 @@ func TestPruneExpired_ExpiredDeneb(t *testing.T) {
 
 	assert.Equal(t, true, s.expired(secondEpochStart), "Should be expired")
 	assert.Equal(t, false, s.expired(thirdEpochStart), "Should not be expired")
+}
+
+func TestPruneExpiredExperimental_ForkchoiceAtts(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	s, err := NewService(ctx, &Config{Cache: cache.NewAttestationCache(), pruneInterval: 10 * time.Millisecond})
+	require.NoError(t, err)
+
+	spe := params.BeaconConfig().SlotsPerEpoch
+	s.genesisTime = time.Now().Add(-params.SlotsDuration(2*spe+1, params.BeaconConfig()))
+
+	sig := make([]byte, fieldparams.BLSSignatureLength)
+	expired := &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: spe - 1}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}
+	kept := &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: spe}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}
+	require.NoError(t, s.cfg.Cache.SaveForkchoiceAttestations([]ethpb.Att{expired, kept}))
+
+	go s.pruneExpiredExperimental()
+
+	require.Eventually(t, func() bool { return len(s.cfg.Cache.ForkchoiceAttestations()) == 1 }, 5*time.Second, 10*time.Millisecond)
+	assert.DeepEqual(t, []ethpb.Att{kept}, s.cfg.Cache.ForkchoiceAttestations())
 }

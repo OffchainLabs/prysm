@@ -47,6 +47,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//async:go_default_library",
+        "//beacon-chain/cache:go_default_library",
         "//beacon-chain/operations/attestations/kv:go_default_library",
         "//config/fieldparams:go_default_library",
         "//config/params:go_default_library",

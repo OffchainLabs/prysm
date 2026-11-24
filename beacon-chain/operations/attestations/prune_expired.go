@@ -5,6 +5,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
 
@@ -40,6 +41,7 @@ func (s *Service) pruneExpiredExperimental() {
 			}
 			numExpired := s.cfg.Cache.PruneBefore(expirySlot)
 			s.updateMetricsExperimental(numExpired)
+			s.pruneExpiredForkchoiceAtts(s.cfg.Cache)
 		case <-s.ctx.Done():
 			log.Debug("Context closed, exiting routine")
 			return
@@ -82,7 +84,7 @@ func (s *Service) pruneExpiredAtts() {
 		}
 	}
 
-	s.pruneExpiredForkchoiceAtts()
+	s.pruneExpiredForkchoiceAtts(s.cfg.Pool)
 
 	expirySlot, err := s.expirySlot()
 	if err != nil {
@@ -93,13 +95,19 @@ func (s *Service) pruneExpiredAtts() {
 	s.cfg.Pool.DeleteSeenAggregatedAttestationsBefore(expirySlot)
 }
 
+// forkchoiceAttStore is implemented by both the attestation pool and the experimental attestation cache.
+type forkchoiceAttStore interface {
+	ForkchoiceAttestations() []ethpb.Att
+	DeleteForkchoiceAttestation(att ethpb.Att) error
+}
+
 // pruneExpiredForkchoiceAtts deletes fork choice attestations from before the previous epoch, which fork choice
 // no longer accepts. Attestations for blocks that are never imported would otherwise stay in the pool forever.
-func (s *Service) pruneExpiredForkchoiceAtts() {
+func (s *Service) pruneExpiredForkchoiceAtts(pool forkchoiceAttStore) {
 	currentEpoch := slots.ToEpoch(slots.CurrentSlot(s.genesisTime))
-	for _, att := range s.cfg.Pool.ForkchoiceAttestations() {
+	for _, att := range pool.ForkchoiceAttestations() {
 		if slots.ToEpoch(att.GetData().Slot)+1 < currentEpoch {
-			if err := s.cfg.Pool.DeleteForkchoiceAttestation(att); err != nil {
+			if err := pool.DeleteForkchoiceAttestation(att); err != nil {
 				log.WithError(err).Error("Could not delete expired fork choice attestation")
 			}
 		}
