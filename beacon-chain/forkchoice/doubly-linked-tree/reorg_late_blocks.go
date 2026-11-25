@@ -37,6 +37,9 @@ func (f *ForkChoice) ShouldOverrideFCU() (override bool) {
 	if consensusHead == nil {
 		return
 	}
+	if !params.BeaconConfig().ProposerReorgCutoffValid() {
+		return
+	}
 
 	if consensusHead.slot != slots.CurrentSlot(f.store.genesisTime) {
 		return
@@ -109,6 +112,9 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 	if consensusHead == nil {
 		return [32]byte{}
 	}
+	if !params.BeaconConfig().ProposerReorgCutoffValid() {
+		return consensusHead.root
+	}
 	// Only reorg blocks from the previous slot.
 	currentSlot := slots.CurrentSlot(f.store.genesisTime)
 	if consensusHead.slot+1 != currentSlot {
@@ -164,7 +170,7 @@ func (f *ForkChoice) GetProposerHead() [32]byte {
 		log.WithError(err).Error("could not check if proposing early")
 		return consensusHead.root
 	}
-	if sss > params.BeaconConfig().SlotComponentDuration(params.BeaconConfig().ProposerReorgCutoffBPS) {
+	if sss > params.BeaconConfig().ProposerReorgCutoffDuration() {
 		return consensusHead.root
 	}
 	return parent.node.root
