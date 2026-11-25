@@ -25,12 +25,10 @@ type SignedExecutionPayloadBidHeze struct {
 
 type BeaconBlockBodyHeze struct {
 	RandaoReveal              string                         `json:"randao_reveal"`
-	Eth1Data                  *Eth1Data                      `json:"eth1_data"`
 	Graffiti                  string                         `json:"graffiti"`
 	ProposerSlashings         []*ProposerSlashing            `json:"proposer_slashings"`
 	AttesterSlashings         []*AttesterSlashingElectra     `json:"attester_slashings"`
 	Attestations              []*AttestationElectra          `json:"attestations"`
-	Deposits                  []*Deposit                     `json:"deposits"`
 	VoluntaryExits            []*SignedVoluntaryExit         `json:"voluntary_exits"`
 	SyncAggregate             *SyncAggregate                 `json:"sync_aggregate"`
 	BLSToExecutionChanges     []*SignedBLSToExecutionChange  `json:"bls_to_execution_changes"`
@@ -71,9 +69,6 @@ type BeaconStateHeze struct {
 	BlockRoots                    []string                    `json:"block_roots"`
 	StateRoots                    []string                    `json:"state_roots"`
 	HistoricalRoots               []string                    `json:"historical_roots"`
-	Eth1Data                      *Eth1Data                   `json:"eth1_data"`
-	Eth1DataVotes                 []*Eth1Data                 `json:"eth1_data_votes"`
-	Eth1DepositIndex              string                      `json:"eth1_deposit_index"`
 	Validators                    []*Validator                `json:"validators"`
 	Balances                      []string                    `json:"balances"`
 	RandaoMixes                   []string                    `json:"randao_mixes"`
@@ -90,7 +85,6 @@ type BeaconStateHeze struct {
 	NextWithdrawalIndex           string                      `json:"next_withdrawal_index"`
 	NextWithdrawalValidatorIndex  string                      `json:"next_withdrawal_validator_index"`
 	HistoricalSummaries           []*HistoricalSummary        `json:"historical_summaries"`
-	DepositRequestsStartIndex     string                      `json:"deposit_requests_start_index"`
 	DepositBalanceToConsume       string                      `json:"deposit_balance_to_consume"`
 	ExitBalanceToConsume          string                      `json:"exit_balance_to_consume"`
 	EarliestExitEpoch             string                      `json:"earliest_exit_epoch"`

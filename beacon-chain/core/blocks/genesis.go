@@ -274,11 +274,7 @@ func hezeGenesisBlock(root [fieldparams.RootLength]byte, latestBid *ethpb.Execut
 		StateRoot:  root[:],
 		Body: &ethpb.BeaconBlockBodyHeze{
 			RandaoReveal: make([]byte, 96),
-			Eth1Data: &ethpb.Eth1Data{
-				DepositRoot: make([]byte, 32),
-				BlockHash:   make([]byte, 32),
-			},
-			Graffiti: make([]byte, 32),
+			Graffiti:     make([]byte, 32),
 			SyncAggregate: &ethpb.SyncAggregate{
 				SyncCommitteeBits:      make([]byte, fieldparams.SyncCommitteeLength/8),
 				SyncCommitteeSignature: make([]byte, fieldparams.BLSSignatureLength),

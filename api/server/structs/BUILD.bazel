@@ -62,6 +62,7 @@ go_test(
         "conversions_block_heze_test.go",
         "conversions_gloas_test.go",
         "conversions_lightclient_test.go",
+        "conversions_state_heze_test.go",
         "conversions_test.go",
     ],
     embed = [":go_default_library"],
