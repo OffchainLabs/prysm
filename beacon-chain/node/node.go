@@ -554,6 +554,13 @@ func (b *BeaconNode) Close() {
 
 	log.Info("Stopping beacon node")
 	b.services.StopAll()
+
+	if b.DataColumnStorage != nil {
+		if err := b.DataColumnStorage.Close(); err != nil {
+			log.WithError(err).Error("Failed to close data column storage")
+		}
+	}
+
 	if err := b.db.Close(); err != nil {
 		log.WithError(err).Error("Failed to close database")
 	}
