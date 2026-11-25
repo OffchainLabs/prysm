@@ -92,7 +92,9 @@ func (s *Service) startBlocksQueue(ctx context.Context, highestSlot primitives.S
 
 // syncToFinalizedEpoch sync from head to the best known finalized epoch.
 func (s *Service) syncToFinalizedEpoch(ctx context.Context) error {
-	highestFinalizedSlot, err := slots.EpochStart(s.highestFinalizedEpoch())
+	// Use the majority's finalized epoch, as the fetcher does: a higher target is out of its range and never reached.
+	finalizedEpoch, _ := s.cfg.P2P.Peers().BestFinalized(s.cfg.Chain.FinalizedCheckpt().Epoch)
+	highestFinalizedSlot, err := slots.EpochStart(finalizedEpoch)
 	if err != nil {
 		return err
 	}
@@ -302,26 +304,6 @@ func syncFields(b blocks.ROBlock) logrus.Fields {
 		"root":     fmt.Sprintf("%#x", b.Root()),
 		"lastSlot": b.Block().Slot(),
 	}
-}
-
-// highestFinalizedEpoch returns the absolute highest finalized epoch of all connected peers.
-// It returns `0` if no peers are connected.
-// Note this can be lower than our finalized epoch if our connected peers are all behind us.
-func (s *Service) highestFinalizedEpoch() primitives.Epoch {
-	highest := primitives.Epoch(0)
-	for _, pid := range s.cfg.P2P.Peers().Connected() {
-		peerChainState, err := s.cfg.P2P.Peers().ChainState(pid)
-
-		if err != nil || peerChainState == nil {
-			continue
-		}
-
-		if peerChainState.FinalizedEpoch > highest {
-			highest = peerChainState.FinalizedEpoch
-		}
-	}
-
-	return highest
 }
 
 // logSyncStatus and increment block processing counter.
