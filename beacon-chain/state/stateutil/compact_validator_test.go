@@ -1,71 +1,79 @@
 package stateutil
 
 import (
+	"math"
+	"math/rand"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
-	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
-	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 )
 
-func validator(slashed bool) *ethpb.Validator {
-	return &ethpb.Validator{
-		PublicKey:                  []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48},
-		WithdrawalCredentials:      []byte{0xaa, 0xbb, 0xcc, 0xdd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff},
-		EffectiveBalance:           32000000000,
-		Slashed:                    slashed,
-		ActivationEligibilityEpoch: 10,
-		ActivationEpoch:            20,
-		ExitEpoch:                  primitives.Epoch(30),
-		WithdrawableEpoch:          primitives.Epoch(40),
+func TestCompactValidator(t *testing.T) {
+	vals := randomCompactValidators(rand.New(rand.NewSource(2)), 256)
+
+	// Maximum value for the public key.
+	var ones [48]byte
+	for i := range ones {
+		ones[i] = 0xff
 	}
+
+	vals = append(vals,
+		// All fields zero.
+		CompactValidator{},
+		// All fields at their maximum value.
+		CompactValidator{PublicKey: ones, Slashed: true, EffectiveBalance: math.MaxUint64,
+			ActivationEligibilityEpoch: math.MaxUint64, ActivationEpoch: math.MaxUint64,
+			ExitEpoch: math.MaxUint64, WithdrawableEpoch: math.MaxUint64},
+	)
+
+	t.Run("proto round trip", func(t *testing.T) {
+		for i, v := range vals {
+			require.Equal(t, v, CompactValidatorFromProto(v.ToProto()), "validator %d", i)
+		}
+	})
+
+	t.Run("field roots match proto", func(t *testing.T) {
+		for i, v := range vals {
+			want, err := ValidatorFieldRoots(v.ToProto())
+			require.NoError(t, err)
+
+			// Prefill dst to check that every byte is written.
+			var dst [validatorFieldRoots][32]byte
+			for k := range dst {
+				for b := range dst[k] {
+					dst[k][b] = 0xee
+				}
+			}
+
+			v.fieldRootsInto(&dst)
+			require.DeepEqual(t, want, dst[:], "validator %d", i)
+		}
+	})
+
+	t.Run("root matches proto", func(t *testing.T) {
+		for i, v := range vals {
+			want, err := ValidatorRootWithHasher(v.ToProto())
+			require.NoError(t, err)
+			got, err := v.Root()
+			require.NoError(t, err)
+			require.Equal(t, want, got, "validator %d", i)
+		}
+	})
 }
 
-func TestCompactValidator(t *testing.T) {
-	t.Run("ProtoRoundTrip", func(t *testing.T) {
-		for _, slashed := range []bool{true, false} {
-			validatorStart := validator(slashed)
-			compactValidator := CompactValidatorFromProto(validatorStart)
-			validatorEnd := compactValidator.ToProto()
-
-			assert.DeepEqual(t, validatorStart.PublicKey, validatorEnd.PublicKey)
-			assert.DeepEqual(t, validatorStart.WithdrawalCredentials, validatorEnd.WithdrawalCredentials)
-			assert.Equal(t, validatorStart.EffectiveBalance, validatorEnd.EffectiveBalance)
-			assert.Equal(t, validatorStart.Slashed, validatorEnd.Slashed)
-			assert.Equal(t, validatorStart.ActivationEligibilityEpoch, validatorEnd.ActivationEligibilityEpoch)
-			assert.Equal(t, validatorStart.ActivationEpoch, validatorEnd.ActivationEpoch)
-			assert.Equal(t, validatorStart.ExitEpoch, validatorEnd.ExitEpoch)
-			assert.Equal(t, validatorStart.WithdrawableEpoch, validatorEnd.WithdrawableEpoch)
-		}
-	})
-
-	t.Run("RootMatchesProto", func(t *testing.T) {
-		validator := validator(true)
-
-		protoRoot, err := ValidatorRootWithHasher(validator)
-		require.NoError(t, err)
-
-		compactValidator := CompactValidatorFromProto(validator)
-		compactRoot, err := compactValidator.Root()
-		require.NoError(t, err)
-
-		assert.Equal(t, protoRoot, compactRoot)
-	})
-
-	t.Run("FieldRootsMatchProto", func(t *testing.T) {
-		v := validator(true)
-
-		protoFieldRoots, err := ValidatorFieldRoots(v)
-		require.NoError(t, err)
-
-		compactValidator := CompactValidatorFromProto(v)
-		compactFieldRoots, err := compactValidator.fieldRoots()
-		require.NoError(t, err)
-
-		require.Equal(t, len(protoFieldRoots), len(compactFieldRoots))
-		for i := range protoFieldRoots {
-			assert.Equal(t, protoFieldRoots[i], compactFieldRoots[i], "field root mismatch at index %d", i)
-		}
-	})
+func randomCompactValidators(r *rand.Rand, n int) []CompactValidator {
+	vals := make([]CompactValidator, n)
+	for i := range vals {
+		v := &vals[i]
+		r.Read(v.PublicKey[:])
+		r.Read(v.WithdrawalCredentials[:])
+		v.EffectiveBalance = r.Uint64()
+		v.Slashed = r.Intn(2) == 0
+		v.ActivationEligibilityEpoch = primitives.Epoch(r.Uint64())
+		v.ActivationEpoch = primitives.Epoch(r.Uint64())
+		v.ExitEpoch = primitives.Epoch(r.Uint64())
+		v.WithdrawableEpoch = primitives.Epoch(r.Uint64())
+	}
+	return vals
 }

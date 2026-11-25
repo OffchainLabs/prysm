@@ -313,7 +313,7 @@ func handle32ByteMVslice(
 // handleValidatorMVSlice returns the validator indices in a slice of root format.
 func handleValidatorMVSlice(mv multi_value_slice.MultiValueSliceComposite[stateutil.CompactValidator], indices []uint64) ([][32]byte, error) {
 	if len(indices) == 0 {
-		return stateutil.OptimizedValidatorRoots(mv.Value(mv.State()))
+		return stateutil.OptimizedValidatorRoots(mv.Value(mv.State())), nil
 	}
 	roots := make([][32]byte, 0, len(indices))
 	totalLen := mv.Len(mv.State())

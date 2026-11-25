@@ -35,9 +35,7 @@ func TestValidatorRegistryRootProgressive(t *testing.T) {
 	got, err := stateutil.ValidatorRegistryRoot(version.Gloas, vals)
 	require.NoError(t, err)
 
-	roots, err := stateutil.OptimizedValidatorRoots(vals)
-	require.NoError(t, err)
-	body := ssz.MerkleizeProgressiveChunks(roots)
+	body := ssz.MerkleizeProgressiveChunks(stateutil.OptimizedValidatorRoots(vals))
 	var length [32]byte
 	binary.LittleEndian.PutUint64(length[:8], uint64(len(vals)))
 	expected := ssz.MixInLength(body, length[:])
