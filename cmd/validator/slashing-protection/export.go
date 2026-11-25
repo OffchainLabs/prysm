@@ -72,7 +72,7 @@ func exportSlashingProtectionJSON(cliCtx *cli.Context) error {
 	// Close the database when we're done.
 	defer func() {
 		if err := validatorDB.Close(); err != nil {
-			log.WithError(err).Errorf("Could not close validator DB")
+			log.WithError(err).Error("Could not close validator DB")
 		}
 	}()
 

@@ -134,13 +134,13 @@ func (c *ValidatorClient) Start() {
 		defer signal.Stop(sigc)
 		<-sigc
 
-		log.Info("Got interrupt, shutting down...")
+		log.Info("Got interrupt, shutting down")
 		c.shutdown(sigc)
 
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				log.WithField("times", i-1).Info("Already shutting down, interrupt more to panic.")
+				log.WithField("times", i-1).Info("Already shutting down, interrupt more to panic")
 			}
 		}
 		panic("Panic closing the validator client") // lint:nopanic -- Panic is requested by user.
@@ -167,7 +167,7 @@ func (c *ValidatorClient) shutdown(sigc <-chan os.Signal) {
 	}()
 
 	<-sigc
-	log.Info("Got interrupt, shutting down immediately...")
+	log.Info("Got interrupt, shutting down immediately")
 	cancel()
 }
 
@@ -235,7 +235,7 @@ func (c *ValidatorClient) getLegacyDatabaseLocation(
 		The next time you run the validator client without a database,
 		it will be created into the --datadir directory (%s).
 		To silence this message, you can move the database from (%s)
-		to (%s).`,
+		to (%s)`,
 			dataDir, legacyDataDir, dataDir, legacyDataFile, dataFile)
 
 		dataDir = legacyDataDir
@@ -337,7 +337,7 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 	// If both a complete and minimal database exist, return on error.
 	if completeDatabaseExists && minimalDatabaseExists {
 		log.Fatalf(
-			"Both complete (%s) and minimal slashing (%s) protection databases exist. Please delete one of them.",
+			"Both complete (%s) and minimal slashing (%s) protection databases exist. Please delete one of them",
 			path.Join(kvDataDir, kv.ProtectionDbFileName),
 			path.Join(fileSystemDataDir, filesystem.DatabaseDirName),
 		)
@@ -347,7 +347,7 @@ func (c *ValidatorClient) initializeDB(cliCtx *cli.Context) error {
 	// If a minimal database exists AND complete slashing protection is requested, convert the minimal
 	// database to a complete one and use the complete database.
 	if !isMinimalSlashingProtectionRequested && minimalDatabaseExists {
-		log.Warning("Complete slashing protection database requested, while minimal slashing protection database currently used. Converting.")
+		log.Warning("Complete slashing protection database requested, while minimal slashing protection database currently used. Converting")
 
 		if err := db.ConvertDatabase(cliCtx.Context, fileSystemDataDir, kvDataDir, true); err != nil {
 			return errors.Wrapf(err, "could not convert minimal slashing protection database to complete slashing protection database")

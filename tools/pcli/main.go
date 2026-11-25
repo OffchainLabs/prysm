@@ -176,7 +176,7 @@ var unrealizedCheckpointsCommand = &cli.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Infof("Computed:\nUnrealized Justified: (Root: %#x, Epoch: %d)\nUnrealized Finalized: (Root: %#x, Epoch: %d).", uj.Root, uj.Epoch, uf.Root, uf.Epoch)
+		log.Infof("Computed:\nUnrealized Justified: (Root: %#x, Epoch: %d)\nUnrealized Finalized: (Root: %#x, Epoch: %d)", uj.Root, uj.Epoch, uf.Root, uf.Epoch)
 		return nil
 	},
 }

@@ -29,7 +29,7 @@ func shouldMigrateValidators(db *bolt.DB) (bool, error) {
 		if !features.Get().EnableHistoricalSpaceRepresentation {
 			b := mb.Get(migrationStateValidatorsKey)
 			if bytes.Equal(b, migrationCompleted) {
-				log.Warning("migration of historical states already completed. The node will work as if --enable-historical-state-representation=true.")
+				log.Warning("migration of historical states already completed. The node will work as if --enable-historical-state-representation=true")
 				return nil
 			} else {
 				return nil
@@ -100,7 +100,7 @@ func migrateStateValidators(ctx context.Context, db *bolt.DB) error {
 	}); err != nil {
 		return err
 	}
-	log.Infof("migration done for bucket %s.", stateBucket)
+	log.Infof("migration done for bucket %s", stateBucket)
 	return nil
 }
 

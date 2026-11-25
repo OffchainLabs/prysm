@@ -527,7 +527,7 @@ func (b *BeaconNode) Start() {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		log.Info("Got interrupt, shutting down...")
+		log.Info("Got interrupt, shutting down")
 
 		if flags.Get().PostponeShutdownForProposals {
 			b.waitForPendingProposals(sigc)
@@ -595,10 +595,10 @@ func openDB(ctx context.Context, dbPath string, clearer *dbClearer) (*kv.Store, 
 		cfg.EnableStateDiff = false
 		features.Init(cfg)
 	} else if errors.Is(err, kv.ErrStateDiffExponentMismatch) {
-		log.WithError(err).Error("State-diff configuration mismatch; restart aborted. Use the stored exponents or re-sync the database.")
+		log.WithError(err).Error("State-diff configuration mismatch; restart aborted. Use the stored exponents or re-sync the database")
 		return nil, err
 	} else if errors.Is(err, kv.ErrStateDiffMissingSnapshot) || errors.Is(err, kv.ErrStateDiffCorrupted) {
-		log.WithError(err).Error("State-diff database corrupted; restart aborted. Delete database and re-sync from genesis/checkpoint.")
+		log.WithError(err).Error("State-diff database corrupted; restart aborted. Delete database and re-sync from genesis/checkpoint")
 		return nil, err
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "could not create database at %s", dbPath)

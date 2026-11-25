@@ -278,7 +278,7 @@ func (s *Service) validateBeaconBlockPubSub(ctx context.Context, pid peer.ID, ms
 		"graffiti":      string(graffiti[:]),
 	}
 	if err != nil {
-		log.WithError(err).WithFields(logFields).Warn("Received block, could not report timing information.")
+		log.WithError(err).WithFields(logFields).Warn("Received block, could not report timing information")
 		return pubsub.ValidationAccept, nil
 	}
 	sinceSlotStartTime := receivedTime.Sub(startTime)

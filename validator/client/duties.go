@@ -653,7 +653,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 
 	epochStartSlot, err := slots.EpochStart(slots.ToEpoch(slot))
 	if err != nil {
-		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties.")
+		log.WithError(err).Error("Could not calculate epoch start. Ignoring logging duties")
 		return
 	}
 	attesterKeys := make([][]string, params.BeaconConfig().SlotsPerEpoch)
@@ -733,7 +733,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 		}
 		startTime, err := slots.StartTime(v.genesisTime, epochStartSlot+i)
 		if err != nil {
-			log.WithError(err).WithField("slot", epochStartSlot+i).Error("Slot overflows, unable to log duties!")
+			log.WithError(err).WithField("slot", epochStartSlot+i).Error("Slot overflows, unable to log duties")
 			return
 		}
 		durationTillDuty := (time.Until(startTime) + time.Second).Truncate(time.Second)
@@ -758,7 +758,7 @@ func (v *validator) logDuties(slot primitives.Slot) {
 		if durationTillDuty > 0 {
 			slotLog = slotLog.WithField("timeUntilDuty", durationTillDuty)
 		}
-		slotLog.Infof("Duties schedule")
+		slotLog.Info("Duties schedule")
 	}
 }
 

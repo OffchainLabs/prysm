@@ -281,7 +281,7 @@ func writeProfile(name, file string) error {
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
-			log.WithError(err).Error("Failed to close pprof profile file.")
+			log.WithError(err).Error("Failed to close pprof profile file")
 		}
 	}()
 	return p.WriteTo(f, 0)

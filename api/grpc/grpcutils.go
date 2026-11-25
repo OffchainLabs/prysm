@@ -34,7 +34,7 @@ func LogRequests(
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	log.WithField("backend", header["x-backend"]).
 		WithField("method", method).WithField("duration", time.Since(start)).
-		Debug("gRPC request finished.")
+		Debug("gRPC request finished")
 	return err
 }
 
@@ -60,7 +60,7 @@ func LogStream(
 	strm, err := streamer(ctx, sd, conn, method, opts...)
 	log.WithField("backend", header["x-backend"]).
 		WithField("method", method).
-		Debug("gRPC stream started.")
+		Debug("gRPC stream started")
 	return strm, err
 }
 

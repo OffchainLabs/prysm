@@ -238,7 +238,7 @@ func (s *Store) getCacheUpdatesByPeriod(headBlock interfaces.ReadOnlySignedBeaco
 
 	cacheHeadItem, ok := s.cache.items[cacheHeadRoot]
 	if !ok {
-		log.Debugf("Head root %x not found in light client cache. Returning empty updates map for non finality cache.", cacheHeadRoot)
+		log.Debugf("Head root %x not found in light client cache. Returning empty updates map for non finality cache", cacheHeadRoot)
 		return updatesByPeriod, nil
 	}
 
@@ -323,7 +323,7 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 	// If there cache is empty (some problem in processing data), we can skip migration.
 	// This is a safety check and should not happen in normal operation.
 	if len(s.cache.items) == 0 {
-		log.Debug("Non-finality cache is empty. Skipping migration.")
+		log.Debug("Non-finality cache is empty. Skipping migration")
 		return nil
 	}
 
@@ -342,7 +342,7 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 
 	finalizedCacheHead, ok = s.cache.items[finalizedCacheHeadRoot]
 	if !ok {
-		log.Debugf("Finalized block's parent root %x not found in light client cache. Cleaning the broken part of the cache.", finalizedCacheHeadRoot)
+		log.Debugf("Finalized block's parent root %x not found in light client cache. Cleaning the broken part of the cache", finalizedCacheHeadRoot)
 
 		// delete non-finality cache items older than finalized slot
 		s.cleanCache(finalizedSlot)
@@ -364,7 +364,7 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 	for period, update := range updateByPeriod {
 		err = s.beaconDB.SaveLightClientUpdate(ctx, period, update)
 		if err != nil {
-			log.WithError(err).Errorf("failed to save light client update for period %d. Skipping this period.", period)
+			log.WithError(err).Errorf("failed to save light client update for period %d. Skipping this period", period)
 		}
 	}
 

@@ -181,7 +181,7 @@ func (s *Service) Start() {
 	// Exit entering round-robin sync if we require 0 peers to sync.
 	if flags.Get().MinimumSyncPeers == 0 {
 		s.markSynced()
-		log.WithField("genesisTime", s.genesisTime).Info("Due to number of peers required for sync being set at 0, entering regular sync immediately.")
+		log.WithField("genesisTime", s.genesisTime).Info("Due to number of peers required for sync being set at 0, entering regular sync immediately")
 		return
 	}
 	if s.genesisTime.After(prysmTime.Now()) {
@@ -196,7 +196,7 @@ func (s *Service) Start() {
 		return
 	}
 	s.chainStarted.Store(true)
-	log.Info("Starting initial chain sync...")
+	log.Info("Starting initial chain sync")
 
 	// Initial sync completion must be slot-precise. Being in the same epoch can still
 	// leave the node several slots behind the current head.

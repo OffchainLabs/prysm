@@ -101,7 +101,7 @@ func compareHeads(clients map[string]pb.BeaconChainClient) {
 			log.Fatal(err)
 		}
 		if !reflect.DeepEqual(head1, head2) {
-			log.Error("Uh oh! Heads mismatched!")
+			log.Error("Uh oh! Heads mismatched")
 			logHead(endpt1, head1)
 			logHead(endpt2, head2)
 

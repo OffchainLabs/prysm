@@ -218,7 +218,7 @@ func (m *MinSpanChunksSlice) CheckSlashable(
 			"targetEpoch":    minTarget,
 		}
 
-		log.WithFields(fields).Error("No existing attestation record found while a surrounding vote was detected.")
+		log.WithFields(fields).Error("No existing attestation record found while a surrounding vote was detected")
 		return nil, nil
 	}
 
@@ -351,7 +351,7 @@ func (m *MaxSpanChunksSlice) CheckSlashable(
 			"targetEpoch":    maxTarget,
 		}
 
-		log.WithFields(fields).Error("No existing attestation record found while a surrounded vote was detected.")
+		log.WithFields(fields).Error("No existing attestation record found while a surrounded vote was detected")
 		return nil, nil
 	}
 

@@ -296,7 +296,7 @@ func (node *LighthouseBeaconNode) saveGenesis(ctx context.Context, testNetDir st
 	log.WithField("forkVersion", g.Fork().CurrentVersion).
 		WithField("latestBlockHeaderRoot", fmt.Sprintf("%#x", lbhr)).
 		WithField("stateRoot", fmt.Sprintf("%#x", root)).
-		Infof("BeaconState info")
+		Info("BeaconState info")
 
 	genesisBytes, err := g.MarshalSSZ()
 	if err != nil {

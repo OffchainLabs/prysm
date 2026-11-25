@@ -425,7 +425,7 @@ func safelyHandlePanic() {
 	if r := recover(); r != nil {
 		log.WithFields(logrus.Fields{
 			"r": r,
-		}).Error("Panicked when handling data from ETH 1.0 Chain! Recovering...")
+		}).Error("Panicked when handling data from ETH 1.0 Chain! Recovering")
 
 		debug.PrintStack()
 	}
@@ -450,7 +450,7 @@ func (s *Service) handleETH1FollowDistance() {
 	// logs for the execution service to process. Also it is a potential
 	// failure condition as would mean we have not respected the protocol threshold.
 	if s.latestEth1Data.LastRequestedBlock == s.latestEth1Data.BlockHeight {
-		log.WithField("lastBlockNumber", s.latestEth1Data.LastRequestedBlock).Error("Beacon node is not respecting the follow distance. EL client is syncing.")
+		log.WithField("lastBlockNumber", s.latestEth1Data.LastRequestedBlock).Error("Beacon node is not respecting the follow distance. EL client is syncing")
 		return
 	}
 	if err := s.requestBatchedHeadersAndLogs(ctx); err != nil {

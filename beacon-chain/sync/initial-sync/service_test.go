@@ -176,7 +176,7 @@ func TestService_InitStartStop(t *testing.T) {
 				return startup.NewClock(makeGenesisTime(futureSlot), vr)
 			},
 			assert: func() {
-				assert.LogsContain(t, hook, "Starting initial chain sync...")
+				assert.LogsContain(t, hook, "Starting initial chain sync")
 				assert.LogsContain(t, hook, "Already synced to the current chain head")
 				assert.LogsDoNotContain(t, hook, "Chain started within the last epoch - not syncing")
 				assert.LogsDoNotContain(t, hook, "Genesis time has not arrived - not syncing")

@@ -242,7 +242,7 @@ func (s *Service) latePayloadTasks(ctx context.Context) {
 		return
 	}
 	if pid == nil {
-		log.Warn("Received nil payload ID from forkchoice update.")
+		log.Warn("Received nil payload ID from forkchoice update")
 		return
 	}
 	var pId [8]byte

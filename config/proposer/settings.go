@@ -738,7 +738,7 @@ func (ps *Settings) WarnDeprecatedSchema() {
 	if !ps.HasLegacyBuilderContent() {
 		return
 	}
-	log.Warn("Proposer settings contain deprecated v1 builder fields (enabled, builder-level gas limits); they stop applying at the gloas fork and are replaced with defaults (fee recipients and graffiti carry over). Configure gloas builders via v2 settings or the keymanager API.")
+	log.Warn("Proposer settings contain deprecated v1 builder fields (enabled, builder-level gas limits); they stop applying at the gloas fork and are replaced with defaults (fee recipients and graffiti carry over). Configure gloas builders via v2 settings or the keymanager API")
 }
 
 // WarnUnsetMaxExecutionPayment logs when a builder entry resolves to the zero
@@ -775,7 +775,7 @@ func (ps *Settings) WarnUnsetMaxExecutionPayment() {
 		return
 	}
 	slices.Sort(maskedURLs)
-	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builders have no max_execution_payment (default 0): execution payment is ignored, so these builders' bids may lose to the local payload.")
+	log.WithField("builders", strings.Join(maskedURLs, ", ")).Warn("Builders have no max_execution_payment (default 0): execution payment is ignored, so these builders' bids may lose to the local payload")
 }
 
 // HasLegacyBuilderContent reports whether any level carries v1 builder fields,

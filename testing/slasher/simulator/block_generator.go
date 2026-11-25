@@ -42,7 +42,7 @@ func (s *Simulator) generateBlockHeadersForSlot(
 
 	blocks = append(blocks, block)
 	if rand.NewGenerator().Float64() < s.srvConfig.Params.ProposerSlashingProbab {
-		log.WithField("proposerIndex", proposer).Infof("Slashable block made")
+		log.WithField("proposerIndex", proposer).Info("Slashable block made")
 		slashableBlock := &ethpb.SignedBeaconBlockHeader{
 			Header: &ethpb.BeaconBlockHeader{
 				Slot:          slot,

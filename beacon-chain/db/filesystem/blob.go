@@ -228,7 +228,7 @@ func (bs *BlobStorage) Save(sidecar blocks.VerifiedROBlob) error {
 		if err == nil {
 			log.WithFields(logrus.Fields{
 				"partPath": partPath,
-			}).Debugf("Removed partial file")
+			}).Debug("Removed partial file")
 		}
 	}()
 	if err != nil {

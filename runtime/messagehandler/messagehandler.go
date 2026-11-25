@@ -40,7 +40,7 @@ func HandlePanic(ctx context.Context, msg *pubsub.Message) {
 		log.WithFields(logrus.Fields{
 			"r":   r,
 			"msg": printedMsg,
-		}).Error("Panicked when handling p2p message! Recovering...")
+		}).Error("Panicked when handling p2p message! Recovering")
 
 		debug.PrintStack()
 

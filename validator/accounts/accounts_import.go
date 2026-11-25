@@ -35,7 +35,7 @@ func (acm *CLIManager) Import(ctx context.Context) error {
 	if !ok {
 		return errors.New("keymanager cannot import keystores")
 	}
-	log.Info("importing validator keystores...")
+	log.Info("importing validator keystores")
 	// Check if the user wishes to import a one-off, private key directly
 	// as an account into the Prysm validator.
 	if acm.importPrivateKeys {
