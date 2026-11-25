@@ -48,7 +48,7 @@ func MsgID(pmsg *pubsubpb.Message) string {
 	if fEpoch >= params.BeaconConfig().AltairForkEpoch {
 		return postAltairMsgID(pmsg)
 	}
-	decodedData, err := encoder.DecodeSnappy(pmsg.Data, params.BeaconConfig().MaxPayloadSize)
+	decodedData, err := encoder.DecodeSnappy(pmsg.Data, encoder.MaxPayloadSize)
 	if err != nil {
 		combinedData := append(params.BeaconConfig().MessageDomainInvalidSnappy[:], pmsg.Data...)
 		h := hash.Hash(combinedData)
@@ -75,7 +75,8 @@ func postAltairMsgID(pmsg *pubsubpb.Message) string {
 	topicLen := len(topic)
 	topicLenBytes := bytesutil.Uint64ToBytesLittleEndian(uint64(topicLen)) // topicLen cannot be negative
 
-	gossipPayloadSize := params.BeaconConfig().MaxPayloadSize
+	// The gossip decoder's limit, so that only data it accepts gets a valid snappy ID.
+	gossipPayloadSize := encoder.MaxPayloadSize
 
 	decodedData, err := encoder.DecodeSnappy(pmsg.Data, gossipPayloadSize)
 	if err != nil {
@@ -92,8 +93,8 @@ func postAltairMsgID(pmsg *pubsubpb.Message) string {
 			copy(msg, "invalid")
 			return bytesutil.UnsafeCastToString(msg)
 		}
-		if uint64(totalLength) > gossipPayloadSize {
-			// this should never happen
+		if uint64(len(pmsg.Data)) > MaxMessageSize() {
+			// this should never happen, pubsub drops larger messages
 			msg := make([]byte, 20)
 			copy(msg, "invalid")
 			return bytesutil.UnsafeCastToString(msg)

@@ -93,6 +93,10 @@ func (_ SszNetworkEncoder) DecodeGossip(b []byte, to ssz.Unmarshaler) error {
 
 // DecodeSnappy decodes a snappy compressed message.
 func DecodeSnappy(msg []byte, maxSize uint64) ([]byte, error) {
+	// Gossip rejects longer encodings, so the message ID must not treat them as valid snappy either.
+	if maxLen := MaxCompressedLen(maxSize); uint64(len(msg)) > maxLen {
+		return nil, errors.Errorf("snappy message exceeds max compressed size: %d bytes > %d bytes", len(msg), maxLen)
+	}
 	size, err := snappy.DecodedLen(msg)
 	if err != nil {
 		return nil, err
