@@ -10,6 +10,7 @@ go_library(
         "caches.go",
         "deposit.go",
         "genesis.go",
+        "inclusion_list.go",
         "legacy.go",
         "log.go",
         "metrics.go",
@@ -61,6 +62,7 @@ go_test(
         "deposit_signature_cache_test.go",
         "deposit_test.go",
         "export_test.go",
+        "inclusion_list_test.go",
         "legacy_test.go",
         "private_access_fuzz_noop_test.go",  # keep
         "private_access_test.go",
