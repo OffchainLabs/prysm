@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
@@ -50,10 +51,15 @@ type ApiClient struct {
 func NewApiClient(baseEndpoint string) (*ApiClient, error) {
 	u, err := url.ParseRequestURI(baseEndpoint)
 	if err != nil {
+		// url.Error quotes the raw URL, credentials included, so only keep its cause.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
 		return nil, errors.Wrap(err, "invalid format, unable to parse url")
 	}
 	if u.Scheme == "" || u.Host == "" {
-		return nil, fmt.Errorf("web3signer url must be in the format of http(s)://host:port url used: %v", baseEndpoint)
+		return nil, fmt.Errorf("web3signer url must be in the format of http(s)://host:port url used: %v", api.RedactEndpoint(baseEndpoint))
 	}
 	return &ApiClient{
 		BaseURL:    u,
@@ -72,7 +78,7 @@ func (client *ApiClient) Sign(ctx context.Context, pubKey string, request SignRe
 		return nil, fmt.Errorf("public key not found")
 	}
 	if resp.StatusCode == http.StatusPreconditionFailed {
-		return nil, fmt.Errorf("signing operation failed due to slashing protection rules,  Signing Request URL: %v, Status: %v", client.BaseURL.String()+requestPath, resp.StatusCode)
+		return nil, fmt.Errorf("signing operation failed due to slashing protection rules,  Signing Request URL: %v, Status: %v", api.RedactEndpoint(client.BaseURL.String()+requestPath), resp.StatusCode)
 	}
 	contentType := resp.Header.Get("Content-Type")
 	if strings.HasPrefix(contentType, "application/json") {
@@ -138,9 +144,12 @@ func (client *ApiClient) GetServerStatus(ctx context.Context) (string, error) {
 func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath string, body io.Reader) (*http.Response, error) {
 	ctx, span := trace.StartSpan(ctx, "remote_web3signer.Client.doRequest")
 	defer span.End()
+	// fullPath may carry basic-auth credentials from the signer URL, so only its redacted form
+	// goes into traces and errors; the callers log those as they are.
+	redactedPath := api.RedactEndpoint(fullPath)
 	span.SetAttributes(
 		trace.StringAttribute("httpMethod", httpMethod),
-		trace.StringAttribute("fullPath", fullPath),
+		trace.StringAttribute("fullPath", redactedPath),
 		trace.BoolAttribute("hasBody", body != nil),
 	)
 	req, err := http.NewRequestWithContext(ctx, httpMethod, fullPath, body)
@@ -178,11 +187,11 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 		log.WithFields(fields).Error("Web3signer request failed")
 	}
 	if resp.StatusCode == http.StatusInternalServerError {
-		err = fmt.Errorf("internal Web3Signer server error, Signing Request URL: %v Status: %v", fullPath, resp.StatusCode)
+		err = fmt.Errorf("internal Web3Signer server error, Signing Request URL: %v Status: %v", redactedPath, resp.StatusCode)
 		tracing.AnnotateError(span, err)
 		return nil, err
 	} else if resp.StatusCode == http.StatusBadRequest {
-		err = fmt.Errorf("bad request format, Signing Request URL: %v Status: %v", fullPath, resp.StatusCode)
+		err = fmt.Errorf("bad request format, Signing Request URL: %v Status: %v", redactedPath, resp.StatusCode)
 		tracing.AnnotateError(span, err)
 		return nil, err
 	}

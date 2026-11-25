@@ -1489,8 +1489,9 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 	fileKey := "0x800057e262bfe42413c2cfce948ff77f11efeea19721f590c8b5b2f32fecb0e164cafba987c80465878408d05b97c9be"
 	keyFilePath := filepath.Join(t.TempDir(), "keyfile.txt")
 	require.NoError(t, file.WriteFile(keyFilePath, []byte(fileKey+"\n")))
+	// Basic-auth credentials in the signer URL must not be served in the response.
 	config := &remoteweb3signer.SetupConfig{
-		BaseEndpoint:          "http://example.com",
+		BaseEndpoint:          "http://alice:s3cret-pa55word@example.com",
 		GenesisValidatorsRoot: root,
 		ProvidedPublicKeys:    []string{flagKey},
 		KeyFilePath:           keyFilePath,
@@ -1518,6 +1519,7 @@ func TestServer_ListRemoteKeys(t *testing.T) {
 			readonly, ok := wantReadonly[key.Pubkey]
 			require.Equal(t, true, ok)
 			require.Equal(t, readonly, key.Readonly)
+			require.Equal(t, "http://alice:xxxxx@example.com", key.Url)
 		}
 	})
 	t.Run("calling list keystores while using a remote wallet returns empty", func(t *testing.T) {
