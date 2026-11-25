@@ -781,7 +781,7 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		currBlockRoot = blk1Root
 	}
 
-	notProcessed := func(_ context.Context, _ interfaces.ROSignedExecutionPayloadEnvelope) bool { return false }
+	notProcessed := func(interfaces.ROSignedExecutionPayloadEnvelope) bool { return false }
 	retBlocks, _, err := validUnprocessed(t.Context(), batch, nil, 2, func(ctx context.Context, block blocks.ROBlock) bool {
 		// Ignore first 2 blocks in the batch.
 		return block.Block().Slot() <= 2
@@ -810,11 +810,35 @@ func TestService_ValidUnprocessed(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, b1.Root(), env.BeaconBlockRoot())
 	})
+
+	t.Run("gloas: keep stored envelopes that forkchoice has not imported", func(t *testing.T) {
+		hash1, hash2, hash3, hash4 := [32]byte{0x01}, [32]byte{0x02}, [32]byte{0x03}, [32]byte{0x04}
+		head := makeGloasBlock(t, 32, [32]byte{0x0f}, hash1)
+		// b1 builds on the head's empty payload, b2 on b1's full payload.
+		b1 := makeGloasBlock(t, 33, head.Root(), hash1)
+		b2 := makeGloasBlock(t, 34, b1.Root(), hash3)
+		envHead := makeEnvelopeForRoot(t, 32, head.Root(), hash2, hash1)
+		envB1 := makeEnvelopeForRoot(t, 33, b1.Root(), hash3, hash1)
+		envB2 := makeEnvelopeForRoot(t, 34, b2.Root(), hash4, hash3)
+
+		for _, e := range []interfaces.ROSignedExecutionPayloadEnvelope{envHead, envB1, envB2} {
+			require.NoError(t, beaconDB.SaveExecutionPayloadEnvelope(t.Context(), e.Proto().(*eth.SignedExecutionPayloadEnvelope)))
+		}
+		s := &Service{cfg: &Config{DB: beaconDB, Chain: &mock.ChainService{ForkchoiceRoots: map[[32]byte]bool{head.Root(): true}}}}
+		isProcessed := func(_ context.Context, b blocks.ROBlock) bool { return b.Root() == head.Root() }
+
+		_, got, err := validUnprocessed(t.Context(), []blocks.BlockWithROSidecars{{Block: head}, {Block: b1}, {Block: b2}},
+			[]interfaces.ROSignedExecutionPayloadEnvelope{envHead, envB1, envB2}, head.Block().Slot(), isProcessed, s.isProcessedPayload)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(got))
+		env, err := got[0].Envelope()
+		require.NoError(t, err)
+		require.Equal(t, b1.Root(), env.BeaconBlockRoot())
+	})
 }
 
 func TestEnvelopesForBlocks(t *testing.T) {
-	ctx := t.Context()
-	notProcessed := func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool { return false }
+	notProcessed := func(interfaces.ROSignedExecutionPayloadEnvelope) bool { return false }
 
 	parentHash := [32]byte{0x0a}
 	b1OwnHash := [32]byte{0x0b}
@@ -831,7 +855,7 @@ func TestEnvelopesForBlocks(t *testing.T) {
 	envB1 := makeEnvelopeForRoot(t, 33, b1.Root(), b1OwnHash, parentHash)
 
 	t.Run("keep parent envelope needed by the first unprocessed block", func(t *testing.T) {
-		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envParent, envB1}, notProcessed)
+		got := envelopesForBlocks(bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envParent, envB1}, notProcessed)
 		require.Equal(t, 2, len(got))
 		env, err := got[0].Envelope()
 		require.NoError(t, err)
@@ -839,13 +863,13 @@ func TestEnvelopesForBlocks(t *testing.T) {
 	})
 
 	t.Run("return no envelopes when only an ancestor envelope is available", func(t *testing.T) {
-		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envAncestor}, notProcessed)
+		got := envelopesForBlocks(bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envAncestor}, notProcessed)
 		require.Equal(t, 0, len(got))
 	})
 
 	t.Run("skip already processed payload envelope", func(t *testing.T) {
-		processed := func(context.Context, interfaces.ROSignedExecutionPayloadEnvelope) bool { return true }
-		got := envelopesForBlocks(ctx, bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envB1}, processed)
+		processed := func(interfaces.ROSignedExecutionPayloadEnvelope) bool { return true }
+		got := envelopesForBlocks(bwb, []interfaces.ROSignedExecutionPayloadEnvelope{envB1}, processed)
 		require.Equal(t, 0, len(got))
 	})
 }
