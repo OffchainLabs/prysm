@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"net"
 	"net/url"
@@ -101,7 +102,7 @@ func NewService(ctx context.Context, opts ...Option) (*Service, error) {
 		if err := s.c.Status(statusCtx); err != nil {
 			log.WithError(err).Error("Failed to check builder status")
 		} else {
-			log.WithField("endpoint", s.c.NodeURL()).Info("Builder has been configured")
+			log.WithField("builder", logs.MaskCredentialsLogging(s.c.NodeURL())).Info("Builder has been configured")
 			log.Warn("Outsourcing block construction to external builders adds non-trivial delay to block propagation time. " +
 				"Builder-constructed blocks or fallback blocks may get orphaned. Use at your own risk!")
 		}
@@ -432,7 +433,7 @@ func (s *Service) RegisterValidator(ctx context.Context, reg []*ethpb.SignedVali
 		if !exists {
 			// we want to allow validators to set up keys that haven't been added to the beaconstate validator list yet,
 			// so we should tolerate keys that do not seem to be valid by skipping past them.
-			log.Warnf("Skipping validator registration for pubkey=%#x - not in current validator set.", r.Message.Pubkey)
+			log.WithField("pubkey", fmt.Sprintf("%#x", r.Message.Pubkey)).Debug("Skipping validator registration, pubkey not in current validator set")
 			continue
 		}
 		valid = append(valid, r)
