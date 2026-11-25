@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/OffchainLabs/go-bitfield"
+	"github.com/OffchainLabs/prysm/v7/async/event"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
@@ -15,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p"
 	p2ptest "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	lruwrpr "github.com/OffchainLabs/prysm/v7/cache/lru"
@@ -468,19 +470,24 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	r := &Service{
 		ctx: ctx,
 		cfg: &config{
-			p2p:                 p,
-			beaconDB:            db,
-			initialSync:         &mockSync.Sync{IsSyncing: false},
-			chain:               chain,
-			clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
-			attPool:             attestations.NewPool(),
-			attestationNotifier: (&mock.ChainService{}).OperationNotifier(),
+			p2p:                     p,
+			beaconDB:                db,
+			initialSync:             &mockSync.Sync{IsSyncing: false},
+			chain:                   chain,
+			clock:                   startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+			attPool:                 attestations.NewPool(),
+			attestationNotifier:     (&mock.ChainService{}).OperationNotifier(),
+			slasherAttestationsFeed: new(event.Feed),
 		},
 		seenAggregatedAttestationCache: lruwrpr.New(10),
 		signatureChan:                  make(chan *signatureVerifier, verifierLimit),
+		slasherEnabled:                 true,
 	}
 	r.initCaches()
 	go r.verifierRoutine()
+	slasherAtts := make(chan *slashertypes.WrappedIndexedAtt, 1)
+	sub := r.cfg.slasherAttestationsFeed.Subscribe(slasherAtts)
+	defer sub.Unsubscribe()
 
 	buf := new(bytes.Buffer)
 	_, err = p.Encoding().EncodeGossip(buf, signedAggregateAndProof)
@@ -499,6 +506,30 @@ func TestValidateAggregateAndProof_CanValidate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, pubsub.ValidationAccept, res, "Validated status is false")
 	assert.NotNil(t, msg.ValidatorData, "Did not set validator data")
+
+	// The attestation cache may mutate the accepted aggregate. The slasher must not see the change.
+	accepted := msg.ValidatorData.(ethpb.SignedAggregateAttAndProof).AggregateAttestationAndProof().AggregateVal()
+	accepted.GetAggregationBits().SetBitAt(1, true)
+	accepted.SetSignature(make([]byte, fieldparams.BLSSignatureLength))
+
+	select {
+	case got := <-slasherAtts:
+		require.DeepEqual(t, att.Data, got.GetData())
+		require.DeepEqual(t, attestingIndices, got.GetAttestingIndices())
+		require.DeepEqual(t, att.Signature, got.GetSignature())
+	case <-time.After(5 * time.Second):
+		t.Fatal("Accepted aggregate was not sent to the slasher")
+	}
+
+	// An aggregate with no bit that was not already sent must not reach the slasher again.
+	res, err = r.validateAggregatedAtt(t.Context(), signedAggregateAndProof)
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept, res)
+	select {
+	case <-slasherAtts:
+		t.Fatal("Aggregate with no new bit was sent to the slasher")
+	case <-time.After(500 * time.Millisecond):
+	}
 }
 
 func TestVerifyIndexInCommittee_SeenAggregatorEpoch(t *testing.T) {
@@ -926,4 +957,43 @@ func TestValidateAggregateAndProof_UnknownBlockRecordsSender(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 1, len(r.blkRootToPendingAtts[root]))
 	require.DeepEqual(t, map[peer.ID]bool{sender: true}, r.pendingAttSenders[root])
+}
+
+func TestHasNewSlasherBits(t *testing.T) {
+	agg := func(set ...uint64) *ethpb.Attestation {
+		bits := bitfield.NewBitlist(8)
+		for _, i := range set {
+			bits.SetBitAt(i, true)
+		}
+		return &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{}), AggregationBits: bits}
+	}
+
+	t.Run("new bits only", func(t *testing.T) {
+		s := &Service{}
+		s.initCaches()
+		for _, tc := range []struct {
+			name      string
+			agg       *ethpb.Attestation
+			committee primitives.CommitteeIndex
+			want      bool
+		}{
+			{name: "first aggregate", agg: agg(0, 1), want: true},
+			{name: "same bits", agg: agg(0, 1), want: false},
+			{name: "subset", agg: agg(1), want: false},
+			{name: "overlap with a new bit", agg: agg(1, 2), want: true},
+			{name: "covered by the union", agg: agg(0, 2), want: false},
+			{name: "other committee", agg: agg(0), committee: 1, want: true},
+		} {
+			require.Equal(t, tc.want, s.hasNewSlasherBits(tc.agg, tc.committee), tc.name)
+		}
+	})
+
+	t.Run("caller mutation does not change the record", func(t *testing.T) {
+		s := &Service{}
+		s.initCaches()
+		a := agg(0)
+		require.Equal(t, true, s.hasNewSlasherBits(a, 0))
+		a.AggregationBits.SetBitAt(1, true)
+		require.Equal(t, true, s.hasNewSlasherBits(agg(1), 0))
+	})
 }

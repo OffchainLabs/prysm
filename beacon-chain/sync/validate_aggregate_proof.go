@@ -1,16 +1,19 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
 
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/feed/operation"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
+	slashertypes "github.com/OffchainLabs/prysm/v7/beacon-chain/slasher/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -20,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing"
 	"github.com/OffchainLabs/prysm/v7/monitoring/tracing/trace"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1/attestation"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -240,7 +244,56 @@ func (s *Service) validateAggregatedAtt(ctx context.Context, signed ethpb.Signed
 	set := bls.NewSet()
 	set.Join(selectionSigSet).Join(aggregatorSigSet).Join(attSigSet)
 
-	return s.validateWithBatchVerifier(ctx, "aggregate", set)
+	result, err = s.validateWithBatchVerifier(ctx, "aggregate", set)
+	if result == pubsub.ValidationAccept && s.slasherEnabled && s.hasNewSlasherBits(aggregate, committeeIndex) {
+		// Convert now: the attestation cache may mutate the aggregate's bits and signature after acceptance.
+		indexedAtt, convErr := attestation.ConvertToIndexed(ctx, aggregate, committee)
+		if convErr != nil {
+			log.WithError(convErr).Error("Could not convert aggregate to indexed attestation")
+		} else {
+			// Send in the background to keep the slasher off the critical path.
+			go s.cfg.slasherAttestationsFeed.Send(&slashertypes.WrappedIndexedAtt{IndexedAtt: indexedAtt})
+		}
+	}
+	return result, err
+}
+
+type slasherAggregateKey struct {
+	dataRoot       [32]byte
+	committeeIndex primitives.CommitteeIndex
+}
+
+// hasNewSlasherBits records the aggregate's bits and returns true if it has a bit not yet sent to the slasher
+// for the same key (data and committee).
+func (s *Service) hasNewSlasherBits(aggregate ethpb.Att, committeeIndex primitives.CommitteeIndex) bool {
+	dataRoot, err := aggregate.GetData().HashTreeRoot()
+	if err != nil {
+		// Assume new to the slasher when this happens.
+		return true
+	}
+
+	key := slasherAggregateKey{dataRoot: dataRoot, committeeIndex: committeeIndex}
+	bits := aggregate.GetAggregationBits()
+	v, ok := s.slasherSentAggBitsCache.Get(key)
+	if !ok {
+		// Copy, because the attestation cache can mutate the bits after acceptance.
+		s.slasherSentAggBitsCache.Add(key, bitfield.Bitlist(bytes.Clone(bits)))
+		return true
+	}
+
+	sent := v.(bitfield.Bitlist)
+	union, err := sent.Or(bits)
+	if err != nil {
+		// Assume new to the slasher when this happens.
+		return true
+	}
+
+	if union.Count() == sent.Count() {
+		// No new bits to send.
+		return false
+	}
+	s.slasherSentAggBitsCache.Add(key, union)
+	return true
 }
 
 // Returns true if the node has received aggregate for the aggregator with index and target epoch.

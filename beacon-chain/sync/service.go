@@ -70,6 +70,7 @@ const (
 	seenDataColumnSize          = seenBlockSize * 128 // Each block can have max 128 data columns.
 	seenUnaggregatedAttSize     = 20000
 	seenAggregatedAttSize       = 16384
+	slasherSentAggBitsSize      = 4096 // about 2 epochs of 64 committees
 	seenSyncMsgSize             = 1000 // Maximum of 512 sync committee members, 1000 is a safe amount.
 	seenSyncContributionSize    = 512  // Maximum of SYNC_COMMITTEE_SIZE as specified by the spec.
 	seenExitSize                = 100
@@ -203,6 +204,7 @@ type Service struct {
 	reconstructionRandGen                *rand.Rand
 	ctxMap                               ContextByteVersions
 	slasherEnabled                       bool
+	slasherSentAggBitsCache              *lru.Cache
 	lcStore                              *lightClient.Store
 	dataColumnLogCh                      chan dataColumnLogEntry
 	payloadAttestationCache              *cache.PayloadAttestationCache
@@ -433,6 +435,7 @@ func (s *Service) initCaches() {
 	s.seenBlobCache = lruwrpr.New(seenBlockSize * params.BeaconConfig().DeprecatedMaxBlobsPerBlockElectra)
 	s.seenDataColumnCache = newSlotAwareCache(seenDataColumnSize)
 	s.seenAggregatedAttestationCache = lruwrpr.New(seenAggregatedAttSize)
+	s.slasherSentAggBitsCache = lruwrpr.New(slasherSentAggBitsSize)
 	s.seenUnAggregatedAttestationCache = lruwrpr.New(seenUnaggregatedAttSize)
 	s.seenSyncMessageCache = lruwrpr.New(seenSyncMsgSize)
 	s.seenSyncContributionCache = lruwrpr.New(seenSyncContributionSize)
