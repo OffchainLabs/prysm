@@ -20,7 +20,6 @@ const (
 	RequireSlotMatchesBlockGloas
 	RequireValidFieldsGloas
 	RequireSidecarKzgProofVerifiedGloas
-	RequireNotSeenGloas
 
 	// Payload attestation specific.
 	RequireCurrentSlot
