@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/network/authorization"
 	gethRPC "github.com/ethereum/go-ethereum/rpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // Endpoint is an endpoint with authorization data.
@@ -134,7 +135,11 @@ func NewExecutionRPCClient(ctx context.Context, endpoint Endpoint, headers http.
 	}
 	switch u.Scheme {
 	case "http", "https":
-		client, err = gethRPC.DialOptions(ctx, endpoint.Url, gethRPC.WithHTTPClient(endpoint.HttpClient()), gethRPC.WithHeaders(headers))
+		client, err = gethRPC.DialOptions(ctx, endpoint.Url,
+			gethRPC.WithHTTPClient(endpoint.HttpClient()),
+			gethRPC.WithHeaders(headers),
+			gethRPC.WithTextMapPropagator(propagation.TraceContext{}),
+		)
 		if err != nil {
 			return nil, err
 		}
