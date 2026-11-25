@@ -605,18 +605,12 @@ func (s *Service) cacheHeadersForEth1DataVote(ctx context.Context) error {
 // Caches block headers from the desired range.
 func (s *Service) cacheBlockHeaders(start, end uint64) error {
 	batchSize := s.cfg.eth1HeaderReqLimit
-	for i := start; i < end; i += batchSize {
-		startReq := i
-		endReq := i + batchSize
-		if endReq > 0 {
-			// Reduce the end request by one
-			// to prevent total batch size from exceeding
-			// the allotted limit.
-			endReq -= 1
-		}
-		endReq = min(endReq, end)
+	for i := start; i < end; {
+		// batchRequestHeaders treats [startBlock, endBlock] as an inclusive range,
+		// so shrink the upper bound by one to keep the batch size within the limit.
+		endReq := min(i+batchSize-1, end)
 		// We call batchRequestHeaders for its header caching side-effect, so we don't need the return value.
-		_, err := s.batchRequestHeaders(startReq, endReq)
+		_, err := s.batchRequestHeaders(i, endReq)
 		if err != nil {
 			if clientTimedOutError(err) {
 				// Reduce batch size as eth1 node is
@@ -626,15 +620,16 @@ func (s *Service) cacheBlockHeaders(start, end uint64) error {
 				if batchSize == 0 {
 					batchSize += 1
 				}
-
-				// Reset request value
-				if i > batchSize {
-					i -= batchSize
-				}
+				// Retry the same starting block with a smaller batch instead of
+				// advancing the cursor. The for-loop post-statement would otherwise
+				// step i forward by the just-shrunk batchSize and skip the range
+				// that failed to fetch.
 				continue
 			}
-			return errors.Wrapf(err, "cacheBlockHeaders, start=%d, end=%d", startReq, endReq)
+			return errors.Wrapf(err, "cacheBlockHeaders, start=%d, end=%d", i, endReq)
 		}
+		// Only advance the cursor once the current batch has been cached successfully.
+		i = endReq + 1
 	}
 	return nil
 }
