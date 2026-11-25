@@ -2,11 +2,15 @@ package light_client
 
 import (
 	"context"
+	"errors"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	p2pTesting "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -19,6 +23,22 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 )
+
+type failingLightClientUpdateDB struct {
+	iface.HeadAccessDatabase
+	failPeriod uint64
+	fail       bool
+	saveError  error
+	saved      []uint64
+}
+
+func (d *failingLightClientUpdateDB) SaveLightClientUpdate(ctx context.Context, period uint64, update interfaces.LightClientUpdate) error {
+	if d.fail && period == d.failPeriod {
+		return d.saveError
+	}
+	d.saved = append(d.saved, period)
+	return d.HeadAccessDatabase.SaveLightClientUpdate(ctx, period, update)
+}
 
 func TestLightClientStore(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
@@ -634,6 +654,129 @@ func TestLightClientStore_MigrateToCold(t *testing.T) {
 		require.NotNil(t, u)
 		require.DeepEqual(t, lastUpdatePeriod1, u)
 	})
+
+	for _, tc := range []struct {
+		name            string
+		increments      []uint64
+		expectedPeriods int
+		failIndex       int
+		failTwice       bool
+		newRoot         bool
+	}{
+		{name: "failed save retains cache for retry", increments: []uint64{1, 2}, expectedPeriods: 1, failTwice: true},
+		{name: "later period failure retains cache and prevents gaps", increments: []uint64{1, 34, 67, 68}, expectedPeriods: 3, failIndex: 1, newRoot: true},
+		{name: "saves periods in ascending order", increments: []uint64{1, 34, 67, 100, 133, 134}, expectedPeriods: 5, failIndex: 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig().Copy()
+			cfg.EpochsPerSyncCommitteePeriod = 1
+			params.OverrideBeaconConfig(cfg)
+
+			ctx := context.Background()
+			beaconDB := testDB.SetupDB(t)
+			_, _ = saveInitialFinalizedCheckpointData(t, ctx, beaconDB)
+			saveError := errors.New("injected light client update save failure")
+			failingDB := &failingLightClientUpdateDB{HeadAccessDatabase: beaconDB, saveError: saveError}
+			s := NewLightClientStore(&p2pTesting.FakeP2P{}, new(event.Feed), failingDB)
+
+			var finalizedRoot, finalizedParentRoot, lastAttestedRoot [32]byte
+			var headBlock interfaces.ReadOnlySignedBeaconBlock
+			for _, increase := range tc.increments {
+				l := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(increase), util.WithAttestedParentRoot(lastAttestedRoot))
+				require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+				require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock, [32]byte{1}))
+				headBlock = l.Block
+				var err error
+				finalizedRoot, err = l.Block.Block().HashTreeRoot()
+				require.NoError(t, err)
+				finalizedParentRoot = l.Block.Block().ParentRoot()
+				lastAttestedRoot, err = l.AttestedBlock.Block().HashTreeRoot()
+				require.NoError(t, err)
+			}
+
+			require.NotNil(t, s.cache.items[finalizedParentRoot])
+			updates := make(map[uint64]interfaces.LightClientUpdate)
+			for item := s.cache.items[finalizedParentRoot]; item != nil; item = item.parent {
+				if _, ok := updates[item.period]; !ok {
+					updates[item.period] = item.bestUpdate
+				}
+			}
+			periods := slices.Sorted(maps.Keys(updates))
+			require.Equal(t, tc.expectedPeriods, len(periods))
+			failingDB.failPeriod = periods[tc.failIndex]
+			failingDB.fail = true
+
+			items := make(map[[32]byte]*cacheItem, len(s.cache.items))
+			parents := make(map[[32]byte]*cacheItem, len(s.cache.items))
+			for root, item := range s.cache.items {
+				items[root] = item
+				parents[root] = item.parent
+			}
+
+			err := s.MigrateToCold(ctx, finalizedRoot)
+			require.ErrorIs(t, err, saveError)
+			require.ErrorContains(t, "period", err)
+			require.Equal(t, len(items), len(s.cache.items))
+			for root, item := range items {
+				require.Equal(t, true, s.cache.items[root] == item)
+				require.Equal(t, true, item.parent == parents[root])
+			}
+			require.Equal(t, tc.failIndex, len(failingDB.saved))
+			for i, period := range failingDB.saved {
+				require.Equal(t, periods[i], period)
+			}
+			for _, period := range periods[:tc.failIndex] {
+				update, err := beaconDB.LightClientUpdate(ctx, period)
+				require.NoError(t, err)
+				require.DeepEqual(t, updates[period], update)
+			}
+			for _, period := range periods[tc.failIndex:] {
+				update, err := beaconDB.LightClientUpdate(ctx, period)
+				require.NoError(t, err)
+				require.IsNil(t, update)
+			}
+			cached, err := s.LightClientUpdates(ctx, failingDB.failPeriod, failingDB.failPeriod, headBlock)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(cached))
+			require.DeepEqual(t, updates[failingDB.failPeriod], cached[0])
+
+			if tc.failTwice {
+				require.ErrorIs(t, s.MigrateToCold(ctx, finalizedRoot), saveError)
+				require.Equal(t, len(items), len(s.cache.items))
+				for root, item := range items {
+					require.Equal(t, true, s.cache.items[root] == item)
+					require.Equal(t, true, item.parent == parents[root])
+				}
+			}
+
+			if tc.newRoot {
+				l := util.NewTestLightClient(t, version.Altair, util.WithIncreasedAttestedSlot(69), util.WithAttestedParentRoot(lastAttestedRoot))
+				require.NoError(t, beaconDB.SaveBlock(ctx, l.Block))
+				require.NoError(t, s.SaveLCData(ctx, l.State, l.Block, l.AttestedState, l.AttestedBlock, l.FinalizedBlock, [32]byte{1}))
+				newAttestedRoot, err := l.AttestedBlock.Block().HashTreeRoot()
+				require.NoError(t, err)
+				require.Equal(t, true, s.cache.items[newAttestedRoot].parent == items[lastAttestedRoot])
+				finalizedRoot, err = l.Block.Block().HashTreeRoot()
+				require.NoError(t, err)
+				clear(updates)
+				for item := s.cache.items[l.Block.Block().ParentRoot()]; item != nil; item = item.parent {
+					if _, ok := updates[item.period]; !ok {
+						updates[item.period] = item.bestUpdate
+					}
+				}
+			}
+
+			failingDB.fail = false
+			require.NoError(t, s.MigrateToCold(ctx, finalizedRoot))
+			require.Equal(t, 0, len(s.cache.items))
+			for period, want := range updates {
+				got, err := beaconDB.LightClientUpdate(ctx, period)
+				require.NoError(t, err)
+				require.DeepEqual(t, want, got)
+			}
+		})
+	}
 }
 
 func saveInitialFinalizedCheckpointData(t *testing.T, ctx context.Context, beaconDB db.Database) ([32]byte, interfaces.SignedBeaconBlock) {

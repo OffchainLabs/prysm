@@ -3,6 +3,7 @@ package light_client
 import (
 	"context"
 	"maps"
+	"slices"
 	"sync"
 
 	"github.com/OffchainLabs/prysm/v7/async/event"
@@ -316,6 +317,8 @@ func (s *Store) LastOptimisticUpdate() interfaces.LightClientOptimisticUpdate {
 	return s.lastOptimisticUpdate
 }
 
+// MigrateToCold saves periods in ascending order and returns save errors without pruning for retry at the next finalization.
+// Retries are best-effort if the cached chain breaks.
 func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -361,10 +364,9 @@ func (s *Store) MigrateToCold(ctx context.Context, finalizedRoot [32]byte) error
 	}
 
 	// save updates to db
-	for period, update := range updateByPeriod {
-		err = s.beaconDB.SaveLightClientUpdate(ctx, period, update)
-		if err != nil {
-			log.WithError(err).Errorf("failed to save light client update for period %d. Skipping this period.", period)
+	for _, period := range slices.Sorted(maps.Keys(updateByPeriod)) {
+		if err := s.beaconDB.SaveLightClientUpdate(ctx, period, updateByPeriod[period]); err != nil {
+			return errors.Wrapf(err, "failed to save light client update for period %d", period)
 		}
 	}
 
