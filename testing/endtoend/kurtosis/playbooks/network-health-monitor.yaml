@@ -94,6 +94,10 @@ tasks:
             timeout: 60m
             config:
               maxForkDistance: 2
+              # NOTE: This is intentional because of late-joining nodes.
+              # If we DO NOT allow for 1 extra fork group, the monitoring test fails
+              # because the late-joining nodes will still report their head as zero root.
+              maxForkCount: 1
               continueOnPass: true
 
           - name: check_consensus_reorgs

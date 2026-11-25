@@ -14,6 +14,7 @@ func TestEndToEnd_Kurtosis_MinimalConfig(t *testing.T) {
 			enclaveName: "minimal",
 			configPath:  "testing/endtoend/network-config/minimal.yaml",
 			epochsToRun: 15,
+			runSyncTest: true,
 		},
 	}
 
