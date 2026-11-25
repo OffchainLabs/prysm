@@ -6,6 +6,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	coreblocks "github.com/OffchainLabs/prysm/v7/beacon-chain/core/blocks"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/peers/peerdata"
 	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
@@ -55,6 +56,17 @@ func TestUpdatePeerScorerStats(t *testing.T) {
 			err:       verification.ErrBlobIndexInvalid,
 			downPeer:  testDownscoreBlob,
 			processed: 3,
+		},
+		{
+			name:      "invalid proposer signature",
+			err:       errors.Wrap(coreblocks.ErrInvalidSignature, "verify proposer signature"),
+			downPeer:  testDownscoreBlock,
+			processed: 2,
+		},
+		{
+			name:      "unknown proposer index",
+			err:       coreblocks.ErrInvalidProposerIndex,
+			processed: 2,
 		},
 		{
 			name:      "not validity error",
