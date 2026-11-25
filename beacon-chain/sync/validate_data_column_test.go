@@ -2,6 +2,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -33,6 +34,35 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 )
+
+func TestProcessDataColumnLogs_ContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	s := &Service{
+		ctx:             ctx,
+		dataColumnLogCh: make(chan dataColumnLogEntry),
+	}
+	done := make(chan struct{})
+	go func() {
+		s.processDataColumnLogs()
+		close(done)
+	}()
+
+	// Wait for the logging routine to receive an entry before canceling.
+	select {
+	case s.dataColumnLogCh <- dataColumnLogEntry{}:
+	case <-time.After(time.Second):
+		t.Fatal("processDataColumnLogs did not receive an entry")
+	}
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("processDataColumnLogs did not exit after context cancellation")
+	}
+}
 
 func TestValidateDataColumn(t *testing.T) {
 	err := kzg.Start()
