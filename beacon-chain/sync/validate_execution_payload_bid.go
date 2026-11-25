@@ -67,7 +67,7 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	}
 
 	// [IGNORE] this is the first signed bid seen with a valid signature from the given builder for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
-	// Cache is populated only after VerifySignature below; a hit here implies a valid-sig bid was already seen.
+	// Cache is populated only after every check below passes; a hit here implies a valid bid was already seen.
 	tupleKey := executionPayloadBidTupleKey(bid)
 	if s.hasSeenExecutionPayloadBid(tupleKey) {
 		return pubsub.ValidationIgnore, nil
@@ -117,10 +117,6 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyPrevRandao(st); err != nil {
 		return pubsub.ValidationReject, err
 	}
-	if err := v.VerifySignature(st); err != nil {
-		return pubsub.ValidationReject, err
-	}
-	s.setSeenExecutionPayloadBid(bid.Slot(), tupleKey)
 	// [IGNORE] this bid is the highest value bid seen for the tuple (bid.slot, bid.parent_block_hash, bid.parent_block_root).
 	if !s.isHighestExecutionPayloadBid(bid) {
 		return pubsub.ValidationIgnore, nil
@@ -166,6 +162,12 @@ func (s *Service) validateExecutionPayloadBidGossip(ctx context.Context, pid pee
 	if err := v.VerifyBidSlotHigherThanParent(parentSlot); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [REJECT] the bid signature is valid. Checked last, as in the spec, so a bid
+	// that fails a transient [IGNORE] check is not marked seen and can be re-validated.
+	if err := v.VerifySignature(st); err != nil {
+		return pubsub.ValidationReject, err
+	}
+	s.setSeenExecutionPayloadBid(bid.Slot(), tupleKey)
 	msg.ValidatorData = signedBid
 	return pubsub.ValidationAccept, nil
 }

@@ -230,7 +230,7 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, msg, _ := setupExecutionPayloadBidService(t)
+			s, msg, signedBid := setupExecutionPayloadBidService(t)
 			s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(tc.verifier)
 
 			result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
@@ -238,6 +238,13 @@ func TestValidateExecutionPayloadBidGossip_ErrorPathsWithMock(t *testing.T) {
 				require.NotNil(t, err)
 			}
 			require.Equal(t, tc.result, result)
+			// A failed bid must not be marked seen, so the builder can re-send it once the condition clears.
+			require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+
+			s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
+			result, err = s.validateExecutionPayloadBidGossip(ctx, "", executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid))
+			require.NoError(t, err)
+			require.Equal(t, pubsub.ValidationAccept, result)
 		})
 	}
 }
@@ -253,10 +260,10 @@ func TestValidateExecutionPayloadBidGossip_LowerOrEqualBidIgnored(t *testing.T) 
 	result, err := s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
-	require.Equal(t, true, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
+	require.Equal(t, false, s.hasSeenExecutionPayloadBid(executionPayloadBidTupleKey(mustBid(t, signedBid))))
 }
 
-func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksTupleSeen(t *testing.T) {
+func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredNotMarkedSeen(t *testing.T) {
 	ctx := context.Background()
 	s, msg, signedBid := setupExecutionPayloadBidService(t)
 	s.newExecutionPayloadBidVerifier = testNewExecutionPayloadBidVerifier(mockExecutionPayloadBidVerifier{})
@@ -269,14 +276,14 @@ func TestValidateExecutionPayloadBidGossip_LowerBidIgnoredStillMarksTupleSeen(t 
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationIgnore, result)
 
-	// If the lower valid bid did not mark the tuple as seen, the same bid would
-	// be accepted once the highest-bid cache is cleared.
+	// The ignored lower bid is not marked seen, so the same bid is accepted
+	// once it is the highest again.
 	s.highestExecutionPayloadBidCache = cache.NewHighestExecutionPayloadBidCache()
 	msg = executionPayloadBidToPubsub(t, s, s.cfg.p2p, signedBid)
 
 	result, err = s.validateExecutionPayloadBidGossip(ctx, "", msg)
 	require.NoError(t, err)
-	require.Equal(t, pubsub.ValidationIgnore, result)
+	require.Equal(t, pubsub.ValidationAccept, result)
 }
 
 func TestValidateExecutionPayloadBidGossip_HigherBidAccepted(t *testing.T) {
