@@ -3321,3 +3321,87 @@ func TestPartialColumnBroadcaster_handleIncomingRPC_GloasSlotMismatchRejected(t 
 	require.Equal(t, pubsub.PeerFeedbackInvalidMessage, ps.peerFeedbackCallsSnapshot()[0].kind)
 	require.IsNil(t, h.broadcaster.getDataColumn(validTopic, group))
 }
+
+// Verifies republishes of the same (topic, group) inside the coalescing window collapse into one deferred republish.
+func TestPartialColumnBroadcaster_requestRepublish_coalesces(t *testing.T) {
+	const validTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+	ps := newMockPubSub(nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	defer h.Stop()
+	b := h.broadcaster
+	b.republishWindow = 20 * time.Millisecond
+
+	col := createPartialColumn(t, 3, map[uint64][]byte{0: {0x55}})
+	group := col.GroupID()
+	b.partialMsgStore[validTopic] = map[string]*verification.PartialColumnVerifier{string(group): newMarkedVerifier(col)}
+	b.partialMsgStore[validTopic][string(group)].Column.Published = true
+
+	// First republish goes out immediately.
+	require.NoError(t, b.requestRepublish(validTopic, col))
+	require.Equal(t, 1, ps.publishedColumnCount())
+	// Repeats inside the window are coalesced into a single pending republish.
+	require.NoError(t, b.requestRepublish(validTopic, col))
+	require.NoError(t, b.requestRepublish(validTopic, col))
+	require.Equal(t, 1, ps.publishedColumnCount())
+	require.Equal(t, 1, len(b.republishDirty))
+	require.NotNil(t, b.republishTimerC)
+
+	// Before the window elapses a flush keeps the entry pending.
+	b.flushRepublish()
+	require.Equal(t, 1, ps.publishedColumnCount())
+	require.Equal(t, 1, len(b.republishDirty))
+
+	// Once the window has elapsed the flush republishes exactly once.
+	<-b.republishTimerC
+	b.republishTimerC = nil
+	b.flushRepublish()
+	require.Equal(t, 2, ps.publishedColumnCount())
+	require.Equal(t, 0, len(b.republishDirty))
+
+	// A pending republish for an evicted group is dropped without publishing.
+	require.NoError(t, b.requestRepublish(validTopic, col))
+	require.Equal(t, 1, len(b.republishDirty))
+	delete(b.partialMsgStore[validTopic], string(group))
+	time.Sleep(b.republishWindow)
+	b.flushRepublish()
+	require.Equal(t, 2, ps.publishedColumnCount())
+	require.Equal(t, 0, len(b.republishDirty))
+}
+
+// Verifies our own Publish is handled before peer requests already queued in incomingReq.
+func TestPartialColumnBroadcaster_PublishBypassesQueuedRequests(t *testing.T) {
+	const queuedTopic = "/eth2/abcd1234/data_column_sidecar_12/ssz_snappy"
+	const ownTopic = "/eth2/abcd1234/data_column_sidecar_3/ssz_snappy"
+	ps := newMockPubSub(nil, nil)
+	recorder := newCallbackRecorder(2, false, nil, nil)
+	h := newBroadcasterHarness(t, ps)
+	defer h.Stop()
+	b := h.broadcaster
+
+	// Peer-driven gossip requests that republish a published column on queuedTopic.
+	queuedCol := createPartialColumn(t, 3, map[uint64][]byte{0: {0x55}})
+	b.partialMsgStore[queuedTopic] = map[string]*verification.PartialColumnVerifier{string(queuedCol.GroupID()): newMarkedVerifier(queuedCol)}
+	b.partialMsgStore[queuedTopic][string(queuedCol.GroupID())].Column.Published = true
+	for range 100 {
+		_, ok := b.tryEnqueue(requestKindGossip, requestValues{gossip: gossip{topic: queuedTopic, groupID: queuedCol.GroupID()}})
+		require.Equal(t, true, ok)
+	}
+
+	ownCol := createPartialColumn(t, 2, map[uint64][]byte{0: {0x10}})
+	done := make(chan error, 1)
+	go func() {
+		done <- b.Publish(t.Context(), func(yield func(string, blocks.PartialDataColumn) bool) {
+			yield(ownTopic, *ownCol)
+		})
+	}()
+	require.Eventually(t, func() bool { return len(b.priorityReq) == 1 }, 5*time.Second, time.Millisecond)
+
+	h.start(recorder)
+	require.NoError(t, <-done)
+	require.Eventually(t, func() bool { return len(b.incomingReq) == 0 }, 5*time.Second, time.Millisecond)
+
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	require.Equal(t, true, len(ps.publishedPartialColumns) >= 2)
+	require.Equal(t, ownTopic, ps.publishedPartialColumns[0].topic, "own publish was queued behind peer requests")
+}
