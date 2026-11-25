@@ -47,6 +47,9 @@ func (s *Service) IsBidCompatibleWithHead(bid interfaces.ROExecutionPayloadBid) 
 	if bid.ParentBlockRoot() != headRoot {
 		return false
 	}
+	if !s.HasFullNode(headRoot) {
+		return buildsOnParentPayload
+	}
 	buildsOnHeadPayload := bid.ParentBlockHash() == headBid.BlockHash()
 	if buildFull, _ := s.shouldBuildOnFull(headState, headRoot, bid.Slot()); buildFull {
 		return buildsOnHeadPayload
