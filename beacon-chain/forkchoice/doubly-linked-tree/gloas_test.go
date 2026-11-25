@@ -2618,3 +2618,71 @@ func TestInsertChain_SetsBuilderPubkey(t *testing.T) {
 	require.NoError(t, err)
 	require.IsNil(t, pk)
 }
+
+func TestIsOptimisticForPayloadStatus(t *testing.T) {
+	ctx := t.Context()
+	root := indexToHash(1)
+
+	// setup returns a fork choice with a validated empty node for root and, if withPayload, an optimistic full node.
+	setup := func(t *testing.T, withPayload bool) *ForkChoice {
+		f := setupGloas(t, 0, 0)
+		st, roblock, err := prepareGloasForkchoiceState(ctx, 1, root, params.BeaconConfig().ZeroHash, indexToHash(100), params.BeaconConfig().ZeroHash, 0, 0)
+		require.NoError(t, err)
+		require.NoError(t, f.InsertNode(ctx, st, roblock))
+		require.NoError(t, f.SetOptimisticToValid(ctx, root))
+		if withPayload {
+			pe, err := prepareGloasForkchoicePayload(root)
+			require.NoError(t, err)
+			require.NoError(t, f.InsertPayload(pe))
+		}
+		return f
+	}
+
+	t.Run("empty node without full node", func(t *testing.T) {
+		f := setup(t, false)
+		opt, err := f.IsOptimisticForPayloadStatus(root, forkchoice2.PayloadStatusEmpty)
+		require.NoError(t, err)
+		require.Equal(t, false, opt)
+	})
+	t.Run("full node missing", func(t *testing.T) {
+		f := setup(t, false)
+		opt, err := f.IsOptimisticForPayloadStatus(root, forkchoice2.PayloadStatusFull)
+		require.ErrorIs(t, err, ErrNilNode)
+		require.Equal(t, true, opt)
+	})
+	t.Run("empty and full nodes differ", func(t *testing.T) {
+		f := setup(t, true)
+		opt, err := f.IsOptimisticForPayloadStatus(root, forkchoice2.PayloadStatusEmpty)
+		require.NoError(t, err)
+		require.Equal(t, false, opt)
+		opt, err = f.IsOptimisticForPayloadStatus(root, forkchoice2.PayloadStatusFull)
+		require.NoError(t, err)
+		require.Equal(t, true, opt)
+	})
+	t.Run("full node validated", func(t *testing.T) {
+		f := setup(t, true)
+		require.NoError(t, f.SetOptimisticToValid(ctx, root))
+		opt, err := f.IsOptimisticForPayloadStatus(root, forkchoice2.PayloadStatusFull)
+		require.NoError(t, err)
+		require.Equal(t, false, opt)
+	})
+	t.Run("pending is invalid", func(t *testing.T) {
+		f := setup(t, true)
+		opt, err := f.IsOptimisticForPayloadStatus(root, forkchoice2.PayloadStatusPending)
+		require.ErrorIs(t, err, errInvalidPayloadStatus)
+		require.Equal(t, true, opt)
+	})
+	t.Run("unknown root", func(t *testing.T) {
+		f := setup(t, true)
+		opt, err := f.IsOptimisticForPayloadStatus(indexToHash(42), forkchoice2.PayloadStatusEmpty)
+		require.ErrorIs(t, err, ErrNilNode)
+		require.Equal(t, true, opt)
+	})
+	t.Run("all tips invalid", func(t *testing.T) {
+		f := setup(t, true)
+		f.store.allTipsAreInvalid = true
+		opt, err := f.IsOptimisticForPayloadStatus(root, forkchoice2.PayloadStatusEmpty)
+		require.NoError(t, err)
+		require.Equal(t, true, opt)
+	})
+}

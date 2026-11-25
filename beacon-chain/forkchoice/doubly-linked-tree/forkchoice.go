@@ -242,6 +242,31 @@ func (f *ForkChoice) IsOptimistic(root [32]byte) (bool, error) {
 	return en.optimistic, nil
 }
 
+// IsOptimisticForPayloadStatus returns the optimistic status of the empty or full node of root.
+// Pending is not supported and returns errInvalidPayloadStatus.
+func (f *ForkChoice) IsOptimisticForPayloadStatus(root [32]byte, status forkchoice2.PayloadStatus) (bool, error) {
+	if status != forkchoice2.PayloadStatusEmpty && status != forkchoice2.PayloadStatusFull {
+		return true, errors.Wrapf(errInvalidPayloadStatus, "status %s", status)
+	}
+	if f.store.allTipsAreInvalid {
+		return true, nil
+	}
+
+	en, ok := f.store.emptyNodeByRoot[root]
+	if !ok || en == nil {
+		return true, ErrNilNode
+	}
+	if status == forkchoice2.PayloadStatusEmpty {
+		return en.optimistic, nil
+	}
+
+	fn := f.store.fullNodeByRoot[root]
+	if fn == nil {
+		return true, errors.Wrap(ErrNilNode, "no full node")
+	}
+	return fn.optimistic, nil
+}
+
 // AncestorRoot returns the ancestor root of input block root at a given slot.
 func (f *ForkChoice) AncestorRoot(ctx context.Context, root [32]byte, slot primitives.Slot) ([32]byte, error) {
 	ctx, span := trace.StartSpan(ctx, "doublyLinkedForkchoice.AncestorRoot")
