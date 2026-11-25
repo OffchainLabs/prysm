@@ -307,7 +307,10 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 		t.Cleanup(rejects.Close)
 
 		mh := multi(t, accepts.URL, rejects.URL)
-		post := func(endpoint string) error {
+		// The call returns as soon as the SSZ-capable node accepts, so the node that
+		// needs the JSON fallback is still writing in the background; wait for its
+		// writes before the next call so the cache and the counters stay deterministic.
+		post := func(endpoint string, wantSSZ, wantJSON int32) error {
 			err := mh.PostSSZWithFallback(
 				context.Background(),
 				endpoint,
@@ -315,12 +318,19 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 				func() ([]byte, error) { return []byte("ssz"), nil },
 				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
 			)
-			return err
+			if err != nil {
+				return err
+			}
+
+			return waitFor(func() bool {
+				return atomic.LoadInt32(&rejectsSSZ) == wantSSZ && atomic.LoadInt32(&rejectsJSON) == wantJSON
+			})
 		}
 
-		require.NoError(t, post("/publish"))
-		require.NoError(t, post("/publish"))
-		require.NoError(t, post("/other"))
+		require.NoError(t, post("/publish", 1, 1))
+		require.NoError(t, post("/publish", 1, 2))
+		require.NoError(t, post("/other", 2, 3))
+		require.NoError(t, waitFor(func() bool { return atomic.LoadInt32(&acceptsSSZ) == 3 }))
 
 		assert.Equal(t, int32(3), atomic.LoadInt32(&acceptsSSZ))
 		assert.Equal(t, int32(0), atomic.LoadInt32(&acceptsJSON), "SSZ-capable node must not be downgraded or receive a duplicate")
@@ -449,6 +459,62 @@ func TestMultiHandlerPostSSZWithFallback(t *testing.T) {
 		assert.Equal(t, int32(1), atomic.LoadInt32(&sszHits))
 		assert.Equal(t, int32(1), atomic.LoadInt32(&sszMarshals))
 		assert.Equal(t, int32(2), atomic.LoadInt32(&jsonHits))
+	})
+
+	t.Run("first success returns without waiting for the slow node", func(t *testing.T) {
+		var (
+			slowParked  = make(chan struct{}, 1)
+			slowRelease = make(chan struct{})
+			releaseOnce sync.Once
+			slowHits    int32
+		)
+
+		fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(fast.Close)
+
+		// The slow node parks mid-request and only counts the write once released.
+		slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			slowParked <- struct{}{}
+			<-slowRelease
+			atomic.AddInt32(&slowHits, 1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(slow.Close)
+		t.Cleanup(func() { releaseOnce.Do(func() { close(slowRelease) }) })
+
+		mh := multi(t, fast.URL, slow.URL)
+		errs := make(chan error, 1)
+		go func() {
+			errs <- mh.PostSSZWithFallback(
+				context.Background(),
+				"/publish",
+				nil,
+				func() ([]byte, error) { return []byte("ssz"), nil },
+				func() ([]byte, error) { return []byte(`{"json":true}`), nil },
+			)
+		}()
+
+		// Both nodes are contacted; the slow one is now holding its request open.
+		select {
+		case <-slowParked:
+		case <-time.After(time.Second):
+			t.Fatal("slow node never received the write")
+		}
+
+		// The fast node has answered, so the call must not wait for the slow one.
+		select {
+		case err := <-errs:
+			require.NoError(t, err)
+		case <-time.After(time.Second):
+			t.Fatal("PostSSZWithFallback waited for every node instead of the first success")
+		}
+
+		// The broadcast is not dropped on the early return: releasing the slow node
+		// afterwards still lets its detached write complete.
+		releaseOnce.Do(func() { close(slowRelease) })
+		require.NoError(t, waitFor(func() bool { return atomic.LoadInt32(&slowHits) == 1 }))
 	})
 
 	t.Run("retries SSZ after cache expires", func(t *testing.T) {
