@@ -1,0 +1,169 @@
+name: Kurtosis PR
+
+# The PR author comments `/kurtosis` with a Kurtosis config and an optional check script.
+# The bot replies with the result. See .github/kurtosis-pr/run.sh for the comment format.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  start:
+    # Trigger gate: Only run for PR comments starting with `/kurtosis` from the PR author who is a member, owner, or collaborator.
+    if: >-
+      github.event.issue.pull_request
+      && startsWith(github.event.comment.body, '/kurtosis')
+      && github.event.comment.user.login == github.event.issue.user.login
+      && contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      pr: ${{ steps.start.outputs.pr }}
+      head_sha: ${{ steps.start.outputs.head_sha }}
+      comment_id: ${{ steps.start.outputs.comment_id }}
+      comment_url: ${{ steps.start.outputs.comment_url }}
+      status_id: ${{ steps.start.outputs.status_id }}
+      cancel: ${{ steps.start.outputs.cancel }}
+    steps:
+      - id: start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          LATEST=$(gh api --paginate "repos/$REPO/issues/$PR/comments" |
+            jq -rs --arg a "$AUTHOR" '[add[] | select(.user.login == $a and (.body | startswith("/kurtosis")))] | last | .id // empty')
+          [ -n "$LATEST" ] || { echo "No /kurtosis comment from $AUTHOR"; exit 0; }
+
+          # Comments can arrive out of order. Drop a command that a newer one supersedes, before it takes the concurrency group.
+          [ "$COMMENT_ID" = "$LATEST" ] || { echo "Comment $COMMENT_ID is superseded by $LATEST"; exit 0; }
+          gh api -X POST "repos/$REPO/issues/comments/$COMMENT_ID/reactions" -f content=eyes > /dev/null
+          FIRST=$(gh api "repos/$REPO/issues/comments/$COMMENT_ID" --jq '.body | split("\n")[0] | rtrimstr("\r") | rtrimstr(" ")')
+          if [ "$FIRST" = "/kurtosis cancel" ]; then
+            printf 'pr=%s\ncancel=true\n' "$PR" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          COMMENT_URL=$(gh api "repos/$REPO/issues/comments/$COMMENT_ID" --jq .html_url)
+          STATUS_ID=$(gh api "repos/$REPO/issues/$PR/comments" -f body="⏳ Kurtosis run started for [this comment]($COMMENT_URL): $RUN_URL" --jq .id)
+          {
+            echo "pr=$PR"
+            echo "comment_url=$COMMENT_URL"
+            echo "head_sha=$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)"
+            echo "comment_id=$COMMENT_ID"
+            echo "status_id=$STATUS_ID"
+          } >> "$GITHUB_OUTPUT"
+
+  run:
+    needs: start
+    if: needs.start.outputs.comment_id != ''
+    concurrency:
+      group: kurtosis-pr-${{ needs.start.outputs.pr }}
+      cancel-in-progress: true
+    runs-on: ${{ github.repository == 'OffchainLabs/prysm' && 'ubuntu-4' || 'ubuntu-latest' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Kurtosis
+        working-directory: ${{ runner.temp }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo kurtosis-tech/kurtosis-cli-release-artifacts \
+            --pattern '*_linux_amd64.tar.gz' --pattern checksums.txt
+          sha256sum -c --ignore-missing checksums.txt
+          sudo tar -xzf kurtosis-cli_*_linux_amd64.tar.gz -C /usr/local/bin kurtosis
+          kurtosis version
+          # The run does not use the default OpenTelemetry and ClickHouse side containers, so use vector.
+          config=$(kurtosis config path)
+          mkdir -p "$(dirname "$config")"
+          cat > "$config" <<'EOF'
+          config-version: 9
+          should-send-metrics: false
+          kurtosis-clusters:
+            docker:
+              type: docker
+              backend-log-collector: vector
+          EOF
+
+      - name: Run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ needs.start.outputs.pr }}
+          HEAD_SHA: ${{ needs.start.outputs.head_sha }}
+          COMMENT_ID: ${{ needs.start.outputs.comment_id }}
+          OUT: ${{ runner.temp }}/kurtosis
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          export COMMENT_FILE=$RUNNER_TEMP/comment.md
+          gh api "repos/$REPO/issues/comments/$COMMENT_ID" --jq .body > "$COMMENT_FILE"
+          export COMMENT_URL=$(gh api "repos/$REPO/issues/comments/$COMMENT_ID" --jq .html_url)
+          bash .github/kurtosis-pr/run.sh
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kurtosis-report
+          path: ${{ runner.temp }}/kurtosis/report.md
+          if-no-files-found: ignore
+
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: enclave-dump
+          path: |
+            ${{ runner.temp }}/kurtosis/dump
+            ${{ runner.temp }}/kurtosis/*.log
+            ${{ runner.temp }}/kurtosis/args.yaml
+            ${{ runner.temp }}/kurtosis/report-full.md
+          if-no-files-found: ignore
+
+  cancel:
+    needs: start
+    if: needs.start.outputs.cancel == 'true'
+    concurrency:
+      group: kurtosis-pr-${{ needs.start.outputs.pr }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Cancelled the running /kurtosis job, if any"
+
+  report:
+    needs: [start, run]
+    if: always() && needs.start.outputs.status_id != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: kurtosis-report
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          STATUS_ID: ${{ needs.start.outputs.status_id }}
+          COMMENT_URL: ${{ needs.start.outputs.comment_url }}
+          RESULT: ${{ needs.run.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$RESULT" = cancelled ]; then
+            printf '### Kurtosis: ⏹️ cancelled\n\nA newer `/kurtosis` comment or `/kurtosis cancel` stopped the run for [this comment](%s): %s\n' "$COMMENT_URL" "$RUN_URL" > report.md
+          fi
+          [ -s report.md ] || printf '### Kurtosis: ❌ fail\n\nThe run for [this comment](%s) ended (%s) without a report: %s\n' "$COMMENT_URL" "$RESULT" "$RUN_URL" > report.md
+          gh api -X PATCH "repos/$REPO/issues/comments/$STATUS_ID" -F body=@report.md > /dev/null
