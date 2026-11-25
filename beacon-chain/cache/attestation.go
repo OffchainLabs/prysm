@@ -75,7 +75,8 @@ func (c *AttestationCache) Add(att ethpb.Att) error {
 	if group == nil {
 		group = &attGroup{
 			slot: att.GetData().Slot,
-			atts: []ethpb.Att{att},
+			// Copy the attestation because unaggregated attestations are later aggregated into it in place.
+			atts: []ethpb.Att{att.Clone()},
 		}
 		c.atts[id] = group
 		return nil
@@ -110,14 +111,17 @@ func (c *AttestationCache) Add(att ethpb.Att) error {
 	return nil
 }
 
-// GetAll returns all attestations in the cache, excluding forkchoice attestations.
+// GetAll returns copies of all attestations in the cache, excluding forkchoice attestations.
+// It returns copies because Add aggregates into cached attestations in place.
 func (c *AttestationCache) GetAll() []ethpb.Att {
 	c.RLock()
 	defer c.RUnlock()
 
 	var result []ethpb.Att
 	for _, group := range c.atts {
-		result = append(result, group.atts...)
+		for _, a := range group.atts {
+			result = append(result, a.Clone())
+		}
 	}
 	return result
 }
@@ -232,7 +236,7 @@ func (c *AttestationCache) DeleteForkchoiceAttestation(att ethpb.Att) error {
 	return c.forkchoiceAtts.Delete(att)
 }
 
-// GetBySlotAndCommitteeIndex returns all attestations in the cache that match the provided slot
+// GetBySlotAndCommitteeIndex returns copies of all attestations in the cache that match the provided slot
 // and committee index. Forkchoice attestations are not returned.
 //
 // NOTE: This function cannot be declared as a method on the AttestationCache because it is a generic function.
@@ -249,9 +253,8 @@ func GetBySlotAndCommitteeIndex[T ethpb.Att](c *AttestationCache, slot primitive
 			a, ok := group.atts[0].(T)
 			if ok && a.GetData().Slot == slot && a.CommitteeBitsVal().BitAt(uint64(committeeIndex)) {
 				for _, a := range group.atts {
-					a, ok := a.(T)
-					if ok {
-						result = append(result, a)
+					if _, ok := a.(T); ok {
+						result = append(result, a.Clone().(T))
 					}
 				}
 			}

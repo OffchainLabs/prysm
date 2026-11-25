@@ -139,6 +139,49 @@ func Test_pruneAttsFromPool_Electra(t *testing.T) {
 	assert.DeepEqual(t, att3, attsInPool[0])
 }
 
+func Test_pruneCoveredAttsFromPool_ExperimentalUnaggregated(t *testing.T) {
+	resetCfg := features.InitWithReset(&features.Flags{EnableExperimentalAttestationPool: true})
+	defer resetCfg()
+
+	data := &ethpb.AttestationData{
+		BeaconBlockRoot: make([]byte, 32),
+		Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+	}
+	cb := primitives.NewAttestationCommitteeBits()
+	cb.SetBitAt(1, true)
+
+	tests := []struct {
+		name string
+		att  func() ethpb.Att
+	}{
+		{
+			name: "phase0",
+			att: func() ethpb.Att {
+				return &ethpb.Attestation{AggregationBits: bitfield.Bitlist{0b00000100, 0b1}, Data: data, Signature: make([]byte, 96)}
+			},
+		},
+		{
+			name: "electra",
+			att: func() ethpb.Att {
+				return &ethpb.AttestationElectra{AggregationBits: bitfield.Bitlist{0b00000100, 0b1}, Data: data, Signature: make([]byte, 96), CommitteeBits: cb}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := testServiceNoDB(t)
+			s.cfg.AttPool = kv.NewAttCaches()
+			s.cfg.AttestationCache = cache.NewAttestationCache()
+			require.NoError(t, s.cfg.AttestationCache.Add(tt.att()))
+			require.Equal(t, 1, s.cfg.AttestationCache.Count())
+
+			require.NoError(t, s.pruneCoveredAttsFromPool(t.Context(), nil, tt.att()))
+			assert.Equal(t, 0, s.cfg.AttestationCache.Count())
+		})
+	}
+}
+
 func TestStore_OnBlockBatch(t *testing.T) {
 	service, tr := minimalTestService(t)
 	ctx := tr.ctx

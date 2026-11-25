@@ -7,6 +7,7 @@ import (
 
 	"github.com/OffchainLabs/go-bitfield"
 	"github.com/OffchainLabs/prysm/v7/async"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -22,10 +23,7 @@ func TestPruneExpired_Ticker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 
-	s, err := NewService(ctx, &Config{
-		Pool:          NewPool(),
-		pruneInterval: 250 * time.Millisecond,
-	})
+	s, err := NewService(ctx, &Config{Pool: NewPool()})
 	require.NoError(t, err)
 
 	ad1 := util.HydrateAttestationData(&ethpb.AttestationData{})
@@ -160,4 +158,25 @@ func TestPruneExpired_ExpiredDeneb(t *testing.T) {
 
 	assert.Equal(t, true, s.expired(secondEpochStart), "Should be expired")
 	assert.Equal(t, false, s.expired(thirdEpochStart), "Should not be expired")
+}
+
+func TestPruneExpiredExperimental_ForkchoiceAtts(t *testing.T) {
+	s, err := NewService(t.Context(), &Config{Cache: cache.NewAttestationCache()})
+	require.NoError(t, err)
+
+	spe := params.BeaconConfig().SlotsPerEpoch
+	s.genesisTime = time.Now().Add(-params.SlotsDuration(2*spe+1, params.BeaconConfig()))
+
+	sig := make([]byte, fieldparams.BLSSignatureLength)
+	expired := &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: spe - 1}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}
+	kept := &ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: spe}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}
+	require.NoError(t, s.cfg.Cache.SaveForkchoiceAttestations([]ethpb.Att{expired, kept}))
+	require.NoError(t, s.cfg.Cache.Add(expired))
+	require.NoError(t, s.cfg.Cache.Add(&ethpb.Attestation{Data: util.HydrateAttestationData(&ethpb.AttestationData{Slot: 2 * spe}), AggregationBits: bitfield.Bitlist{0b1101}, Signature: sig}))
+
+	s.pruneExpiredAttsExperimental()
+
+	assert.Equal(t, 1, s.cfg.Cache.Count())
+	require.Equal(t, 1, len(s.cfg.Cache.ForkchoiceAttestations()))
+	assert.DeepEqual(t, []ethpb.Att{kept}, s.cfg.Cache.ForkchoiceAttestations())
 }
