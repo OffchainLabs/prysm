@@ -646,6 +646,7 @@ func TestBlocksFetcher_currentHeadAndTargetEpochs(t *testing.T) {
 				&blocksFetcherConfig{
 					chain: mc,
 					p2p:   p2p,
+					clock: startup.NewClock(makeGenesisTime(params.BeaconConfig().SlotsPerEpoch.Mul(uint64(tt.targetEpoch))), [32]byte{}),
 				},
 			)
 			mc.FinalizedCheckPoint = &ethpb.Checkpoint{
@@ -691,10 +692,34 @@ func TestBlocksFetcher_bestNonFinalizedSlot_PreservesPeerHeadWithinEpoch(t *test
 	fetcher := newBlocksFetcher(ctx, &blocksFetcherConfig{
 		chain: mc,
 		p2p:   p2p,
+		clock: startup.NewClock(makeGenesisTime(peerHeadSlot), [32]byte{}),
 	})
 	fetcher.mode = modeNonConstrained
 	require.NoError(t, mc.State.SetSlot(ourHeadSlot))
 
 	got := fetcher.bestNonFinalizedSlot()
 	require.Equal(t, peerHeadSlot, got, "bestNonFinalizedSlot should keep slot precision within the current epoch")
+}
+
+func TestBlocksFetcher_bestNonFinalizedSlot_CappedAtCurrentSlot(t *testing.T) {
+	useMinimalInitialSyncConfig(t)
+
+	const currentSlot = primitives.Slot(92)
+
+	// Peers may claim a head one slot past the current slot, where no block exists yet.
+	mc, p2p, _ := initializeTestServices(t, []primitives.Slot{}, []*peerData{
+		{blocks: makeSequence(1, currentSlot), finalizedEpoch: 8, headSlot: currentSlot + 1},
+		{blocks: makeSequence(1, currentSlot), finalizedEpoch: 8, headSlot: currentSlot + 1},
+	})
+
+	clock, _ := newClockAtSlot(currentSlot)
+	fetcher := newBlocksFetcher(t.Context(), &blocksFetcherConfig{
+		chain: mc,
+		p2p:   p2p,
+		clock: clock,
+	})
+	fetcher.mode = modeNonConstrained
+	require.NoError(t, mc.State.SetSlot(90))
+
+	require.Equal(t, currentSlot, fetcher.bestNonFinalizedSlot())
 }
