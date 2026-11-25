@@ -160,7 +160,8 @@ func ValidateAttestationTime(attSlot primitives.Slot, genesis time.Time, clockDi
 		lowerBoundsSlot,
 		currentSlot,
 	)
-	if attTime.After(upperBounds) {
+	// The slot number is compared as well: the start time of a slot in the far future wraps around.
+	if attTime.After(upperBounds) || slots.ValidateClock(attSlot, genesis) != nil {
 		attReceivedTooEarlyCount.Inc()
 		return attError
 	}

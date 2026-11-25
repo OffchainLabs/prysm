@@ -674,7 +674,7 @@ func TestSubmitAttestationsV2(t *testing.T) {
 	b := bitfield.NewBitlist(1)
 	b.SetBitAt(0, true)
 	slot := primitives.Slot(0)
-	chainService := &blockchainmock.ChainService{State: bs, Slot: &slot}
+	chainService := &blockchainmock.ChainService{State: bs, Slot: &slot, Genesis: time.Now()}
 	s := &Server{
 		HeadFetcher:             chainService,
 		ChainInfoFetcher:        chainService,
@@ -1128,6 +1128,133 @@ func TestSubmitAttestationsV2(t *testing.T) {
 		assert.Equal(t, http.StatusServiceUnavailable, writer.Code)
 		assert.Equal(t, true, strings.Contains(writer.Body.String(), "Beacon node is currently syncing"))
 	})
+}
+
+type recordingHeadValidatorsIndicesFetcher struct {
+	*blockchainmock.ChainService
+	epochs []primitives.Epoch
+}
+
+func (r *recordingHeadValidatorsIndicesFetcher) HeadValidatorsIndices(ctx context.Context, epoch primitives.Epoch) ([]primitives.ValidatorIndex, error) {
+	r.epochs = append(r.epochs, epoch)
+	return r.ChainService.HeadValidatorsIndices(ctx, epoch)
+}
+
+func TestSubmitAttestationsV2_InvalidSlot(t *testing.T) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	currentSlot := 3*slotsPerEpoch + 1
+	currentEpoch := slots.ToEpoch(currentSlot)
+	// The start time of this slot overflows time.Duration and would wrap around to the past.
+	overflowSlot := primitives.Slot(uint64(1<<63-1)/uint64(params.BeaconConfig().SlotDuration()) + 1)
+
+	key, err := bls.RandKey()
+	require.NoError(t, err)
+	sig := hexutil.Encode(key.Sign([]byte("not checked")).Marshal())
+	root := hexutil.Encode(make([]byte, 32))
+	attData := func(slot primitives.Slot, target primitives.Epoch) *structs.AttestationData {
+		return &structs.AttestationData{
+			Slot:            fmt.Sprintf("%d", slot),
+			CommitteeIndex:  "0",
+			BeaconBlockRoot: root,
+			Source:          &structs.Checkpoint{Epoch: "0", Root: root},
+			Target:          &structs.Checkpoint{Epoch: fmt.Sprintf("%d", target), Root: root},
+		}
+	}
+
+	tests := []struct {
+		name      string
+		slot      primitives.Slot
+		target    primitives.Epoch
+		wantedErr string
+	}{
+		{
+			name:      "next slot",
+			slot:      currentSlot + 1,
+			target:    currentEpoch,
+			wantedErr: "not within attestation propagation range",
+		},
+		{
+			name:      "future epoch",
+			slot:      currentSlot + 10*slotsPerEpoch,
+			target:    currentEpoch + 10,
+			wantedErr: "not within attestation propagation range",
+		},
+		{
+			name:      "far future epoch",
+			slot:      overflowSlot,
+			target:    slots.ToEpoch(overflowSlot),
+			wantedErr: "not within attestation propagation range",
+		},
+		{
+			name:      "before the previous epoch",
+			slot:      slotsPerEpoch,
+			target:    1,
+			wantedErr: "attestation is too late",
+		},
+		{
+			name:      "not in the target epoch",
+			slot:      currentSlot,
+			target:    currentEpoch - 1,
+			wantedErr: "does not match target epoch",
+		},
+	}
+	for _, v := range []int{version.Phase0, version.Electra} {
+		for _, tt := range tests {
+			t.Run(version.String(v)+"/"+tt.name, func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				config := params.BeaconConfig().Copy()
+				if v >= version.Electra {
+					config.ElectraForkEpoch = 0
+				}
+				params.OverrideBeaconConfig(config)
+
+				bs, err := util.NewBeaconState(func(state *ethpbv1alpha1.BeaconState) error {
+					state.Validators = []*ethpbv1alpha1.Validator{{PublicKey: key.PublicKey().Marshal(), ExitEpoch: params.BeaconConfig().FarFutureEpoch}}
+					return nil
+				})
+				require.NoError(t, err)
+				chainService := &blockchainmock.ChainService{
+					State:   bs,
+					Genesis: time.Now().Add(-time.Duration(currentSlot) * params.BeaconConfig().SlotDuration()),
+				}
+				headFetcher := &recordingHeadValidatorsIndicesFetcher{ChainService: chainService}
+				broadcaster := &p2pMock.MockBroadcaster{}
+				s := &Server{
+					HeadFetcher:             headFetcher,
+					ChainInfoFetcher:        chainService,
+					TimeFetcher:             chainService,
+					OptimisticModeFetcher:   chainService,
+					SyncChecker:             &mockSync.Sync{IsSyncing: false},
+					OperationNotifier:       &blockchainmock.MockOperationNotifier{},
+					AttestationStateFetcher: chainService,
+					AttestationsPool:        attestations.NewPool(),
+					Broadcaster:             broadcaster,
+				}
+
+				var reqBody []byte
+				if v >= version.Electra {
+					reqBody, err = json.Marshal([]*structs.SingleAttestation{{CommitteeIndex: "0", AttesterIndex: "0", Data: attData(tt.slot, tt.target), Signature: sig}})
+				} else {
+					reqBody, err = json.Marshal([]*structs.Attestation{{AggregationBits: "0x03", Data: attData(tt.slot, tt.target), Signature: sig}})
+				}
+				require.NoError(t, err)
+				request := httptest.NewRequest(http.MethodPost, "http://example.com", bytes.NewReader(reqBody))
+				request.Header.Set(api.VersionHeader, version.String(v))
+				writer := httptest.NewRecorder()
+				writer.Body = &bytes.Buffer{}
+
+				s.SubmitAttestationsV2(writer, request)
+				assert.Equal(t, http.StatusBadRequest, writer.Code)
+				e := &server.IndexedErrorContainer{}
+				require.NoError(t, json.Unmarshal(writer.Body.Bytes(), e))
+				require.Equal(t, 1, len(e.Failures))
+				assert.StringContains(t, "Invalid attestation slot", e.Failures[0].Message)
+				assert.StringContains(t, tt.wantedErr, e.Failures[0].Message)
+				assert.Equal(t, 0, len(headFetcher.epochs), "active validators must not be computed for an invalid slot")
+				assert.Equal(t, false, broadcaster.BroadcastCalled.Load())
+			})
+		}
+	}
 }
 
 // signedSingleAttElectra builds a SingleAttestation with a valid BLS signature over data for the given state's fork.

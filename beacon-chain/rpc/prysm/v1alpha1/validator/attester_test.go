@@ -3,19 +3,24 @@
 package validator
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/cache"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/helpers"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	dbutil "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
 	doublylinkedtree "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/doubly-linked-tree"
 	forkchoicetypes "github.com/OffchainLabs/prysm/v7/beacon-chain/forkchoice/types"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/operations/attestations"
 	mockp2p "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/rpc/core"
+	beaconState "github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockSync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync/initial-sync/testing"
 	"github.com/OffchainLabs/prysm/v7/config/params"
@@ -27,13 +32,16 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	prysmTime "github.com/OffchainLabs/prysm/v7/time"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestProposeAttestation(t *testing.T) {
-	chainService := &mock.ChainService{}
+	helpers.ClearCache()
+
+	chainService := &mock.ChainService{Genesis: time.Now()}
 	attesterServer := &Server{
 		HeadFetcher:             chainService,
 		P2P:                     &mockp2p.MockBroadcaster{},
@@ -49,16 +57,19 @@ func TestProposeAttestation(t *testing.T) {
 	root, err := head.Block.HashTreeRoot()
 	require.NoError(t, err)
 
+	_, keys, err := util.DeterministicDepositsAndKeys(64)
+	require.NoError(t, err)
 	validators := make([]*ethpb.Validator, 64)
 	for i := range validators {
 		validators[i] = &ethpb.Validator{
-			PublicKey:             make([]byte, 48),
+			PublicKey:             keys[i].PublicKey().Marshal(),
 			WithdrawalCredentials: make([]byte, 32),
 			ExitEpoch:             params.BeaconConfig().FarFutureEpoch,
 			EffectiveBalance:      params.BeaconConfig().MaxEffectiveBalance,
 		}
 	}
 
+	// A key that belongs to no validator in the state.
 	sk, err := bls.RandKey()
 	require.NoError(t, err)
 	sig := sk.Sign([]byte("dummy_test_data"))
@@ -68,17 +79,56 @@ func TestProposeAttestation(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
 		require.NoError(t, state.SetValidators(validators))
+		chainService.State = state
+		attesterServer.AttPool = attestations.NewPool()
 
+		data := &ethpb.AttestationData{
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		}
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, data.Slot, data.CommitteeIndex)
+		require.NoError(t, err)
+		bits := bitfield.NewBitlist(uint64(len(committee)))
+		bits.SetBitAt(0, true)
 		req := &ethpb.Attestation{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-			},
+			AggregationBits: bits,
+			Signature:       signAttestationData(t, state, keys[committee[0]], data),
+			Data:            data,
 		}
 		_, err = attesterServer.ProposeAttestation(t.Context(), req)
 		assert.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return attesterServer.AttPool.UnaggregatedAttestationCount() == 1
+		}, time.Second, 10*time.Millisecond, "Expected 1 attestation in pool")
+	})
+	t.Run("Phase 0 invalid signature not added to pool", func(t *testing.T) {
+		state, err := util.NewBeaconState()
+		require.NoError(t, err)
+		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+		require.NoError(t, state.SetValidators(validators))
+		chainService.State = state
+		attesterServer.AttPool = attestations.NewPool()
+
+		data := &ethpb.AttestationData{
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		}
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, data.Slot, data.CommitteeIndex)
+		require.NoError(t, err)
+		bits := bitfield.NewBitlist(uint64(len(committee)))
+		bits.SetBitAt(0, true)
+		req := &ethpb.Attestation{
+			AggregationBits: bits,
+			Signature:       signAttestationData(t, state, sk, data), // well-formed, but not the attester's key
+			Data:            data,
+		}
+		_, err = attesterServer.ProposeAttestation(t.Context(), req)
+		assert.ErrorContains(t, "Attestation signature verification failed", err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, attesterServer.AttPool.UnaggregatedAttestationCount(), "Invalid-signature attestation must not enter the pool")
 	})
 	t.Run("Phase 0 post electra", func(t *testing.T) {
 		params.SetupTestConfigCleanup(t)
@@ -113,17 +163,56 @@ func TestProposeAttestation(t *testing.T) {
 		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
 		require.NoError(t, state.SetValidators(validators))
 		chainService.State = state
+		attesterServer.AttPool = attestations.NewPool()
 
+		data := &ethpb.AttestationData{
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		}
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, data.Slot, 0)
+		require.NoError(t, err)
 		req := &ethpb.SingleAttestation{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-			},
+			AttesterIndex: committee[0],
+			Signature:     signAttestationData(t, state, keys[committee[0]], data),
+			Data:          data,
 		}
 		_, err = attesterServer.ProposeAttestationElectra(t.Context(), req)
 		assert.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return attesterServer.AttPool.UnaggregatedAttestationCount() == 1
+		}, time.Second, 10*time.Millisecond, "Expected 1 attestation in pool")
+	})
+	t.Run("Electra invalid signature not added to pool", func(t *testing.T) {
+		params.SetupTestConfigCleanup(t)
+		config := params.BeaconConfig()
+		config.ElectraForkEpoch = 0
+		params.OverrideBeaconConfig(config)
+
+		state, err := util.NewBeaconStateElectra()
+		require.NoError(t, err)
+		require.NoError(t, state.SetSlot(params.BeaconConfig().SlotsPerEpoch+1))
+		require.NoError(t, state.SetValidators(validators))
+		chainService.State = state
+		attesterServer.AttPool = attestations.NewPool()
+
+		data := &ethpb.AttestationData{
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+		}
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, data.Slot, 0)
+		require.NoError(t, err)
+		req := &ethpb.SingleAttestation{
+			AttesterIndex: committee[0],
+			Signature:     signAttestationData(t, state, sk, data), // well-formed, but not the attester's key
+			Data:          data,
+		}
+		_, err = attesterServer.ProposeAttestationElectra(t.Context(), req)
+		assert.ErrorContains(t, "Attestation signature verification failed", err)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, attesterServer.AttPool.UnaggregatedAttestationCount(), "Invalid-signature attestation must not enter the pool")
 	})
 	t.Run("Electra att too early", func(t *testing.T) {
 		req := &ethpb.SingleAttestation{
@@ -200,7 +289,11 @@ func TestProposeAttestation(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, state.SetSlot(attSlot))
 		require.NoError(t, state.SetValidators(validators))
-		cs := &mock.ChainService{State: state, BlockSlot: attSlot - 1}
+		cs := &mock.ChainService{
+			State:     state,
+			BlockSlot: attSlot - 1,
+			Genesis:   time.Now().Add(-time.Duration(attSlot) * params.BeaconConfig().SlotDuration()),
+		}
 		server := &Server{
 			HeadFetcher:             cs,
 			P2P:                     &mockp2p.MockBroadcaster{},
@@ -211,19 +304,120 @@ func TestProposeAttestation(t *testing.T) {
 			SyncChecker:             &mockSync.Sync{IsSyncing: false},
 			ForkchoiceFetcher:       cs,
 		}
+		data := &ethpb.AttestationData{
+			Slot:            attSlot,
+			CommitteeIndex:  1,
+			BeaconBlockRoot: root[:],
+			Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+			Target:          &ethpb.Checkpoint{Epoch: slots.ToEpoch(attSlot), Root: make([]byte, 32)},
+		}
+		committee, err := helpers.BeaconCommitteeFromState(t.Context(), state, data.Slot, 0)
+		require.NoError(t, err)
 		req := &ethpb.SingleAttestation{
-			Signature: sig.Marshal(),
-			Data: &ethpb.AttestationData{
-				Slot:            attSlot,
-				CommitteeIndex:  1,
-				BeaconBlockRoot: root[:],
-				Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-				Target:          &ethpb.Checkpoint{Root: make([]byte, 32)},
-			},
+			AttesterIndex: committee[0],
+			Signature:     signAttestationData(t, state, keys[committee[0]], data),
+			Data:          data,
 		}
 		_, err = server.ProposeAttestationElectra(t.Context(), req)
 		assert.NoError(t, err)
 	})
+}
+
+func TestProposeAttestation_InvalidSlot(t *testing.T) {
+	slotsPerEpoch := params.BeaconConfig().SlotsPerEpoch
+	currentSlot := 10*slotsPerEpoch + 1
+	currentEpoch := slots.ToEpoch(currentSlot)
+	// The start time of this slot overflows time.Duration and would wrap around to the past.
+	overflowSlot := primitives.Slot(uint64(1<<63-1)/uint64(params.BeaconConfig().SlotDuration()) + 1)
+
+	sk, err := bls.RandKey()
+	require.NoError(t, err)
+	sig := sk.Sign([]byte("dummy_test_data")).Marshal()
+
+	tests := []struct {
+		name      string
+		slot      primitives.Slot
+		target    primitives.Epoch
+		wantedErr string
+	}{
+		{
+			name:      "next slot",
+			slot:      currentSlot + 1,
+			target:    currentEpoch,
+			wantedErr: "not within attestation propagation range",
+		},
+		{
+			name:      "future epoch",
+			slot:      currentSlot + 10*slotsPerEpoch,
+			target:    currentEpoch + 10,
+			wantedErr: "not within attestation propagation range",
+		},
+		{
+			name:      "far future epoch",
+			slot:      overflowSlot,
+			target:    slots.ToEpoch(overflowSlot),
+			wantedErr: "not within attestation propagation range",
+		},
+		{
+			name:      "before the previous epoch",
+			slot:      slotsPerEpoch,
+			target:    1,
+			wantedErr: "attestation is too late",
+		},
+		{
+			name:      "not in the target epoch",
+			slot:      currentSlot,
+			target:    currentEpoch - 1,
+			wantedErr: "does not match target epoch",
+		},
+	}
+	for _, electra := range []bool{false, true} {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("electra=%t/%s", electra, tt.name), func(t *testing.T) {
+				params.SetupTestConfigCleanup(t)
+				config := params.BeaconConfig().Copy()
+				if electra {
+					config.ElectraForkEpoch = 0
+				}
+				params.OverrideBeaconConfig(config)
+
+				// No HeadFetcher: looking up the active validators for an invalid slot would panic.
+				chainService := &mock.ChainService{Genesis: time.Now().Add(-time.Duration(currentSlot) * params.BeaconConfig().SlotDuration())}
+				broadcaster := &mockp2p.MockBroadcaster{}
+				attesterServer := &Server{
+					P2P:               broadcaster,
+					AttPool:           attestations.NewPool(),
+					OperationNotifier: chainService.OperationNotifier(),
+					TimeFetcher:       chainService,
+					SyncChecker:       &mockSync.Sync{IsSyncing: false},
+				}
+				data := &ethpb.AttestationData{
+					Slot:            tt.slot,
+					BeaconBlockRoot: make([]byte, 32),
+					Source:          &ethpb.Checkpoint{Root: make([]byte, 32)},
+					Target:          &ethpb.Checkpoint{Epoch: tt.target, Root: make([]byte, 32)},
+				}
+				if electra {
+					_, err = attesterServer.ProposeAttestationElectra(t.Context(), &ethpb.SingleAttestation{Data: data, Signature: sig})
+				} else {
+					_, err = attesterServer.ProposeAttestation(t.Context(), &ethpb.Attestation{Data: data, Signature: sig})
+				}
+				assert.ErrorContains(t, "Invalid attestation slot", err)
+				assert.ErrorContains(t, tt.wantedErr, err)
+				assert.Equal(t, codes.InvalidArgument, status.Code(err))
+				assert.Equal(t, false, broadcaster.BroadcastCalled.Load())
+			})
+		}
+	}
+}
+
+// signAttestationData signs data with key under the attester domain of the given state's fork.
+func signAttestationData(t *testing.T, st beaconState.ReadOnlyBeaconState, key bls.SecretKey, data *ethpb.AttestationData) []byte {
+	domain, err := signing.Domain(st.Fork(), data.Target.Epoch, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
+	require.NoError(t, err)
+	root, err := signing.ComputeSigningRoot(data, domain)
+	require.NoError(t, err)
+	return key.Sign(root[:]).Marshal()
 }
 
 func TestProposeAttestation_IncorrectSignature(t *testing.T) {

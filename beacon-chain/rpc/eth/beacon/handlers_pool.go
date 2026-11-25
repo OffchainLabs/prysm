@@ -229,6 +229,13 @@ func (s *Server) handleAttestationsPostElectra(
 			})
 			continue
 		}
+		if err = s.validateAttestationSlot(att.Data); err != nil {
+			attFailures = append(attFailures, &server.IndexedError{
+				Index:   i,
+				Message: "Invalid attestation slot: " + err.Error(),
+			})
+			continue
+		}
 		attEpoch := slots.ToEpoch(att.Data.Slot)
 		if attEpoch >= params.BeaconConfig().ElectraForkEpoch && attEpoch < params.BeaconConfig().GloasForkEpoch {
 			if att.Data.CommitteeIndex != 0 {
@@ -357,6 +364,20 @@ func (s *Server) handleAttestationsPostElectra(
 	return attFailures, failedBroadcasts, nil
 }
 
+// validateAttestationSlot checks that the attestation's slot is one that can be broadcast at the current time
+// and that it belongs to the target epoch, as gossip validation does. The slot selects the epoch for which
+// active validators and committees are computed, so this must pass before anything is derived from it.
+func (s *Server) validateAttestationSlot(data *eth.AttestationData) error {
+	if err := corehelpers.ValidateAttestationTime(
+		data.Slot,
+		s.TimeFetcher.GenesisTime(),
+		params.BeaconConfig().MaximumGossipClockDisparityDuration(),
+	); err != nil {
+		return err
+	}
+	return corehelpers.ValidateSlotTargetEpoch(data)
+}
+
 func (s *Server) handleAttestations(
 	ctx context.Context,
 	atts []*eth.Attestation,
@@ -371,6 +392,13 @@ func (s *Server) handleAttestations(
 			attFailures = append(attFailures, &server.IndexedError{
 				Index:   i,
 				Message: "Incorrect attestation signature: " + err.Error(),
+			})
+			continue
+		}
+		if err = s.validateAttestationSlot(att.Data); err != nil {
+			attFailures = append(attFailures, &server.IndexedError{
+				Index:   i,
+				Message: "Invalid attestation slot: " + err.Error(),
 			})
 			continue
 		}
