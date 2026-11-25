@@ -1,13 +1,16 @@
 package kv
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/math"
+	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
+	"github.com/OffchainLabs/prysm/v7/testing/assert"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"go.etcd.io/bbolt"
 )
@@ -320,6 +323,43 @@ func TestStateDiff_AnchorMemo(t *testing.T) {
 
 	db.stateDiffCache.clearAnchors()
 	require.IsNil(t, db.stateDiffCache.getAnchor(0))
+}
+
+// A reader that decodes the old anchor while setAnchor replaces it must not memoize the old state.
+func TestStateDiff_AnchorMemoRace(t *testing.T) {
+	setDefaultStateDiffExponents()
+	resetCfg := features.InitWithReset(&features.Flags{EnableStateDiff: true})
+	defer resetCfg()
+
+	db := setupDB(t)
+	require.NoError(t, setOffsetInDB(db, 0))
+	cache := db.stateDiffCache
+
+	const level = 1
+	oldSlot := primitives.Slot(math.PowerOf2(18))
+	newSlot := primitives.Slot(2 * math.PowerOf2(18))
+	oldAnchor, _ := createState(t, oldSlot, version.Phase0)
+	newAnchor, _ := createState(t, newSlot, version.Phase0)
+	// The large old anchor keeps the reader decoding while the writer replaces it.
+	validators := make([]*ethpb.Validator, 1<<14)
+	for i := range validators {
+		validators[i] = &ethpb.Validator{PublicKey: make([]byte, 48), WithdrawalCredentials: make([]byte, 32)}
+	}
+	require.NoError(t, oldAnchor.SetValidators(validators))
+	require.NoError(t, oldAnchor.SetBalances(make([]uint64, len(validators))))
+
+	for i := range 20 {
+		cache.clearAnchors()
+		require.NoError(t, cache.setAnchor(level, oldAnchor))
+		var wg sync.WaitGroup
+		wg.Go(func() { cache.getAnchor(level) })
+		wg.Go(func() { assert.NoError(t, cache.setAnchor(level, newAnchor)) })
+		wg.Wait()
+
+		got := cache.getAnchor(level, withExactSlot(newSlot))
+		require.NotNil(t, got)
+		require.Equal(t, newSlot, got.Slot(), "iteration %d: memo served the replaced anchor", i)
+	}
 }
 
 // The memo trades memory for deserializations, so it must stay bounded: anchors are held compressed
