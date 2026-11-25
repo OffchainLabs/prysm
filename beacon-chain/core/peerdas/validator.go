@@ -10,6 +10,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	mvslice "github.com/OffchainLabs/prysm/v7/container/multi-value-slice"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -110,16 +111,23 @@ func PopulateFromPartialHeader(header *ethpb.PartialDataColumnHeader) (*PartialD
 }
 
 // ValidatorsCustodyRequirement returns the number of custody groups regarding the validator indices attached to the beacon node.
+// Indices that are not in the validator registry of `st` do not contribute to the requirement.
 // https://github.com/ethereum/consensus-specs/blob/master/specs/fulu/validator.md#validator-custody
 func ValidatorsCustodyRequirement(st beaconState.ReadOnlyBalances, validatorsIndex map[primitives.ValidatorIndex]bool) (uint64, error) {
 	cfg := params.BeaconConfig()
-	idxs := make([]primitives.ValidatorIndex, 0, len(validatorsIndex))
+	totalBalance := uint64(0)
 	for index := range validatorsIndex {
-		idxs = append(idxs, index)
-	}
-	totalBalance, err := st.EffectiveBalanceSum(idxs)
-	if err != nil {
-		return 0, errors.Wrap(err, "effective balances")
+		balance, err := st.EffectiveBalanceAtIndex(index)
+		if errors.Is(err, mvslice.ErrOutOfBounds) {
+			// Attached validators are validated against the head state at best, so an index
+			// may not exist yet in an older (e.g. finalized) state. Such an index must not
+			// make the whole requirement fail.
+			continue
+		}
+		if err != nil {
+			return 0, errors.Wrapf(err, "effective balance at index %d", index)
+		}
+		totalBalance += balance
 	}
 
 	numberOfCustodyGroups := cfg.NumberOfCustodyGroups
