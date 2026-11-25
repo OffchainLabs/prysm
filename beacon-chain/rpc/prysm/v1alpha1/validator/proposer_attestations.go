@@ -192,7 +192,7 @@ func onChainAggregates(attsById map[attestation.Id][]ethpb.Att) (proposerAtts, e
 
 // filter separates attestation list into two groups: valid and invalid attestations.
 // The first group passes the all the required checks for attestation to be considered for proposing.
-// And attestations from the second group should be deleted.
+// And attestations from the second group can't be included in a block at the slot of the state.
 func (a proposerAtts) filter(ctx context.Context, st state.BeaconState) (proposerAtts, proposerAtts) {
 	validAtts := make([]ethpb.Att, 0, len(a))
 	invalidAtts := make([]ethpb.Att, 0, len(a))
@@ -398,12 +398,27 @@ func (a proposerAtts) dedup() (proposerAtts, error) {
 }
 
 // This filters the input attestations to return a list of valid attestations to be packaged inside a beacon block.
+// Invalid attestations are deleted from the pool, unless they can still be included in a later block.
 func (vs *Server) validateAndDeleteAttsInPool(ctx context.Context, st state.BeaconState, atts []ethpb.Att) []ethpb.Att {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.validateAndDeleteAttsInPool")
 	defer span.End()
 
 	validAtts, invalidAtts := proposerAtts(atts).filter(ctx, st)
-	if err := vs.deleteAttsInPool(ctx, invalidAtts); err != nil {
+	// The pool is shared with fork choice, aggregation and later proposals, while validity is relative
+	// to the slot of the state, which follows the requested block slot. A state ahead of the clock makes
+	// live attestations look expired, so nothing can be concluded about them.
+	if st.Slot() > vs.TimeFetcher.CurrentSlot() {
+		return validAtts
+	}
+	staleAtts := make([]ethpb.Att, 0, len(invalidAtts))
+	for _, att := range invalidAtts {
+		// Too recent for the state, the attestation can be included in a later slot.
+		if att.GetData().Slot+params.BeaconConfig().MinAttestationInclusionDelay > st.Slot() {
+			continue
+		}
+		staleAtts = append(staleAtts, att)
+	}
+	if err := vs.deleteAttsInPool(ctx, staleAtts); err != nil {
 		log.WithError(err).Error("Could not delete invalid attestations")
 	}
 	return validAtts
