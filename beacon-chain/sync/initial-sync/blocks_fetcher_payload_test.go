@@ -2,7 +2,11 @@ package initialsync
 
 import (
 	"testing"
+	"time"
 
+	mock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	p2pt "github.com/OffchainLabs/prysm/v7/beacon-chain/p2p/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	prysmsync "github.com/OffchainLabs/prysm/v7/beacon-chain/sync"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
@@ -10,6 +14,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
 	"github.com/OffchainLabs/prysm/v7/testing/require"
 	"github.com/OffchainLabs/prysm/v7/testing/util"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/pkg/errors"
 )
 
@@ -163,6 +169,69 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 		f.validatePayloadBlockConsistency(r)
 		require.NoError(t, r.err)
 		require.Equal(t, 2, len(r.envelopes))
+	})
+
+	t.Run("no envelopes for blocks that build on payloads fails the request", func(t *testing.T) {
+		f := &blocksFetcher{}
+		r := &fetchRequestResponse{
+			blocksFrom:   "peer1",
+			payloadsFrom: "peer2",
+			bwb: []blocks.BlockWithROSidecars{
+				{Block: b0},
+				{Block: b1},
+				{Block: b2},
+			},
+			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{},
+		}
+		f.validatePayloadBlockConsistency(r)
+		require.ErrorContains(t, "no envelopes for blocks that build on payloads", r.err)
+		require.Equal(t, false, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
+	})
+
+	t.Run("no envelopes from the blocks peer is invalid fetched data", func(t *testing.T) {
+		ctx := t.Context()
+		p2p := p2pt.NewTestP2P(t)
+		mc := &mock.ChainService{Genesis: time.Now(), ValidatorsRoot: [32]byte{}}
+		f := newBlocksFetcher(ctx, &blocksFetcherConfig{
+			chain: mc,
+			p2p:   p2p,
+			clock: startup.NewClock(mc.Genesis, mc.ValidatorsRoot),
+		})
+		p2p.Peers().Add(new(enr.Record), "peer1", nil, network.DirOutbound)
+		r := &fetchRequestResponse{
+			blocksFrom:   "peer1",
+			payloadsFrom: "peer1",
+			bwb: []blocks.BlockWithROSidecars{
+				{Block: b0},
+				{Block: b1},
+				{Block: b2},
+			},
+			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{},
+		}
+		f.validatePayloadBlockConsistency(r)
+		require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
+		// The queue is the only place that penalizes the peer for invalid fetched data.
+		count, err := p2p.Peers().Scorers().BadResponsesScorer().Count("peer1")
+		require.NoError(t, err)
+		require.Equal(t, 0, count)
+	})
+
+	t.Run("no envelopes for blocks that build on empty is fine", func(t *testing.T) {
+		sameHash := [32]byte{0x77}
+		e0 := makeGloasBlock(t, 10, [32]byte{}, sameHash)
+		e1 := makeGloasBlock(t, 11, e0.Root(), sameHash)
+		f := &blocksFetcher{}
+		r := &fetchRequestResponse{
+			blocksFrom:   "peer1",
+			payloadsFrom: "peer2",
+			bwb: []blocks.BlockWithROSidecars{
+				{Block: e0},
+				{Block: e1},
+			},
+			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{},
+		}
+		f.validatePayloadBlockConsistency(r)
+		require.NoError(t, r.err)
 	})
 
 	t.Run("not enough envelopes truncates blocks", func(t *testing.T) {
