@@ -36,12 +36,12 @@ func BaseReward(ctx context.Context, s state.ReadOnlyBeaconState, index primitiv
 
 // BaseRewardWithTotalBalance calculates the base reward with the provided total balance.
 func BaseRewardWithTotalBalance(s state.ReadOnlyBeaconState, index primitives.ValidatorIndex, totalBalance uint64) (uint64, error) {
-	val, err := s.ValidatorAtIndexReadOnly(index)
+	effectiveBalance, err := s.EffectiveBalanceAtIndex(index)
 	if err != nil {
 		return 0, err
 	}
 	cfg := params.BeaconConfig()
-	increments := val.EffectiveBalance() / cfg.EffectiveBalanceIncrement
+	increments := effectiveBalance / cfg.EffectiveBalanceIncrement
 	baseRewardPerInc, err := BaseRewardPerIncrement(totalBalance)
 	if err != nil {
 		return 0, err
