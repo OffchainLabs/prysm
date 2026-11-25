@@ -62,6 +62,25 @@ func WithHeaders(headers []string) Option {
 	}
 }
 
+// WithGetPayloadOverride supplies an in-process implementation of
+// engine_getPayloadVX, bypassing JSON-RPC serialization for the payload and
+// blobs bundle. All other engine calls keep using the RPC client.
+func WithGetPayloadOverride(o GetPayloadOverride) Option {
+	return func(s *Service) error {
+		s.cfg.getPayloadOverride = o
+		return nil
+	}
+}
+
+// WithGetBlobsOverride supplies an in-process implementation of
+// engine_getBlobsV2/V3, bypassing JSON-RPC serialization for blob retrieval.
+func WithGetBlobsOverride(o GetBlobsOverride) Option {
+	return func(s *Service) error {
+		s.cfg.getBlobsOverride = o
+		return nil
+	}
+}
+
 // WithDepositContractAddress for the deposit contract.
 func WithDepositContractAddress(addr common.Address) Option {
 	return func(s *Service) error {

@@ -277,6 +277,34 @@ func (s *Service) ForkchoiceUpdated(
 	}
 }
 
+// GetPayloadOverride, when set, produces the engine_getPayloadVX response
+// in-process instead of issuing the JSON-RPC call. It must populate result,
+// which is the exact proto type getPayloadMethodAndMessage selects for the
+// slot (e.g. *pb.ExecutionBundleFulu at Fulu); method names the JSON-RPC
+// method the call replaces. Everything downstream of the call (response
+// wrapping, metrics, spans, timeouts) is unchanged.
+type GetPayloadOverride func(ctx context.Context, payloadId [8]byte, slot primitives.Slot, method string, result proto.Message) error
+
+// GetBlobsOverride, when set, serves engine_getBlobsV2/V3 in-process instead
+// of the JSON-RPC call; method distinguishes the two. It bypasses the
+// capability cache (which describes a remote endpoint, not the in-process
+// implementation) but not the DisableGetBlobsV2 feature flag.
+type GetBlobsOverride func(ctx context.Context, method string, versionedHashes []common.Hash) ([]*pb.BlobAndProofV2, error)
+
+func (s *Service) getPayloadOverride() GetPayloadOverride {
+	if s.cfg == nil {
+		return nil
+	}
+	return s.cfg.getPayloadOverride
+}
+
+func (s *Service) getBlobsOverride() GetBlobsOverride {
+	if s.cfg == nil {
+		return nil
+	}
+	return s.cfg.getBlobsOverride
+}
+
 func getPayloadMethodAndMessage(slot primitives.Slot) (string, proto.Message) {
 	epoch := slots.ToEpoch(slot)
 	if epoch >= params.BeaconConfig().GloasForkEpoch {
@@ -318,8 +346,11 @@ func (s *Service) GetPayload(ctx context.Context, payloadId [8]byte, slot primit
 	defer cancel()
 
 	method, result := getPayloadMethodAndMessage(slot)
-	err := s.rpcClient.CallContext(ctx, result, method, pb.PayloadIDBytes(payloadId))
-	if err != nil {
+	if o := s.getPayloadOverride(); o != nil {
+		if err := o(ctx, payloadId, slot, method, result); err != nil {
+			return nil, err
+		}
+	} else if err := s.rpcClient.CallContext(ctx, result, method, pb.PayloadIDBytes(payloadId)); err != nil {
 		return nil, handleRPCError(err)
 	}
 	res, err := blocks.NewGetPayloadResponse(result)
@@ -435,6 +466,14 @@ func (s *Service) GetBlobsV2(ctx context.Context, versionedHashes []common.Hash)
 
 	start := time.Now()
 
+	if o := s.getBlobsOverride(); o != nil && !flags.Get().DisableGetBlobsV2 {
+		result, err := o(ctx, GetBlobsV2, versionedHashes)
+		if len(result) != 0 {
+			getBlobsV2Latency.Observe(float64(time.Since(start).Milliseconds()))
+		}
+		return result, err
+	}
+
 	if !s.capabilityCache.has(GetBlobsV2) {
 		return nil, errors.New(fmt.Sprintf("%s is not supported", GetBlobsV2))
 	}
@@ -459,6 +498,14 @@ func (s *Service) GetBlobsV3(ctx context.Context, versionedHashes []common.Hash)
 	start := time.Now()
 
 	getBlobsV3RequestsTotal.Inc()
+	if o := s.getBlobsOverride(); o != nil {
+		result, err := o(ctx, GetBlobsV3, versionedHashes)
+		if err != nil {
+			return nil, err
+		}
+		getBlobsV3Latency.Observe(float64(time.Since(start).Seconds()))
+		return result, nil
+	}
 	result := make([]*pb.BlobAndProofV2, len(versionedHashes))
 	if err := s.rpcClient.CallContext(ctx, &result, GetBlobsV3, versionedHashes); err != nil {
 		return nil, handleRPCError(err)
