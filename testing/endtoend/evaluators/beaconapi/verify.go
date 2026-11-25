@@ -260,9 +260,8 @@ func compareGETJSON(nodeIdx int, base, path string, pResp, lhResp any, customEva
 	}
 	if customEval != nil {
 		return customEval(pResp, lhResp)
-	} else {
-		return compareJSON(pResp, lhResp)
 	}
+	return compareJSON(pResp, lhResp)
 }
 
 func comparePOSTJSON(nodeIdx int, base, path string, postObj, pResp, lhResp any, customEval func(any, any) error) error {
@@ -280,9 +279,8 @@ func comparePOSTJSON(nodeIdx int, base, path string, postObj, pResp, lhResp any,
 	}
 	if customEval != nil {
 		return customEval(pResp, lhResp)
-	} else {
-		return compareJSON(pResp, lhResp)
 	}
+	return compareJSON(pResp, lhResp)
 }
 
 func compareGETSSZ(nodeIdx int, base, path string) ([]byte, error) {

@@ -81,9 +81,8 @@ func (client *ApiClient) Sign(ctx context.Context, pubKey string, request SignRe
 			return nil, err
 		}
 		return bls.SignatureFromBytes(sigResp.Signature)
-	} else {
-		return unmarshalSignatureResponse(resp.Body)
 	}
+	return unmarshalSignatureResponse(resp.Body)
 }
 
 // GetPublicKeys is a wrapper method around the web3signer publickeys api (this may be removed in the future or moved to another location due to its usage).
@@ -157,9 +156,8 @@ func (client *ApiClient) doRequest(ctx context.Context, httpMethod, fullPath str
 		err = errors.Wrap(err, "failed to execute json request")
 		tracing.AnnotateError(span, err)
 		return resp, err
-	} else {
-		signRequestDurationSeconds.WithLabelValues(req.Method, strconv.Itoa(resp.StatusCode)).Observe(duration.Seconds())
 	}
+	signRequestDurationSeconds.WithLabelValues(req.Method, strconv.Itoa(resp.StatusCode)).Observe(duration.Seconds())
 	if resp.StatusCode != http.StatusOK {
 		fields := logrus.Fields{"status": resp.StatusCode}
 		// The client has already consumed req.Body, so dump the request without it.

@@ -631,10 +631,9 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 			return &ethpb.FeeRecipientByPubKeyResponse{
 				FeeRecipient: params.BeaconConfig().DefaultFeeRecipient.Bytes(),
 			}, nil
-		} else {
-			log.WithError(err).Error("An error occurred while retrieving validator index")
-			return nil, err
 		}
+		log.WithError(err).Error("An error occurred while retrieving validator index")
+		return nil, err
 	}
 	// Only the default set by PrepareBeaconProposer. Post-Gloas, per-slot preferences arrive by
 	// gossip keyed by (dependentRoot, slot), which this request has no way to name; the endpoint

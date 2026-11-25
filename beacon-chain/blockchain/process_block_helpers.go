@@ -446,9 +446,8 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, signed inte
 		// even without pending blocks, the first payload may be pending.
 		s.insertFirstPayloadIfNeeded(ctx, signed.Block())
 		return nil
-	} else {
-		s.insertFirstPayloadIfNeeded(ctx, pendingNodes[len(pendingNodes)-1].Block.Block())
 	}
+	s.insertFirstPayloadIfNeeded(ctx, pendingNodes[len(pendingNodes)-1].Block.Block())
 
 	slices.Reverse(pendingNodes)
 	return s.cfg.ForkChoiceStore.InsertChain(ctx, pendingNodes)
