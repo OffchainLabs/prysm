@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/OffchainLabs/prysm/v7/api"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/execution"
@@ -71,21 +72,27 @@ func (ns *Server) GetHealth(ctx context.Context, request *ethpb.HealthRequest) (
 	if ns.SyncChecker.Synced() && !isOptimistic {
 		return &empty.Empty{}, nil
 	}
-	if ns.SyncChecker.Syncing() || ns.SyncChecker.Initialized() {
-		// Set header for REST API clients (via gRPC-gateway)
-		if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(http.StatusPartialContent, 10))); err != nil {
-			return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set status code header: %v", err)
-		}
-		return &empty.Empty{}, status.Error(codes.Unavailable, "node is syncing")
+	if ns.SyncChecker.Syncing() {
+		return &empty.Empty{}, partialContentError(ctx, api.HealthSyncingReason)
 	}
+	// Checked before Initialized, which is also true for a synced but optimistic node.
 	if isOptimistic {
-		// Set header for REST API clients (via gRPC-gateway)
-		if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(http.StatusPartialContent, 10))); err != nil {
-			return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set status code header: %v", err)
-		}
-		return &empty.Empty{}, status.Error(codes.Unavailable, "node is optimistic")
+		return &empty.Empty{}, partialContentError(ctx, api.HealthOptimisticReason)
+	}
+	if ns.SyncChecker.Initialized() {
+		return &empty.Empty{}, partialContentError(ctx, api.HealthSyncingReason)
 	}
 	return &empty.Empty{}, status.Errorf(codes.Unavailable, "service unavailable")
+}
+
+// partialContentError sets the 206 status code header for REST API clients (via gRPC-gateway)
+// and returns an Unavailable error carrying the given reason.
+func partialContentError(ctx context.Context, reason string) error {
+	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", strconv.FormatUint(http.StatusPartialContent, 10))); err != nil {
+		return status.Errorf(codes.Internal, "Could not set status code header: %v", err)
+	}
+
+	return status.Error(codes.Unavailable, reason)
 }
 
 // Deprecated: The gRPC API will remain the default and fully supported through v8 (expected in 2026) but will be eventually removed in favor of REST API.
