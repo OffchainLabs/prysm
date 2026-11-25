@@ -5,6 +5,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/node"
 	"github.com/OffchainLabs/prysm/v7/cmd/beacon-chain/das/flags"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -17,6 +18,9 @@ func BeaconNodeOptions(c *cli.Context) ([]node.Option, error) {
 		oldestBackfillSlot = &sv
 	}
 	blobRetentionEpochs := primitives.Epoch(c.Uint64(flags.BlobRetentionEpochFlag.Name))
+	if blobRetentionEpochs == 0 {
+		blobRetentionEpochs = slots.MaxSafeEpoch()
+	}
 	opt := func(n *node.BeaconNode) error {
 		n.SyncNeedsWaiter = func() (das.SyncNeeds, error) {
 			clock, err := n.ClockWaiter.WaitForClock(c.Context)
