@@ -337,3 +337,37 @@ func countStateEventsByType(ch chan *feed.Event) map[feed.EventType]int {
 		}
 	}
 }
+
+func TestCallNewPayload_HezeDispatch(t *testing.T) {
+	params.SetupTestConfigCleanup(t)
+	cfg := params.BeaconConfig().Copy()
+	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 1
+	params.OverrideBeaconConfig(cfg)
+
+	payload, err := blocks.WrappedExecutionPayloadGloas(&enginev1.ExecutionPayloadGloas{BlockHash: make([]byte, 32)})
+	require.NoError(t, err)
+	hezeSlot := primitives.Slot(cfg.SlotsPerEpoch)
+	notSatisfied := false
+
+	for _, tc := range []struct {
+		name   string
+		slot   primitives.Slot
+		wantV6 bool
+	}{
+		{name: "Gloas slot uses NewPayload", slot: hezeSlot - 1},
+		{name: "Heze slot uses NewPayloadWithInclusionList", slot: hezeSlot, wantV6: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := &mockExecution.EngineClient{InclusionListSatisfied: &notSatisfied}
+			s := &Service{cfg: &config{ExecutionEngineCaller: engine}}
+			valid, err := s.callNewPayload(t.Context(), payload, nil, [32]byte{}, &enginev1.ExecutionRequestsGloas{}, tc.slot)
+			require.NoError(t, err)
+			require.Equal(t, true, valid)
+			require.Equal(t, tc.wantV6, engine.RecordedInclusionListTxs != nil)
+			if tc.wantV6 {
+				require.Equal(t, 0, len(engine.RecordedInclusionListTxs))
+			}
+		})
+	}
+}

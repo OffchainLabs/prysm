@@ -50,6 +50,8 @@ type EngineClient struct {
 	ClientVersion               []*structs.ClientVersionV1
 	ErrorClientVersion          error
 	FetchedAttributes           payloadattribute.Attributer
+	InclusionListSatisfied      *bool
+	RecordedInclusionListTxs    [][]byte
 }
 
 // PartialColumnsSupported --
@@ -60,6 +62,15 @@ func (e *EngineClient) PartialColumnsSupported() bool {
 // NewPayload --
 func (e *EngineClient) NewPayload(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ pb.ExecutionRequester) ([]byte, error) {
 	return e.NewPayloadResp, e.ErrNewPayload
+}
+
+// NewPayloadWithInclusionList --
+func (e *EngineClient) NewPayloadWithInclusionList(_ context.Context, _ interfaces.ExecutionData, _ []common.Hash, _ *common.Hash, _ pb.ExecutionRequester, txs [][]byte) ([]byte, *bool, error) {
+	e.RecordedInclusionListTxs = txs
+	if e.ErrNewPayload != nil {
+		return e.NewPayloadResp, nil, e.ErrNewPayload
+	}
+	return e.NewPayloadResp, e.InclusionListSatisfied, nil
 }
 
 // ForkchoiceUpdated --

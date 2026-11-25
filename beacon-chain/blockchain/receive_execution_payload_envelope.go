@@ -295,7 +295,13 @@ func (s *Service) callNewPayload(
 	requests *enginev1.ExecutionRequestsGloas,
 	slot primitives.Slot,
 ) (bool, error) {
-	_, err := s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
+	var err error
+	if slots.ToEpoch(slot) >= params.BeaconConfig().HezeForkEpoch {
+		// For now, the inclusion list stays empty until the inclusion list gossip fills the inclusion list store.
+		_, _, err = s.cfg.ExecutionEngineCaller.NewPayloadWithInclusionList(ctx, payload, versionedHashes, &parentRoot, requests, [][]byte{})
+	} else {
+		_, err = s.cfg.ExecutionEngineCaller.NewPayload(ctx, payload, versionedHashes, &parentRoot, requests)
+	}
 	if err == nil {
 		newPayloadValidNodeCount.Inc()
 		return true, nil

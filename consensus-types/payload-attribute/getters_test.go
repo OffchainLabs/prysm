@@ -273,3 +273,55 @@ func TestIsEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestHeze(t *testing.T) {
+	v5 := &enginev1.PayloadAttributesV5{
+		Timestamp:                 1,
+		PrevRandao:                []byte{2},
+		SuggestedFeeRecipient:     []byte{3},
+		Withdrawals:               []*enginev1.Withdrawal{{Index: 4}},
+		ParentBeaconBlockRoot:     []byte{5},
+		SlotNumber:                6,
+		TargetGasLimit:            7,
+		InclusionListTransactions: [][]byte{{8}, {9, 10}},
+	}
+	t.Run("New", func(t *testing.T) {
+		a, err := New(v5)
+		require.NoError(t, err)
+		require.Equal(t, version.Heze, a.Version())
+		require.DeepEqual(t, v5.InclusionListTransactions, a.InclusionListTransactions())
+	})
+	t.Run("PbV5", func(t *testing.T) {
+		a, err := New(v5)
+		require.NoError(t, err)
+		got, err := a.PbV5()
+		require.NoError(t, err)
+		require.DeepEqual(t, v5, got)
+	})
+	t.Run("PbV4 drops the inclusion list", func(t *testing.T) {
+		a, err := New(v5)
+		require.NoError(t, err)
+		got, err := a.PbV4()
+		require.NoError(t, err)
+		require.Equal(t, v5.SlotNumber, got.SlotNumber)
+	})
+	t.Run("PbV5 before Heze", func(t *testing.T) {
+		_, err := EmptyWithVersion(version.Gloas).PbV5()
+		require.ErrorContains(t, "PbV5 is not supported for gloas", err)
+	})
+	t.Run("InclusionListTransactions is a copy", func(t *testing.T) {
+		a, err := New(v5)
+		require.NoError(t, err)
+		a.InclusionListTransactions()[0][0] = 0xff
+		require.Equal(t, byte(8), a.InclusionListTransactions()[0][0])
+	})
+	t.Run("EmptyWithVersion", func(t *testing.T) {
+		a := EmptyWithVersion(version.Heze)
+		require.Equal(t, version.Heze, a.Version())
+		require.Equal(t, true, a.IsEmpty())
+		got, err := a.PbV5()
+		require.NoError(t, err)
+		require.Equal(t, true, got == nil)
+		require.Equal(t, 0, len(a.InclusionListTransactions()))
+	})
+}

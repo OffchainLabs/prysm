@@ -29,6 +29,8 @@ var (
 	ErrInvalidPayloadAttributes = errors.New("payload attributes are invalid / inconsistent")
 	// ErrRequestTooLarge when the request is too large
 	ErrRequestTooLarge = errors.New("request too large")
+	// ErrUnsupportedFork corresponds to JSON-RPC code -38005.
+	ErrUnsupportedFork = errors.New("unsupported fork")
 )
 
 // Handles errors received from the RPC server according to the specification.
@@ -79,6 +81,9 @@ func handleRPCError(err error) error {
 	case -38004:
 		errRequestTooLargeCount.Inc()
 		return ErrRequestTooLarge
+	case -38005:
+		errUnsupportedForkCount.Inc()
+		return ErrUnsupportedFork
 	case -32000:
 		errServerErrorCount.Inc()
 		// Only -32000 status codes are data errors in the RPC specification.

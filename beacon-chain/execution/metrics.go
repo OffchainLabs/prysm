@@ -112,4 +112,8 @@ var (
 		Name: "execution_payload_bodies_count",
 		Help: "The number of requested payload bodies is too large",
 	})
+	errUnsupportedForkCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "execution_unsupported_fork_count",
+		Help: "The number of errors that occurred due to an unsupported fork",
+	})
 )

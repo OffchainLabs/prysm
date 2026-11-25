@@ -2359,6 +2359,7 @@ func Test_ExchangeCapabilities_StableAcrossCalls(t *testing.T) {
 	cfg.ElectraForkEpoch = 0
 	cfg.FuluForkEpoch = 0
 	cfg.GloasForkEpoch = 0
+	cfg.HezeForkEpoch = 0
 	params.OverrideBeaconConfig(cfg)
 
 	// Capture the engine method list the EL receives on each call.
@@ -2411,6 +2412,9 @@ func Test_ExchangeCapabilities_StableAcrossCalls(t *testing.T) {
 	for _, m := range requested[1] {
 		require.Equal(t, false, seen[m], "duplicate engine method requested: %s", m)
 		seen[m] = true
+	}
+	for _, m := range []string{NewPayloadMethodV6, ForkchoiceUpdatedMethodV5} {
+		require.Equal(t, true, seen[m], "missing Heze engine method: %s", m)
 	}
 }
 

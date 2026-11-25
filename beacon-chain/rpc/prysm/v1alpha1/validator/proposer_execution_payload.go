@@ -139,6 +139,26 @@ func (vs *Server) getLocalPayloadFromEngine(
 	}
 	var attr payloadattribute.Attributer
 	switch {
+	case st.Version() >= version.Heze:
+		withdrawals, err := vs.computePayloadWithdrawals(st, parentFull)
+		if err != nil {
+			return nil, err
+		}
+		parentGasLimit := helpers.ParentTargetGasLimit(st)
+		attr, err = payloadattribute.New(&enginev1.PayloadAttributesV5{
+			Timestamp:             uint64(t.Unix()),
+			PrevRandao:            random,
+			SuggestedFeeRecipient: val.FeeRecipient[:],
+			Withdrawals:           withdrawals,
+			ParentBeaconBlockRoot: parentRoot[:],
+			SlotNumber:            uint64(slot),
+			TargetGasLimit:        val.GasLimitOr(parentGasLimit),
+			// For now, the inclusion list stays empty until the inclusion list gossip fills the inclusion list store.
+			InclusionListTransactions: [][]byte{},
+		})
+		if err != nil {
+			return nil, err
+		}
 	case st.Version() >= version.Gloas:
 		withdrawals, err := vs.computePayloadWithdrawals(st, parentFull)
 		if err != nil {
