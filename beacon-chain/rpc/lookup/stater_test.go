@@ -1,6 +1,7 @@
 package lookup
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,10 +9,13 @@ import (
 	"time"
 
 	chainMock "github.com/OffchainLabs/prysm/v7/beacon-chain/blockchain/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/db"
 	testDB "github.com/OffchainLabs/prysm/v7/beacon-chain/db/testing"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	statenative "github.com/OffchainLabs/prysm/v7/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen"
 	mockstategen "github.com/OffchainLabs/prysm/v7/beacon-chain/state/stategen/mock"
+	"github.com/OffchainLabs/prysm/v7/config/features"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -23,6 +27,8 @@ import (
 	"github.com/OffchainLabs/prysm/v7/testing/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 func TestGetState(t *testing.T) {
@@ -532,6 +538,137 @@ func TestStateBySlot_ReplayNoDataForSlotReturnsNotFound(t *testing.T) {
 	require.ErrorContains(t, "historical data not available", err)
 	var stateNotFoundErr *StateNotFoundError
 	require.Equal(t, true, errors.As(err, &stateNotFoundErr))
+}
+
+type diffTreeLookupDB struct {
+	db.ReadOnlyDatabase
+	level     int
+	slotErr   error
+	readState state.BeaconState
+	readErr   error
+}
+
+type nilDiffTreeState struct {
+	state.BeaconState
+}
+
+func (*nilDiffTreeState) IsNil() bool {
+	return true
+}
+
+func (d *diffTreeLookupDB) EarliestSlot(context.Context) (primitives.Slot, error) {
+	return 0, db.ErrNotFound
+}
+
+func (d *diffTreeLookupDB) BackfillStatus(context.Context) (*dbval.BackfillStatus, error) {
+	return nil, db.ErrNotFound
+}
+
+func (d *diffTreeLookupDB) SlotInDiffTree(primitives.Slot) (uint64, int, error) {
+	return 0, d.level, d.slotErr
+}
+
+func (d *diffTreeLookupDB) StateBySlotFromDiffTree(context.Context, primitives.Slot) (state.BeaconState, error) {
+	return d.readState, d.readErr
+}
+
+func histogramSampleCount(t *testing.T, path string) uint64 {
+	t.Helper()
+	var metric dto.Metric
+	require.NoError(t, stateBySlotMilliseconds.WithLabelValues(path).(prometheus.Metric).Write(&metric))
+	return metric.GetHistogram().GetSampleCount()
+}
+
+func diffTreeMissCount(t *testing.T, reason string) float64 {
+	t.Helper()
+	var metric dto.Metric
+	require.NoError(t, stateFromDiffTreeMiss.WithLabelValues(reason).Write(&metric))
+	return metric.GetCounter().GetValue()
+}
+
+func TestStateBySlot_DiffTreeMetrics(t *testing.T) {
+	target := primitives.Slot(100)
+	treeState, err := statenative.New(&ethpb.BeaconState{Slot: target})
+	require.NoError(t, err)
+	replayedState, err := statenative.New(&ethpb.BeaconState{Slot: target + 1})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		enabled    bool
+		db         *diffTreeLookupDB
+		missReason string
+		path       string
+		wantState  state.BeaconState
+		replayErr  error
+	}{
+		{name: "tree hit", enabled: true, db: &diffTreeLookupDB{level: 0, readState: treeState}, path: pathDiffTree, wantState: treeState},
+		{name: "non-boundary", enabled: true, db: &diffTreeLookupDB{level: -1}, missReason: missNotBoundary, path: pathReplay, wantState: replayedState},
+		{name: "feature disabled", db: &diffTreeLookupDB{level: 0, readState: treeState}, missReason: "", path: pathReplay, wantState: replayedState},
+		{name: "no database", enabled: true, missReason: "", path: pathReplay, wantState: replayedState},
+		{name: "slot before offset", enabled: true, db: &diffTreeLookupDB{slotErr: errors.Wrap(db.ErrSlotBeforeOffset, "before offset")}, missReason: missSlotBeforeOffset, path: pathReplay, wantState: replayedState},
+		{name: "slot lookup error", enabled: true, db: &diffTreeLookupDB{slotErr: errors.New("slot lookup failed")}, missReason: missError, path: pathReplay, wantState: replayedState},
+		// kv wraps ErrNotFoundState for missing diffs and missing snapshots.
+		{name: "wrapped not found", enabled: true, db: &diffTreeLookupDB{readErr: errors.Wrap(db.ErrNotFoundState, "missing tree state")}, missReason: missNotFound, path: pathReplay, wantState: replayedState},
+		{name: "read error", enabled: true, db: &diffTreeLookupDB{readErr: errors.New("disk error")}, missReason: missError, path: pathReplay, wantState: replayedState},
+		{name: "nil state", enabled: true, db: &diffTreeLookupDB{}, missReason: missNilState, path: pathReplay, wantState: replayedState},
+		{name: "IsNil state", enabled: true, db: &diffTreeLookupDB{readState: &nilDiffTreeState{}}, missReason: missNilState, path: pathReplay, wantState: replayedState},
+		{name: "failed replay", enabled: true, db: &diffTreeLookupDB{level: -1}, missReason: missNotBoundary, replayErr: errors.New("replay failed")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			reset := features.InitWithReset(&features.Flags{EnableStateDiff: tc.enabled})
+			defer reset()
+
+			currentSlot := target
+			replayer := mockstategen.NewReplayerBuilder()
+			replayer.SetMockStateForSlot(replayedState, target)
+			if tc.replayErr != nil {
+				replayer.SetMockSlotError(target, tc.replayErr)
+			}
+			var beaconDB db.ReadOnlyDatabase
+			if tc.db != nil {
+				beaconDB = tc.db
+			}
+			p := BeaconDbStater{
+				BeaconDB:           beaconDB,
+				GenesisTimeFetcher: &chainMock.ChainService{Slot: &currentSlot},
+				ReplayerBuilder:    replayer,
+			}
+			paths := []string{pathDiffTree, pathReplay}
+			reasons := []string{missNotBoundary, missSlotBeforeOffset, missNotFound, missError, missNilState}
+			beforePaths := make(map[string]uint64, len(paths))
+			beforeMisses := make(map[string]float64, len(reasons))
+			for _, path := range paths {
+				beforePaths[path] = histogramSampleCount(t, path)
+			}
+			for _, reason := range reasons {
+				beforeMisses[reason] = diffTreeMissCount(t, reason)
+			}
+
+			got, err := p.StateBySlot(t.Context(), target)
+			if tc.replayErr != nil {
+				require.ErrorContains(t, tc.replayErr.Error(), err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantState, got)
+			}
+			for _, path := range paths {
+				want := beforePaths[path]
+				if path == tc.path {
+					want++
+				}
+				require.Equal(t, want, histogramSampleCount(t, path))
+			}
+			for _, reason := range reasons {
+				want := beforeMisses[reason]
+				if reason == tc.missReason {
+					want++
+				}
+				require.Equal(t, want, diffTreeMissCount(t, reason))
+			}
+		})
+	}
 }
 
 func TestStateByEpoch(t *testing.T) {
