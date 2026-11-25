@@ -112,7 +112,12 @@ func (f *ForkChoice) ProcessAttestation(ctx context.Context, validatorIndices []
 
 		// A zero next root means no prior message, spec update_latest_messages semantics.
 		firstVote := vote.nextRoot == params.BeaconConfig().ZeroHash
-		if firstVote || targetEpoch > nextEpoch {
+		replace := targetEpoch > nextEpoch
+		// [Modified in Gloas:EIP7732] update_latest_messages compares the attestation slot, not the target epoch.
+		if targetEpoch >= params.BeaconConfig().GloasForkEpoch {
+			replace = slot > vote.nextSlot
+		}
+		if firstVote || replace {
 			vote.nextSlot = slot
 			vote.nextRoot = blockRoot
 			vote.nextPayloadStatus = payloadStatus

@@ -2618,3 +2618,38 @@ func TestInsertChain_SetsBuilderPubkey(t *testing.T) {
 	require.NoError(t, err)
 	require.IsNil(t, pk)
 }
+
+// From Gloas, update_latest_messages replaces a latest message when the new attestation slot is
+// later, so a later-slot vote in the same epoch wins regardless of arrival order.
+func TestProcessAttestation_SameEpochLatestMessage(t *testing.T) {
+	early, late := primitives.Slot(3), primitives.Slot(5)
+	rootEarly, rootLate := indexToHash(1), indexToHash(2)
+	tests := []struct {
+		name       string
+		gloasEpoch primitives.Epoch
+		first      primitives.Slot
+		firstRoot  [32]byte
+		second     primitives.Slot
+		secondRoot [32]byte
+		wantSlot   primitives.Slot
+		wantRoot   [32]byte
+	}{
+		{"gloas early then late", 0, early, rootEarly, late, rootLate, late, rootLate},
+		{"gloas late then early", 0, late, rootLate, early, rootEarly, late, rootLate},
+		{"pre-gloas keeps first in epoch", 100, early, rootEarly, late, rootLate, early, rootEarly},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params.SetupTestConfigCleanup(t)
+			cfg := params.BeaconConfig()
+			cfg.GloasForkEpoch = tt.gloasEpoch
+			params.OverrideBeaconConfig(cfg)
+
+			f := setup(0, 0)
+			f.ProcessAttestation(t.Context(), []uint64{0}, tt.firstRoot, tt.first, false)
+			f.ProcessAttestation(t.Context(), []uint64{0}, tt.secondRoot, tt.second, false)
+			require.Equal(t, tt.wantSlot, f.votes[0].nextSlot)
+			require.Equal(t, tt.wantRoot, f.votes[0].nextRoot)
+		})
+	}
+}
