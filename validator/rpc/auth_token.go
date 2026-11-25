@@ -126,7 +126,10 @@ func logValidatorWebAuth(validatorWebAddr, token, tokenPath string) {
 		log.Infof(
 			"Starting Prysm WebUI, once your validator process is running, navigate to the link below to authenticate",
 		)
-		log.Info(webAuthURL)
+		// The URL carries the bearer token, so it is printed to the console directly rather than
+		// logged: everything that goes through logrus also reaches the log files and the
+		// unauthenticated log stream endpoint of the web API.
+		fmt.Println(webAuthURL)
 	}
 	log.Infof("Validator Client auth token for gRPC and REST authentication set at %s", tokenPath)
 }
