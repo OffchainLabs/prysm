@@ -878,9 +878,10 @@ func TestService_validateCommitteeIndexBeaconAttestation_UnknownBlockRecordsSend
 	p := p2ptest.NewTestP2P(t)
 	db := dbtest.SetupDB(t)
 	chain := &mockChain.ChainService{
-		Genesis:        time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
-		ValidatorsRoot: [32]byte{'A'},
-		DB:             db,
+		Genesis:         time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+		ValidatorsRoot:  [32]byte{'A'},
+		DB:              db,
+		ForkchoiceRoots: map[[32]byte]bool{},
 	}
 	s := &Service{
 		cfg: &config{
@@ -917,4 +918,103 @@ func TestService_validateCommitteeIndexBeaconAttestation_UnknownBlockRecordsSend
 	require.Equal(t, pubsub.ValidationIgnore, res)
 	require.Equal(t, 1, len(s.blkRootToPendingAtts[root]))
 	require.DeepEqual(t, map[peer.ID]bool{sender: true}, s.pendingAttSenders[root])
+}
+
+func TestService_validateCommitteeIndexBeaconAttestation_UnknownBlockKnownTarget(t *testing.T) {
+	for _, validSig := range []bool{true, false} {
+		t.Run(fmt.Sprintf("valid signature %v", validSig), func(t *testing.T) {
+			helpers.ClearCache()
+			p := p2ptest.NewTestP2P(t)
+			sender := p2ptest.NewTestP2P(t)
+			p.Connect(sender)
+			requested := blocksByRootRecorder(sender)
+
+			db := dbtest.SetupDB(t)
+			blk := util.NewBeaconBlock()
+			blk.Block.Slot = 1
+			util.SaveBlock(t, t.Context(), db, blk)
+			targetRoot, err := blk.Block.HashTreeRoot()
+			require.NoError(t, err)
+			st, keys := util.DeterministicGenesisState(t, 64)
+			require.NoError(t, st.SetSlot(1))
+			require.NoError(t, db.SaveState(t.Context(), st, targetRoot))
+
+			chain := &mockChain.ChainService{
+				Genesis:         time.Now().Add(-time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second),
+				ValidatorsRoot:  [32]byte{'A'},
+				DB:              db,
+				State:           st,
+				ForkchoiceRoots: map[[32]byte]bool{targetRoot: true},
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			s := &Service{
+				ctx: ctx,
+				cfg: &config{
+					initialSync:         &mockSync.Sync{IsSyncing: false},
+					p2p:                 p,
+					beaconDB:            db,
+					chain:               chain,
+					clock:               startup.NewClock(chain.Genesis, chain.ValidatorsRoot),
+					attestationNotifier: (&mockChain.ChainService{}).OperationNotifier(),
+				},
+				blkRootToPendingAtts:             make(map[[32]byte][]any),
+				seenPendingBlocks:                make(map[[32]byte]bool),
+				seenUnAggregatedAttestationCache: lruwrpr.New(10),
+				signatureChan:                    make(chan *signatureVerifier, verifierLimit),
+			}
+			s.initCaches()
+			go s.verifierRoutine()
+
+			unknownRoot := [32]byte{'U'}
+			att := &ethpb.Attestation{
+				AggregationBits: bitfield.Bitlist{0b101},
+				Data: &ethpb.AttestationData{
+					BeaconBlockRoot: unknownRoot[:],
+					Slot:            1,
+					Target:          &ethpb.Checkpoint{Epoch: 0, Root: targetRoot[:]},
+					Source:          &ethpb.Checkpoint{Root: make([]byte, fieldparams.RootLength)},
+				},
+			}
+			com, err := helpers.BeaconCommitteeFromState(t.Context(), st, 1, 0)
+			require.NoError(t, err)
+			domain, err := signing.Domain(st.Fork(), 0, params.BeaconConfig().DomainBeaconAttester, st.GenesisValidatorsRoot())
+			require.NoError(t, err)
+			signingRoot, err := signing.ComputeSigningRoot(att.Data, domain)
+			require.NoError(t, err)
+			signer := keys[com[0]]
+			if !validSig {
+				signer = keys[com[1]]
+			}
+			att.Signature = signer.Sign(signingRoot[:]).Marshal()
+
+			buf := new(bytes.Buffer)
+			_, err = p.Encoding().EncodeGossip(buf, att)
+			require.NoError(t, err)
+			topic := fmt.Sprintf("/eth2/%x/beacon_attestation_1", s.currentForkDigest()) + p.Encoding().ProtocolSuffix()
+			msg := &pubsub.Message{Message: &pubsubpb.Message{Data: buf.Bytes(), Topic: &topic}}
+
+			res, err := s.validateCommitteeIndexBeaconAttestation(ctx, sender.PeerID(), msg)
+			if !validSig {
+				require.NotNil(t, err)
+				require.Equal(t, pubsub.ValidationReject, res)
+				require.Equal(t, 0, len(s.blkRootToPendingAtts[unknownRoot]))
+				select {
+				case got := <-requested:
+					t.Fatalf("block %#x was requested for an invalid attestation", got)
+				case <-time.After(200 * time.Millisecond):
+				}
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, pubsub.ValidationIgnore, res)
+			require.Equal(t, 1, len(s.blkRootToPendingAtts[unknownRoot]))
+			select {
+			case got := <-requested:
+				require.Equal(t, unknownRoot, got)
+			case <-time.After(5 * time.Second):
+				t.Fatal("block was not requested from the sender")
+			}
+		})
+	}
 }

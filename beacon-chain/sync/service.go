@@ -149,6 +149,7 @@ type Service struct {
 	blkRootToPendingAtts                 map[[32]byte][]any
 	pendingAttSenders                    map[[32]byte]map[peer.ID]bool
 	pendingAttRequestPeers               map[peer.ID]bool
+	pendingAttVerifiedRoots              map[[32]byte]bool
 	subHandler                           *subTopicHandler
 	pendingAttsLock                      sync.RWMutex
 	pendingQueueLock                     sync.RWMutex
@@ -444,6 +445,7 @@ func (s *Service) initCaches() {
 	s.badPayloadCache = lruwrpr.New(badBlockSize)
 	s.pendingAttSenders = make(map[[32]byte]map[peer.ID]bool)
 	s.pendingAttRequestPeers = make(map[peer.ID]bool)
+	s.pendingAttVerifiedRoots = make(map[[32]byte]bool)
 }
 
 func (s *Service) waitForChainStart() {
