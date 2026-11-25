@@ -9,7 +9,9 @@ import (
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/db/iface"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/startup"
 	"github.com/OffchainLabs/prysm/v7/config/params"
+	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -157,9 +159,9 @@ func (p *Service) run() {
 	}
 }
 
-// prune deletes historical chain data beyond the pruneSlot.
+// prune deletes historical chain data before the retention and finality boundaries.
 func (p *Service) prune(slot primitives.Slot) error {
-	// Prune everything up to this slot (inclusive).
+	// Keep the block at the pruning boundary.
 	pruneUpto := p.ps(slot)
 
 	// Can't prune beyond genesis.
@@ -167,7 +169,24 @@ func (p *Service) prune(slot primitives.Slot) error {
 		return nil
 	}
 
-	pruneUpto, err := p.db.LastStateDiffBoundary(pruneUpto)
+	finalized, err := p.db.FinalizedCheckpoint(p.ctx)
+	if err != nil {
+		return errors.Wrap(err, "get finalized checkpoint for pruning")
+	}
+	if finalized == nil || finalized.Epoch == 0 {
+		return nil
+	}
+	finalizedBlock, err := p.db.Block(p.ctx, bytesutil.ToBytes32(finalized.Root))
+	if err != nil {
+		return errors.Wrap(err, "get finalized block for pruning")
+	}
+	if err := blocks.BeaconBlockIsNil(finalizedBlock); err != nil {
+		return errors.Wrap(err, "get finalized block for pruning")
+	}
+	// Use the actual block slot to preserve the checkpoint even when its epoch start was skipped.
+	pruneUpto = min(pruneUpto, finalizedBlock.Block().Slot())
+
+	pruneUpto, err = p.db.LastStateDiffBoundary(pruneUpto)
 	if err != nil {
 		return errors.Wrap(err, "last state diff boundary")
 	}
