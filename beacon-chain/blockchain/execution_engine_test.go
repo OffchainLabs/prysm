@@ -714,6 +714,46 @@ func Test_NotifyNewPayload_SetOptimisticToValid(t *testing.T) {
 	require.Equal(t, true, validated)
 }
 
+func Test_validateExecutionOnBlock_InvalidUsesPayloadParentHash(t *testing.T) {
+	service, tr := minimalTestService(t)
+	ctx, fcs := tr.ctx, tr.fcs
+
+	// Optimistic chain A <- B <- C with payload hashes 'A', 'B' and 'C'.
+	ojc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ofc := &ethpb.Checkpoint{Root: params.BeaconConfig().ZeroHash[:]}
+	ra, rb, rc := [32]byte{'a'}, [32]byte{'b'}, [32]byte{'c'}
+	st, blk, err := prepareForkchoiceState(ctx, 1, ra, [32]byte{}, [32]byte{'A'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 2, rb, ra, [32]byte{'B'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, blk))
+	st, blk, err = prepareForkchoiceState(ctx, 3, rc, rb, [32]byte{'C'}, ojc, ofc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, blk))
+	preStateVersion, preStateHeader, err := getStateVersionAndPayload(st)
+	require.NoError(t, err)
+
+	// A child of C whose payload builds on A's payload. The engine finds it invalid with A as the latest valid
+	// hash, which says nothing about B and C.
+	b := util.NewBeaconBlockBellatrix()
+	b.Block.Slot = 4
+	b.Block.ParentRoot = rc[:]
+	b.Block.Body.ExecutionPayload.ParentHash = bytesutil.PadTo([]byte{'A'}, 32)
+	wsb, err := consensusblocks.NewSignedBeaconBlock(b)
+	require.NoError(t, err)
+	rob, err := consensusblocks.NewROBlock(wsb)
+	require.NoError(t, err)
+	lvh := [32]byte{'A'}
+	service.cfg.ExecutionEngineCaller = &mockExecution.EngineClient{ErrNewPayload: execution.ErrInvalidPayloadStatus, NewPayloadResp: lvh[:]}
+
+	_, err = service.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, rob)
+	require.ErrorContains(t, "received an INVALID payload from execution engine", err)
+	require.Equal(t, 0, len(InvalidAncestorRoots(err)))
+	require.Equal(t, true, fcs.HasFullNode(rb))
+	require.Equal(t, true, fcs.HasFullNode(rc))
+}
+
 func Test_reportInvalidBlock(t *testing.T) {
 	params.SetupTestConfigCleanup(t)
 	params.OverrideBeaconConfig(params.MainnetConfig())
