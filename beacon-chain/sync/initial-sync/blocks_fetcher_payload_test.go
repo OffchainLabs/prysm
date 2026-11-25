@@ -160,7 +160,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 			},
 			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{env0, env1},
 		}
-		f.validatePayloadBlockConsistency(r)
+		f.validatePayloadBlockConsistency(r, 0)
 		require.NoError(t, r.err)
 		require.Equal(t, 2, len(r.envelopes))
 	})
@@ -176,7 +176,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 			// Only one envelope, but two are needed
 			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{env0},
 		}
-		f.validatePayloadBlockConsistency(r)
+		f.validatePayloadBlockConsistency(r, 0)
 		// Should truncate bwb to the point where envelopes run out
 		require.NoError(t, r.err)
 	})
@@ -197,7 +197,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 			},
 			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{envFirst, env2},
 		}
-		f.validatePayloadBlockConsistency(r)
+		f.validatePayloadBlockConsistency(r, 0)
 		require.NoError(t, r.err)
 		// Extra envelope should be truncated
 		require.Equal(t, 1, len(r.envelopes))
@@ -215,7 +215,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 			},
 			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{wrongEnv},
 		}
-		f.validatePayloadBlockConsistency(r)
+		f.validatePayloadBlockConsistency(r, 0)
 		require.ErrorContains(t, "envelope does not match block", r.err)
 		require.Equal(t, false, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
 	})
@@ -232,9 +232,48 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 			},
 			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{env0, wrongRootEnv},
 		}
-		f.validatePayloadBlockConsistency(r)
+		f.validatePayloadBlockConsistency(r, 0)
 		require.ErrorContains(t, "envelope does not match block", r.err)
 		require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
+	})
+
+	t.Run("batch across the fork", func(t *testing.T) {
+		fuluBlk := util.NewBeaconBlockFulu()
+		fuluBlk.Block.Slot = 31
+		signedFulu, err := blocks.NewSignedBeaconBlock(fuluBlk)
+		require.NoError(t, err)
+		f0, err := blocks.NewROBlock(signedFulu)
+		require.NoError(t, err)
+		fuluHash := [32]byte{0x60}
+		g1Hash := [32]byte{0x70}
+		g2Hash := [32]byte{0x80}
+		g1 := makeGloasBlock(t, 32, f0.Root(), fuluHash)
+		g2 := makeGloasBlock(t, 33, g1.Root(), g1Hash)
+		g3 := makeGloasBlock(t, 34, g2.Root(), g2Hash)
+		g1Env := makeEnvelopeForRoot(t, 32, g1.Root(), g1Hash, fuluHash)
+		g2Env := makeEnvelopeForRoot(t, 33, g2.Root(), g2Hash, g1Hash)
+
+		t.Run("all envelopes", func(t *testing.T) {
+			r := &fetchRequestResponse{
+				bwb:       []blocks.BlockWithROSidecars{{Block: f0}, {Block: g1}, {Block: g2}},
+				envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{g1Env, g2Env},
+			}
+			(&blocksFetcher{}).validatePayloadBlockConsistency(r, 1)
+			require.NoError(t, r.err)
+			require.Equal(t, 3, len(r.bwb))
+			require.Equal(t, 2, len(r.envelopes))
+		})
+
+		t.Run("missing envelope truncates after the fork block", func(t *testing.T) {
+			r := &fetchRequestResponse{
+				bwb:       []blocks.BlockWithROSidecars{{Block: f0}, {Block: g1}, {Block: g2}, {Block: g3}},
+				envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{g1Env},
+			}
+			(&blocksFetcher{}).validatePayloadBlockConsistency(r, 1)
+			require.NoError(t, r.err)
+			require.Equal(t, 3, len(r.bwb))
+			require.Equal(t, g2.Root(), r.bwb[2].Block.Root())
+		})
 	})
 
 	t.Run("grandparent envelope is not the parent payload when the parent is empty", func(t *testing.T) {
@@ -257,7 +296,7 @@ func TestValidatePayloadBlockConsistency(t *testing.T) {
 			},
 			envelopes: []interfaces.ROSignedExecutionPayloadEnvelope{gpEnv, c0Env},
 		}
-		f.validatePayloadBlockConsistency(r)
+		f.validatePayloadBlockConsistency(r, 0)
 		require.ErrorContains(t, "envelope does not match block", r.err)
 		require.Equal(t, true, errors.Is(r.err, prysmsync.ErrInvalidFetchedData))
 	})
