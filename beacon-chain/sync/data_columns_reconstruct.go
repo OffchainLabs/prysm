@@ -156,7 +156,16 @@ func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
 
 	// Reconstruct only if we have at least the minimum number of columns to reconstruct, but not all the columns.
 	// (If we have not enough columns, reconstruction is impossible. If we have all the columns, reconstruction is unnecessary.)
-	return storedColumnsCount >= peerdas.MinimumColumnCountToReconstruct() && storedColumnsCount != fieldparams.NumberOfColumns
+	if storedColumnsCount < peerdas.MinimumColumnCountToReconstruct() || storedColumnsCount == fieldparams.NumberOfColumns {
+		return false
+	}
+
+	// Reconstructed columns are only used for the indices we sample, so there is nothing to gain once all of them are stored.
+	columnIndicesToSample, err := s.columnIndicesToSample()
+	if err != nil {
+		return true
+	}
+	return !storedDataColumns.AllAvailable(columnIndicesToSample)
 }
 
 // computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.

@@ -368,3 +368,31 @@ func TestSemiSupernodeReconstruction(t *testing.T) {
 		}
 	})
 }
+
+func TestShouldReconstruct_AllSampledColumnsStored(t *testing.T) {
+	require.NoError(t, kzg.Start())
+	_, _, sidecars := util.GenerateTestFuluBlockWithSidecars(t, 1)
+
+	storage := filesystem.NewEphemeralDataColumnStorage(t)
+	service := NewService(t.Context(), WithP2P(p2ptest.NewTestP2P(t)), WithDataColumnStorage(storage))
+	sampled, err := service.columnIndicesToSample()
+	require.NoError(t, err)
+
+	// Store enough columns to reconstruct, including every column this node samples.
+	minimumCount := peerdas.MinimumColumnCountToReconstruct()
+	toStore := make([]blocks.VerifiedRODataColumn, 0, minimumCount)
+	for _, sidecar := range sidecars {
+		if sampled[sidecar.Index()] {
+			toStore = append(toStore, sidecar)
+		}
+	}
+	for _, sidecar := range sidecars {
+		if uint64(len(toStore)) < minimumCount && !sampled[sidecar.Index()] {
+			toStore = append(toStore, sidecar)
+		}
+	}
+	require.NoError(t, storage.Save(toStore))
+
+	// Reconstruction would only produce columns that this node does not sample.
+	require.Equal(t, false, service.shouldReconstruct(sidecars[0].BlockRoot()))
+}
