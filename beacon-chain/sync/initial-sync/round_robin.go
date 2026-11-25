@@ -581,7 +581,7 @@ func (s *Service) updatePeerScorerStats(data *blocksQueueFetchedData, count uint
 	s.cfg.P2P.Peers().Scorers().BlockProviderScorer().IncrementProcessedBlocks(data.blocksFrom, count)
 }
 
-// isProcessedBlock checks DB and local cache for presence of a given block, to avoid duplicates.
+// isProcessedBlock checks forkchoice for presence of a given block, to avoid duplicates.
 func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool {
 	cp := s.cfg.Chain.FinalizedCheckpt()
 	finalizedSlot, err := slots.EpochStart(cp.Epoch)
@@ -593,9 +593,9 @@ func (s *Service) isProcessedBlock(ctx context.Context, blk blocks.ROBlock) bool
 	if blk.Block().Slot() <= finalizedSlot {
 		return true
 	}
-	// If block exists in our db and is before or equal to our current head
-	// we ignore it.
-	if s.cfg.Chain.HeadSlot() >= blk.Block().Slot() && s.cfg.Chain.HasBlock(ctx, blk.Root()) {
+	// If block is in forkchoice and is before or equal to our current head
+	// we ignore it. The DB is not enough: after a restart it holds blocks that forkchoice does not.
+	if s.cfg.Chain.HeadSlot() >= blk.Block().Slot() && s.cfg.Chain.InForkchoice(blk.Root()) {
 		return true
 	}
 	return false

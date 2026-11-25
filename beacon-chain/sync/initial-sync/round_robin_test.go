@@ -1099,3 +1099,28 @@ func TestService_ProcessFetchedData(t *testing.T) {
 		})
 	}
 }
+
+func TestService_isProcessedBlock_ChecksForkchoice(t *testing.T) {
+	beaconDB := dbtest.SetupDB(t)
+	blk := util.NewBeaconBlock()
+	blk.Block.Slot = 10
+	util.SaveBlock(t, t.Context(), beaconDB, blk)
+	wsb, err := blocks.NewSignedBeaconBlock(blk)
+	require.NoError(t, err)
+	roBlk, err := blocks.NewROBlock(wsb)
+	require.NoError(t, err)
+
+	// After a restart the DB can hold blocks below the head that forkchoice does not have.
+	headSlot := primitives.Slot(20)
+	chain := &mock.ChainService{
+		DB:                  beaconDB,
+		MockHeadSlot:        &headSlot,
+		FinalizedCheckPoint: &eth.Checkpoint{},
+		ForkchoiceRoots:     map[[32]byte]bool{},
+	}
+	s := &Service{cfg: &Config{Chain: chain, DB: beaconDB}}
+	require.Equal(t, false, s.isProcessedBlock(t.Context(), roBlk))
+
+	chain.ForkchoiceRoots[roBlk.Root()] = true
+	require.Equal(t, true, s.isProcessedBlock(t.Context(), roBlk))
+}
