@@ -864,8 +864,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		}
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+		actual := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
 
 		require.Equal(t, stop-start, len(actual))
 
@@ -913,8 +912,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		}
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+		actual := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
 
 		require.Equal(t, middle-start, len(actual))
 
@@ -966,8 +964,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		}
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blocksByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+		actual := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blocksByRoot, roDataColumnsByPeer)
 
 		// Only the honest peer's sidecars should be returned.
 		require.Equal(t, middle-start, len(actual))
@@ -1003,8 +1000,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{}
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+		actual := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
 		require.Equal(t, 0, len(actual))
 		// The peer is NOT downscored for returning sidecars whose block we don't hold locally.
 		require.Equal(t, float64(0), p2p.Peers().Scorers().BadResponsesScorer().Score("peer1"))
@@ -1035,8 +1031,7 @@ func TestVerifyDataColumnSidecarsByPeer(t *testing.T) {
 		blockByRoot := map[[fieldparams.RootLength]byte]blocks.ROBlock{roBlock.Root(): roBlock}
 
 		newDataColumnsVerifier := newDataColumnsVerifierFromInitializer(initializer)
-		actual, err := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
-		require.NoError(t, err)
+		actual := verifyDataColumnSidecarsByPeer(p2p, newDataColumnsVerifier, blockByRoot, roDataColumnsByPeer)
 
 		// Only the local-root sidecars are returned; foreign ones are silently dropped.
 		require.Equal(t, 5, len(actual))

@@ -50,7 +50,7 @@ func (s *Service) processDataColumnSidecarsFromReconstruction(ctx context.Contex
 		}
 
 		// Randomly choose value before starting reconstruction.
-		timeIntoSlot := s.computeRandomDelay(slotStartTime)
+		timeIntoSlot := s.computeRandomDelay()
 		broadcastTime := slotStartTime.Add(timeIntoSlot)
 		waitingTime := time.Until(broadcastTime)
 
@@ -160,7 +160,7 @@ func (s *Service) shouldReconstruct(root [fieldparams.RootLength]byte) bool {
 }
 
 // computeRandomDelay computes a random delay duration to wait before reconstructing data column sidecars.
-func (s *Service) computeRandomDelay(slotStartTime time.Time) time.Duration {
+func (s *Service) computeRandomDelay() time.Duration {
 	const maxReconstructionDelaySec = 2.
 
 	randFloat := s.reconstructionRandGen.Float64()

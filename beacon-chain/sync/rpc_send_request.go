@@ -830,12 +830,7 @@ func readChunkedDataColumnSidecar(
 	return &roDataColumn, nil
 }
 
-func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string, fields ...logrus.Fields) {
-	log := log
-	for _, field := range fields {
-		log = log.WithFields(field)
-	}
-
+func downscorePeer(p2p p2p.P2P, peerID peer.ID, reason string) {
 	newScore := p2p.Peers().Scorers().BadResponsesScorer().Increment(peerID)
 	log.WithFields(logrus.Fields{"peerID": peerID, "reason": reason, "newScore": newScore}).Debug("Downscore peer")
 }

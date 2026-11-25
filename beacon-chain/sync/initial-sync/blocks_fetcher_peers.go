@@ -46,11 +46,11 @@ func (f *blocksFetcher) removeStalePeerLocks(age time.Duration) {
 }
 
 // waitForMinimumPeers spins and waits up until enough peers are available.
-func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, error) {
+func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) error {
 	required := min(flags.Get().MinimumSyncPeers, params.BeaconConfig().MaxPeersToSync)
 	for {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
 		var peers []peer.ID
 		if f.mode == modeStopOnFinalizedEpoch {
@@ -63,14 +63,14 @@ func (f *blocksFetcher) waitForMinimumPeers(ctx context.Context) ([]peer.ID, err
 			_, peers = f.p2p.Peers().BestNonFinalized(flags.Get().MinimumSyncPeers, headEpoch)
 		}
 		if len(peers) >= required {
-			return peers, nil
+			return nil
 		}
 		log.WithFields(logrus.Fields{
 			"suitable": len(peers),
 			"required": required}).Info("Waiting for enough suitable peers before syncing")
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-time.After(handshakePollingInterval):
 		}
 	}

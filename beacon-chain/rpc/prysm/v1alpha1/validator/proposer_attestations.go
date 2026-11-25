@@ -480,25 +480,25 @@ func (vs *Server) filterCurrentEpochAttestationByForkchoice(ctx context.Context,
 // The conditions checked are:
 // 1. The attestation's target epoch matches the forkchoice target epoch.
 // 2. The attestation's target root matches the forkchoice target root.
-func (vs *Server) filterCurrentEpochAttestationByTarget(att ethpb.Att, targetRoot [32]byte, targetEpoch, currentEpoch primitives.Epoch) (bool, error) {
+func (vs *Server) filterCurrentEpochAttestationByTarget(att ethpb.Att, targetRoot [32]byte, targetEpoch, currentEpoch primitives.Epoch) bool {
 	if !vs.isAttestationFromCurrentEpoch(att, currentEpoch) {
-		return false, nil
+		return false
 	}
 
 	attTargetRoot := [32]byte(att.GetData().Target.Root)
-	return att.GetData().Target.Epoch == targetEpoch && attTargetRoot == targetRoot, nil
+	return att.GetData().Target.Epoch == targetEpoch && attTargetRoot == targetRoot
 }
 
 // filterPreviousEpochAttestationByTarget returns true if an attestation from the previous epoch matches the fork choice previous target view.
 // The conditions checked are:
 // 1. The attestation's target epoch matches the forkchoice previous target epoch.
 // 2. The attestation's target root matches the forkchoice previous target root.
-func (vs *Server) filterPreviousEpochAttestationByTarget(att ethpb.Att, cp *ethpb.Checkpoint, currentEpoch primitives.Epoch) (bool, error) {
+func (vs *Server) filterPreviousEpochAttestationByTarget(att ethpb.Att, cp *ethpb.Checkpoint, currentEpoch primitives.Epoch) bool {
 	if !vs.isAttestationFromPreviousEpoch(att, currentEpoch) {
-		return false, nil
+		return false
 	}
 
-	return att.GetData().Target.Epoch == cp.Epoch && bytes.Equal(att.GetData().Target.Root, cp.Root), nil
+	return att.GetData().Target.Epoch == cp.Epoch && bytes.Equal(att.GetData().Target.Root, cp.Root)
 }
 
 // filterAttestationBySignature filters attestations based on specific conditions and performs batch signature verification.
@@ -540,25 +540,13 @@ func (vs *Server) filterAttestationBySignature(ctx context.Context, atts propose
 			log.WithFields(attestationFields(att)).Warn("Dropping attestation with infinite aggregate signature")
 			continue
 		}
-		ok, err := vs.filterCurrentEpochAttestationByTarget(att, targetRoot, targetEpoch, currentEpoch)
-		if err != nil {
-			log.WithFields(attestationFields(att)).WithError(err).Error("Could not filter current epoch attestation by target")
-		}
-		if ok {
+		if vs.filterCurrentEpochAttestationByTarget(att, targetRoot, targetEpoch, currentEpoch) ||
+			vs.filterPreviousEpochAttestationByTarget(att, &ethpb.Checkpoint{Root: prevTargetRoot[:], Epoch: prevTargetEpoch}, currentEpoch) {
 			verifiedAtts = append(verifiedAtts, att)
 			continue
 		}
 
-		ok, err = vs.filterPreviousEpochAttestationByTarget(att, &ethpb.Checkpoint{Root: prevTargetRoot[:], Epoch: prevTargetEpoch}, currentEpoch)
-		if err != nil {
-			log.WithFields(attestationFields(att)).WithError(err).Error("Could not filter previous epoch attestation by target")
-		}
-		if ok {
-			verifiedAtts = append(verifiedAtts, att)
-			continue
-		}
-
-		ok, err = vs.filterCurrentEpochAttestationByForkchoice(ctx, att, currentEpoch)
+		ok, err := vs.filterCurrentEpochAttestationByForkchoice(ctx, att, currentEpoch)
 		if err != nil {
 			log.WithFields(attestationFields(att)).WithError(err).Error("Could not filter current epoch attestation by fork choice")
 		}

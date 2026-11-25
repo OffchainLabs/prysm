@@ -209,13 +209,12 @@ func (p *PartialColumnBroadcaster) enqueue(ctx context.Context, kind requestKind
 
 // tryEnqueue creates and enqueues a request without blocking.
 // Returns false if the request channel is full.
-func (p *PartialColumnBroadcaster) tryEnqueue(kind requestKind, v requestValues) (request, bool) {
-	req := newRequest(p.ctx, kind, v)
+func (p *PartialColumnBroadcaster) tryEnqueue(kind requestKind, v requestValues) bool {
 	select {
-	case p.incomingReq <- req:
-		return req, true
+	case p.incomingReq <- newRequest(p.ctx, kind, v):
+		return true
 	default:
-		return req, false
+		return false
 	}
 }
 
@@ -330,7 +329,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 			"topic": rpc.GetTopicID(),
 			"got":   len(rpc.GetGroupID()),
 		}).Debug("Invalid group ID")
-		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+		p.reportInvalidMessageAsync(rpc.GetTopicID(), from)
 		return errors.Wrap(err, "parse partial column group id")
 	}
 
@@ -342,7 +341,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 			"columnIndex": columnIndex,
 			"maxColumns":  fieldparams.NumberOfColumns,
 		}).Debug("Invalid topic ID: column index missing or out of bounds")
-		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+		p.reportInvalidMessageAsync(rpc.GetTopicID(), from)
 		return errors.Errorf("invalid topic ID %q: column index missing or out of bounds", rpc.GetTopicID())
 	}
 
@@ -371,7 +370,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 			"topic":      rpc.GetTopicID(),
 			"gloasGroup": isGloas,
 		}).Debug("Group ID fork does not match topic fork")
-		p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+		p.reportInvalidMessageAsync(rpc.GetTopicID(), from)
 		return errors.Errorf("group ID fork (gloas=%t) does not match topic fork %q", isGloas, rpc.GetTopicID())
 	}
 
@@ -380,12 +379,12 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 		// A malformed message body is the peer's fault, so downscore it. Other errors
 		// are dropped without penalty.
 		if errors.Is(err, errMalformedPartialMessage) {
-			p.reportPeerFeedbackAsync(rpc.GetTopicID(), from, pubsub.PeerFeedbackInvalidMessage)
+			p.reportInvalidMessageAsync(rpc.GetTopicID(), from)
 		}
 		return errors.Wrap(err, "update peer state from incoming rpc")
 	}
 
-	_, ok := p.tryEnqueue(requestKindHandleIncomingRPC, requestValues{
+	ok := p.tryEnqueue(requestKindHandleIncomingRPC, requestValues{
 		incomingRPC: incomingPartialRPC{rpc, from, message, isGloas, slot, root},
 	})
 	if !ok {
@@ -400,7 +399,7 @@ func (p *PartialColumnBroadcaster) onIncomingRPC(from peer.ID, peerStates map[pe
 	return nil
 }
 
-func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from peer.ID, kind pubsub.PeerFeedbackKind) {
+func (p *PartialColumnBroadcaster) reportInvalidMessageAsync(topic string, from peer.ID) {
 	select {
 	case p.peerFeedbackSemaphore <- struct{}{}:
 		go func() {
@@ -410,7 +409,7 @@ func (p *PartialColumnBroadcaster) reportPeerFeedbackAsync(topic string, from pe
 			if p.ctx.Err() != nil {
 				return
 			}
-			p.reportPeerFeedback(topic, from, kind)
+			p.reportPeerFeedback(topic, from, pubsub.PeerFeedbackInvalidMessage)
 		}()
 	default:
 		p.logger.WithFields(logrus.Fields{
@@ -609,11 +608,11 @@ func (p *PartialColumnBroadcaster) getDataColumn(topic string, group []byte) *bl
 	return verifier.Column
 }
 
-func decodePartsMetadataFromPeerState(state *ethpb.PartialDataColumnPartsMetadata, expectedLength uint64) (*ethpb.PartialDataColumnPartsMetadata, error) {
+func decodePartsMetadataFromPeerState(state *ethpb.PartialDataColumnPartsMetadata, expectedLength uint64) *ethpb.PartialDataColumnPartsMetadata {
 	if state == nil {
-		return blocks.NewPartsMetaWithNoAvailableAndNoRequests(expectedLength), nil
+		return blocks.NewPartsMetaWithNoAvailableAndNoRequests(expectedLength)
 	}
-	return state, nil
+	return state
 }
 
 func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState, rpc *pubsub_pb.PartialMessagesExtension, isGloas bool) (blocks.PartialDataColumnPeerState,
@@ -673,10 +672,7 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 
 	// only update RecvdState using the incoming partial message if the peer did not send us their parts metadata
 	if !hasIncomingPartsMetadata {
-		recievedMeta, err := decodePartsMetadataFromPeerState(peerState.Recvd, nKzgCommitments)
-		if err != nil {
-			return peerState, nil, errors.Wrap(err, "received")
-		}
+		recievedMeta := decodePartsMetadataFromPeerState(peerState.Recvd, nKzgCommitments)
 		recvdState, err := blocks.MergeAvailableIntoPartsMetadata(recievedMeta, cellsPresent)
 		if err != nil {
 			return peerState, nil, errors.Wrap(err, "merge available cells into received parts metadata")
@@ -684,11 +680,7 @@ func updatePeerStateFromIncomingRPC(peerState blocks.PartialDataColumnPeerState,
 		peerState.Recvd = recvdState
 	}
 
-	sentMeta, err := decodePartsMetadataFromPeerState(peerState.Sent, nKzgCommitments)
-	if err != nil {
-		return peerState, nil, errors.Wrap(err, "sent")
-	}
-
+	sentMeta := decodePartsMetadataFromPeerState(peerState.Sent, nKzgCommitments)
 	sentState, err := blocks.MergeAvailableIntoPartsMetadata(sentMeta, cellsPresent)
 	if err != nil {
 		return peerState, nil, errors.Wrap(err, "merge available cells into sent parts metadata")

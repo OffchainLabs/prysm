@@ -290,10 +290,7 @@ func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) 
 		// Overlay mode: Read root from overrides and fallback to base.
 		depth := f.base.depth()
 
-		leaf, err = f.readOverlayNode(0 /* leaf level */, fieldIndex)
-		if err != nil {
-			return [32]byte{}, nil, fmt.Errorf("read overlay leaf: %w", err)
-		}
+		leaf = f.readOverlayNode(0 /* leaf level */, fieldIndex)
 
 		// Collect proof by walking up the trie levels.
 		proof = make([][32]byte, depth)
@@ -301,10 +298,7 @@ func (f *FieldTrie) ProveField(fieldIndex uint64) ([32]byte, [][32]byte, error) 
 		for level := range depth {
 			siblingIdx := currentIndex ^ 1
 
-			neighbor, err := f.readOverlayNode(level, siblingIdx)
-			if err != nil {
-				return [32]byte{}, nil, fmt.Errorf("read overlay sibling at level %d: %w", level, err)
-			}
+			neighbor := f.readOverlayNode(level, siblingIdx)
 
 			proof[level] = neighbor
 			currentIndex /= 2
@@ -425,10 +419,7 @@ func (f *FieldTrie) trieRoot() ([32]byte, error) {
 	}
 
 	// Overlay mode: Read root from overrides and fallback to base.
-	root, err := f.readOverlayNode(f.base.depth(), 0)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("read overlay node: %w", err)
-	}
+	root := f.readOverlayNode(f.base.depth(), 0)
 
 	rootWithMixin, err := f.rootWithMixin(root)
 	if err != nil {
@@ -771,15 +762,9 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 			leftIdx := parentIdx * 2
 			rightIdx := leftIdx + 1
 
-			left, err := f.readOverlayNode(level, leftIdx)
-			if err != nil {
-				return [32]byte{}, fmt.Errorf("read left overlay node: %w", err)
-			}
+			left := f.readOverlayNode(level, leftIdx)
 
-			right, err := f.readOverlayNode(level, rightIdx)
-			if err != nil {
-				return [32]byte{}, fmt.Errorf("read right overlay node: %w", err)
-			}
+			right := f.readOverlayNode(level, rightIdx)
 
 			copy(combinedChunks[:32], left[:])
 			copy(combinedChunks[32:], right[:])
@@ -799,10 +784,7 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 	f.overridesData.updateMetrics()
 
 	// The root is at levels[depth][0], or fallback to base.
-	root, err := f.readOverlayNode(depth, 0)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("read overlay root: %w", err)
-	}
+	root := f.readOverlayNode(depth, 0)
 
 	rootWithMixin, err := f.rootWithMixin(root)
 	if err != nil {
@@ -813,22 +795,22 @@ func (f *FieldTrie) recomputeOverlay(elements any, indices []uint64) ([32]byte, 
 }
 
 // readOverlayNode reads a node from the overlay at (level, idx).
-func (f *FieldTrie) readOverlayNode(level uint64, idx uint64) ([32]byte, error) {
+func (f *FieldTrie) readOverlayNode(level uint64, idx uint64) [32]byte {
 	// First, check if there is an override for this node.
 	if nodeByIdx := f.overridesData.levels[level]; nodeByIdx != nil {
 		if root, ok := nodeByIdx[idx]; ok {
-			return root, nil
+			return root
 		}
 	}
 
 	// If no override, read from base.
 	levelSize := f.base.levelSize(level)
 	if idx < levelSize {
-		return f.base.nodesData.nodes[f.base.nodesData.offsets[level]+idx], nil
+		return f.base.nodesData.nodes[f.base.nodesData.offsets[level]+idx]
 	}
 
 	// If idx is out of bounds for the base, return zero hash.
-	return trie.ZeroHashes[level], nil
+	return trie.ZeroHashes[level]
 }
 
 // compressedIndicesToChunks converts element-level indices to unique

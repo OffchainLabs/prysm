@@ -52,7 +52,7 @@ func TestBlocksFetcher_WaitForMinimumPeersCancellation(t *testing.T) {
 				}
 				done := make(chan error, 1)
 				go func() {
-					_, err := fetcher.waitForMinimumPeers(ctx)
+					err := fetcher.waitForMinimumPeers(ctx)
 					done <- err
 				}()
 				synctest.Wait()

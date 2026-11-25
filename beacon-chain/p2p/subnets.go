@@ -115,7 +115,7 @@ func (s *Service) FindAndDialPeersWithSubnets(
 			ctx, cancel := context.WithTimeout(ctx, batchPeriod)
 			defer cancel()
 
-			peersToDial, err := s.findPeersWithSubnets(ctx, topicFormat, digest, minimumPeersPerSubnet, defectiveSubnets)
+			peersToDial, err := s.findPeersWithSubnets(ctx, topicFormat, defectiveSubnets)
 			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 				return nil, errors.Wrap(err, "find peers with subnets")
 			}
@@ -160,8 +160,6 @@ func updateDefectiveSubnets(
 func (s *Service) findPeersWithSubnets(
 	ctx context.Context,
 	topicFormat string,
-	digest [fieldparams.VersionLength]byte,
-	minimumPeersPerSubnet int,
 	defectiveSubnetsOrigin map[uint64]int,
 ) ([]*enode.Node, error) {
 	// Copy the defective subnets map to avoid modifying the original map.

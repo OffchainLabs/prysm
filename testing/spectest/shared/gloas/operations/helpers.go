@@ -22,11 +22,3 @@ func sszToBlock(b []byte) (interfaces.SignedBeaconBlock, error) {
 	}
 	return blocks.NewSignedBeaconBlock(&ethpb.SignedBeaconBlockGloas{Block: base})
 }
-
-func sszToBlockBody(b []byte) (interfaces.ReadOnlyBeaconBlockBody, error) {
-	base := &ethpb.BeaconBlockBodyGloas{}
-	if err := base.UnmarshalSSZ(b); err != nil {
-		return nil, err
-	}
-	return blocks.NewBeaconBlockBody(base)
-}

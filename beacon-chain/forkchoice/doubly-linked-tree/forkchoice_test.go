@@ -103,7 +103,7 @@ func TestForkChoice_UpdateBalancesPositiveChange(t *testing.T) {
 	// Each node gets one unique vote. The weight should look like 103 <- 102 <- 101 because
 	// they get propagated back.
 	f.justifiedBalances = []uint64{10, 20, 30}
-	require.NoError(t, f.updateBalances())
+	f.updateBalances()
 	s := f.store
 	assert.Equal(t, uint64(10), s.fullNodeByRoot[indexToHash(1)].balance)
 	assert.Equal(t, uint64(20), s.fullNodeByRoot[indexToHash(2)].balance)
@@ -132,7 +132,7 @@ func TestForkChoice_UpdateBalancesSameSlot(t *testing.T) {
 
 	// Balance changes with same slot should still update node balances.
 	f.justifiedBalances = []uint64{50, 200}
-	require.NoError(t, f.updateBalances())
+	f.updateBalances()
 	assert.Equal(t, uint64(50), s.fullNodeByRoot[indexToHash(1)].balance)
 	assert.Equal(t, uint64(200), s.fullNodeByRoot[indexToHash(2)].balance)
 }
@@ -162,7 +162,7 @@ func TestForkChoice_UpdateBalancesNegativeChange(t *testing.T) {
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
-	require.NoError(t, f.updateBalances())
+	f.updateBalances()
 	assert.Equal(t, uint64(10), s.fullNodeByRoot[indexToHash(1)].balance)
 	assert.Equal(t, uint64(20), s.fullNodeByRoot[indexToHash(2)].balance)
 	assert.Equal(t, uint64(30), s.fullNodeByRoot[indexToHash(3)].balance)
@@ -193,7 +193,7 @@ func TestForkChoice_UpdateBalancesUnderflow(t *testing.T) {
 	}
 
 	f.justifiedBalances = []uint64{10, 20, 30}
-	require.NoError(t, f.updateBalances())
+	f.updateBalances()
 	assert.Equal(t, uint64(0), s.fullNodeByRoot[indexToHash(1)].balance)
 	assert.Equal(t, uint64(0), s.fullNodeByRoot[indexToHash(2)].balance)
 	assert.Equal(t, uint64(5), s.fullNodeByRoot[indexToHash(3)].balance)

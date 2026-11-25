@@ -75,14 +75,6 @@ func TestServiceProgressMetrics(t *testing.T) {
 	})
 }
 
-type mockMinimumSlotter struct {
-	min primitives.Slot
-}
-
-func (m mockMinimumSlotter) minimumSlot(_ primitives.Slot) primitives.Slot {
-	return m.min
-}
-
 type mockInitalizerWaiter struct {
 }
 

@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 type IntervalLogger struct {
 	*logrus.Entry
 	base    *logrus.Entry
-	mux     sync.Mutex
 	seconds int64         // seconds is the number of seconds per logging interval
 	last    *atomic.Int64 // last is the quantized representation of the last time a log was emitted
 	now     func() time.Time

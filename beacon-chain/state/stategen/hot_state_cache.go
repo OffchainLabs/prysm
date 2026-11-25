@@ -88,8 +88,8 @@ func (c *hotStateCache) has(blockRoot [32]byte) bool {
 }
 
 // delete deletes the key exists in the cache.
-func (c *hotStateCache) delete(blockRoot [32]byte) bool {
+func (c *hotStateCache) delete(blockRoot [32]byte) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	return c.cache.Remove(blockRoot)
+	c.cache.Remove(blockRoot)
 }

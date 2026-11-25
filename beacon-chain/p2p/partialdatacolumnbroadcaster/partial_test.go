@@ -2663,7 +2663,7 @@ func TestPartialColumnBroadcaster_Unsubscribe(t *testing.T) {
 	}
 }
 
-func TestPartialColumnBroadcaster_reportPeerFeedbackAsync(t *testing.T) {
+func TestPartialColumnBroadcaster_reportInvalidMessageAsync(t *testing.T) {
 	const (
 		topic = "/eth2/abcd1234/data_column_sidecar_3/ssz_snappy"
 		from  = peer.ID("peer-x")
@@ -2695,7 +2695,7 @@ func TestPartialColumnBroadcaster_reportPeerFeedbackAsync(t *testing.T) {
 				}
 			}
 
-			h.broadcaster.reportPeerFeedbackAsync(topic, from, pubsub.PeerFeedbackInvalidMessage)
+			h.broadcaster.reportInvalidMessageAsync(topic, from)
 
 			if tt.expectCall {
 				require.Eventually(t, func() bool {
