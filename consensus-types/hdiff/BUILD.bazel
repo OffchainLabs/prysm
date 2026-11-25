@@ -53,6 +53,7 @@ go_test(
     deps = [
         "//beacon-chain/core/gloas:go_default_library",
         "//beacon-chain/core/heze:go_default_library",
+        "//beacon-chain/core/signing:go_default_library",
         "//beacon-chain/core/transition:go_default_library",
         "//beacon-chain/state:go_default_library",
         "//beacon-chain/state/state-native:go_default_library",
@@ -60,6 +61,7 @@ go_test(
         "//config/params:go_default_library",
         "//consensus-types/blocks:go_default_library",
         "//consensus-types/primitives:go_default_library",
+        "//crypto/bls:go_default_library",
         "//proto/engine/v1:go_default_library",
         "//proto/prysm/v1alpha1:go_default_library",
         "//runtime/version:go_default_library",

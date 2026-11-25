@@ -4,11 +4,13 @@ import (
 	"testing"
 
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/gloas"
+	"github.com/OffchainLabs/prysm/v7/beacon-chain/core/signing"
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v7/crypto/bls"
 	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/runtime/version"
@@ -258,7 +260,7 @@ func TestGloasCrossForkDiff(t *testing.T) {
 }
 
 func TestGloasCrossForkDiffOnboardsBuilderDeposit(t *testing.T) {
-	// A 0x03 builder deposit in the Fulu anchor is removed by Gloas onboarding, shortening
+	// A 0xB0 builder deposit in the Fulu anchor is removed by Gloas onboarding, shortening
 	// pending_deposits. The diff indexes the pre-upgrade list, so applying it must not use the
 	// post-upgrade (shortened) list, which previously panicked with slice bounds out of range.
 	fuluSource, _ := util.DeterministicGenesisStateFulu(t, 64)
@@ -295,6 +297,82 @@ func TestGloasCrossForkDiffOnboardsBuilderDeposit(t *testing.T) {
 	result, err := ApplyDiff(ctx, fuluSource.Copy(), hdiffBytes)
 	require.NoError(t, err)
 	requireEqualState(t, gloasTarget, result)
+}
+
+func TestGloasCrossForkDiffDropsOnboardedBuilders(t *testing.T) {
+	// The real chain can process a 0xB0 (`BUILDER_WITHDRAWAL_PREFIX`) deposit as a validator between the anchor slot and the fork.
+	// Applying the diff then onboards builders from the anchor that the target never had.
+	signedBuilderDeposit := func(t *testing.T) *ethpb.PendingDeposit {
+		sk, err := bls.RandKey()
+		require.NoError(t, err)
+		wc := make([]byte, fieldparams.RootLength)
+		wc[0] = params.BeaconConfig().BuilderWithdrawalPrefixByte
+		amount := params.BeaconConfig().MinActivationBalance
+		domain, err := signing.ComputeDomain(params.BeaconConfig().DomainDeposit, nil, nil)
+		require.NoError(t, err)
+		root, err := signing.ComputeSigningRoot(&ethpb.DepositMessage{
+			PublicKey:             sk.PublicKey().Marshal(),
+			WithdrawalCredentials: wc,
+			Amount:                amount,
+		}, domain)
+		require.NoError(t, err)
+		return &ethpb.PendingDeposit{
+			PublicKey:             sk.PublicKey().Marshal(),
+			WithdrawalCredentials: wc,
+			Amount:                amount,
+			Signature:             sk.Sign(root[:]).Marshal(),
+		}
+	}
+
+	tests := []struct {
+		name           string
+		targetDeposits func(anchor []*ethpb.PendingDeposit) []*ethpb.PendingDeposit
+		wantBuilders   int
+	}{
+		{
+			name:           "target has no builders",
+			targetDeposits: func([]*ethpb.PendingDeposit) []*ethpb.PendingDeposit { return nil },
+			wantBuilders:   0,
+		},
+		{
+			name:           "target has fewer builders",
+			targetDeposits: func(anchor []*ethpb.PendingDeposit) []*ethpb.PendingDeposit { return anchor[1:] },
+			wantBuilders:   1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Fulu source state with two pending deposits.
+			fuluSource, _ := util.DeterministicGenesisStateFulu(t, 64)
+			anchorDeposits := []*ethpb.PendingDeposit{signedBuilderDeposit(t), signedBuilderDeposit(t)}
+			require.NoError(t, fuluSource.SetPendingDeposits(anchorDeposits))
+
+			// Upgrade to Gloas and onboarding happens.
+			onboarded, err := gloas.UpgradeToGloas(t.Context(), fuluSource.Copy())
+			require.NoError(t, err)
+			onboardedBuilders, err := onboarded.Builders()
+			require.NoError(t, err)
+			require.Equal(t, len(anchorDeposits), len(onboardedBuilders))
+
+			fuluTarget := fuluSource.Copy()
+			require.NoError(t, fuluTarget.SetPendingDeposits(tt.targetDeposits(anchorDeposits)))
+			gloasTarget, err := gloas.UpgradeToGloas(t.Context(), fuluTarget)
+			require.NoError(t, err)
+			require.NoError(t, gloasTarget.SetSlot(fuluSource.Slot()+1))
+
+			// Pre-Gloas source state will have zero builders.
+			// As the target is post-Gloas, the patch will contain all builders in the target. (`diffBuilders`)
+			hdiffBytes, err := Diff(fuluSource, gloasTarget)
+			require.NoError(t, err)
+			result, err := ApplyDiff(t.Context(), fuluSource.Copy(), hdiffBytes)
+			require.NoError(t, err)
+
+			resultBuilders, err := result.Builders()
+			require.NoError(t, err)
+			require.Equal(t, tt.wantBuilders, len(resultBuilders))
+			requireEqualState(t, gloasTarget, result)
+		})
+	}
 }
 
 func TestGloasSerializeDeserializeRoundTrip(t *testing.T) {

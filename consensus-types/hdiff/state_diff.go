@@ -2046,10 +2046,14 @@ func applyBalancesDiff(source state.BeaconState, diff []int64) (state.BeaconStat
 
 // applyStateDiff applies the given diff to the source state in place.
 func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDiff) (state.BeaconState, error) {
-	var err error
-	// updateToVersion runs Gloas onboarding which drops builder deposits, so capture the pre-upgrade list the diff indexes.
-	var prevPendingDeposits []*ethpb.PendingDeposit
-	if source.Version() >= version.Electra {
+	var (
+		err error
+		// updateToVersion runs Gloas onboarding which drops builder deposits, so capture the pre-upgrade list the diff indexes.
+		prevPendingDeposits []*ethpb.PendingDeposit
+		// sourceVersion captures the version of the source state before any updates.
+		sourceVersion = source.Version()
+	)
+	if sourceVersion >= version.Electra {
 		prevPendingDeposits, err = source.PendingDeposits()
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get pending deposits")
@@ -2057,6 +2061,12 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	}
 	if source, err = updateToVersion(ctx, source, diff.targetVersion); err != nil {
 		return nil, errors.Wrap(err, "failed to update state to target version")
+	}
+	// diffBuilders treats a pre-Gloas source as having no builders, so drop the ones onboarding created.
+	if sourceVersion < version.Gloas && diff.targetVersion >= version.Gloas {
+		if err := source.SetBuilders(nil); err != nil {
+			return nil, errors.Wrap(err, "failed to reset builders")
+		}
 	}
 	if err := source.SetSlot(diff.slot); err != nil {
 		return nil, errors.Wrap(err, "failed to set slot")
