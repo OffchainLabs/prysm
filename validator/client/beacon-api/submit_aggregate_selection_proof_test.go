@@ -378,7 +378,7 @@ func TestSubmitAggregateSelectionProof_UsesSubmittedAttestationData(t *testing.T
 		signedRoot, err := signed.HashTreeRoot()
 		require.NoError(t, err)
 		handler.EXPECT().Post(gomock.Any(), "/eth/v2/beacon/pool/attestations", gomock.Any(), gomock.Any(), nil).Return(postErr).Times(1)
-		handler.EXPECT().Get(gomock.Any(), syncingEndpoint, &structs.SyncStatusResponse{}).
+		handler.EXPECT().Get(gomock.Any(), syncingEndpoint, &structs.SyncStatusResponse{}, gomock.Any(), gomock.Any()).
 			SetArg(2, structs.SyncStatusResponse{Data: &structs.SyncStatusResponseData{}}).Return(nil).Times(1)
 		aggregateJSON, err := json.Marshal(aggregate)
 		require.NoError(t, err)
