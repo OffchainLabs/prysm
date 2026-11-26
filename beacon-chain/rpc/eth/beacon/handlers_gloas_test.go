@@ -71,6 +71,9 @@ func (m *mockEnvelopeVerifier) VerifyExecutionRequestsRoot(_ interfaces.ROExecut
 }
 func (*mockEnvelopeVerifier) VerifyExecutionRequestsLimits() error { return nil }
 func (*mockEnvelopeVerifier) VerifyWithdrawalsLimit() error        { return nil }
+func (*mockEnvelopeVerifier) VerifyTransactionsLimit(_ interfaces.ROExecutionPayloadBid, _ func() (uint64, error)) error {
+	return nil
+}
 func (m *mockEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
 	return m.errSignature
 }
@@ -784,6 +787,7 @@ func TestPublishExecutionPayloadEnvelope_GossipValidation(t *testing.T) {
 			s := &Server{
 				Blocker:                 tc.blocker,
 				HeadFetcher:             chainSvc,
+				ForkchoiceFetcher:       chainSvc,
 				SyncChecker:             &mockSync.Sync{IsSyncing: false},
 				PayloadEnvelopeVerifier: verification.NewEnvelopeVerifier,
 			}

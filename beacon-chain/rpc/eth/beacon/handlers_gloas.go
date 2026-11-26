@@ -360,6 +360,12 @@ func (s *Server) validateEnvelopeGossip(ctx context.Context, w http.ResponseWrit
 		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
 		return false
 	}
+	if err := v.VerifyTransactionsLimit(bid, func() (uint64, error) {
+		return s.ForkchoiceFetcher.GasLimit(blk.Block().ParentRoot(), bid.ParentBlockHash())
+	}); err != nil {
+		httputil.HandleError(w, "gossip validation failed: "+err.Error(), http.StatusBadRequest)
+		return false
+	}
 
 	// VerifySignature needs the state at the envelope's block. We only have head state on
 	// hand, so require the envelope to be for the canonical head rather than replaying state.

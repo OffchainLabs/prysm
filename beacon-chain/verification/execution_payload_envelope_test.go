@@ -2,6 +2,7 @@ package verification
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	ssz "github.com/OffchainLabs/methodical-ssz/ssz"
@@ -202,6 +203,49 @@ func TestEnvelopeVerifier_VerifyWithdrawalsLimit(t *testing.T) {
 
 	t.Run("over limit", func(t *testing.T) {
 		require.ErrorIs(t, newVerifier(t, make([]*enginev1.Withdrawal, limit+1)).VerifyWithdrawalsLimit(), ErrTooManyWithdrawals)
+	})
+}
+
+func TestEnvelopeVerifier_VerifyTransactionsLimit(t *testing.T) {
+	root := bytesutil.ToBytes32(bytes.Repeat([]byte{0xAA}, 32))
+	blockHash := bytesutil.ToBytes32(bytes.Repeat([]byte{0xBB}, 32))
+	minGas := params.BeaconConfig().MinTransactionGas
+	signedBid := util.GenerateTestSignedExecutionPayloadBid(1)
+	signedBid.Message.GasLimit = 2 * minGas
+	wrappedBid, err := blocks.WrappedROSignedExecutionPayloadBid(signedBid)
+	require.NoError(t, err)
+	bid := wrappedBid.Bid()
+	bidLimit := uint64(2)
+	parentGasLimit := 4 * 1024 * minGas
+	parentLimit := (parentGasLimit + parentGasLimit/1024 - 1) / minGas
+	require.Equal(t, uint64(4099), parentLimit)
+	known := func() (uint64, error) { return parentGasLimit, nil }
+	unknown := func() (uint64, error) { return 0, errors.New("no full ancestor") }
+
+	newVerifier := func(t *testing.T, count uint64) *EnvelopeVerifier {
+		txs, err := enginev1.NewProgressiveTransactionList(make([][]byte, count))
+		require.NoError(t, err)
+		env := testSignedExecutionPayloadEnvelope(t, 1, 1, root, blockHash)
+		env.Message.Payload.Transactions = txs
+		wrapped, err := blocks.WrappedROSignedExecutionPayloadEnvelope(env)
+		require.NoError(t, err)
+		return &EnvelopeVerifier{results: newResults(RequireTransactionsLimitValid), e: wrapped}
+	}
+
+	t.Run("at parent limit", func(t *testing.T) {
+		require.NoError(t, newVerifier(t, parentLimit).VerifyTransactionsLimit(bid, known))
+	})
+
+	t.Run("over parent limit", func(t *testing.T) {
+		require.ErrorIs(t, newVerifier(t, parentLimit+1).VerifyTransactionsLimit(bid, known), ErrTooManyTransactions)
+	})
+
+	t.Run("unknown parent at bid limit", func(t *testing.T) {
+		require.NoError(t, newVerifier(t, bidLimit).VerifyTransactionsLimit(bid, unknown))
+	})
+
+	t.Run("unknown parent over bid limit", func(t *testing.T) {
+		require.ErrorIs(t, newVerifier(t, bidLimit+1).VerifyTransactionsLimit(bid, unknown), ErrTooManyTransactions)
 	})
 }
 

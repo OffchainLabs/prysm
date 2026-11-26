@@ -13,6 +13,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/crypto/bls"
+	enginev1 "github.com/OffchainLabs/prysm/v7/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/pkg/errors"
@@ -29,6 +30,7 @@ type ExecutionPayloadEnvelopeVerifier interface {
 	VerifyExecutionRequestsRoot(interfaces.ROExecutionPayloadBid) error
 	VerifyExecutionRequestsLimits() error
 	VerifyWithdrawalsLimit() error
+	VerifyTransactionsLimit(bid interfaces.ROExecutionPayloadBid, parentGasLimit func() (uint64, error)) error
 	VerifySignature(context.Context, state.ReadOnlyBeaconState) error
 	VerifySignatureWithPubkey(pubkey [fieldparams.BLSPubkeyLength]byte, genesisValidatorsRoot [32]byte) error
 	SatisfyRequirement(Requirement)
@@ -50,6 +52,7 @@ var ExecutionPayloadEnvelopeGossipRequirements = []Requirement{
 	RequireExecutionRequestsRootValid,
 	RequireExecutionRequestsLimitsValid,
 	RequireWithdrawalsLimitValid,
+	RequireTransactionsLimitValid,
 	RequireBuilderSignatureValid,
 }
 
@@ -65,6 +68,7 @@ var (
 	ErrIncorrectEnvelopeBlockHash     = errors.New("block hash does not match committed header")
 	ErrIncorrectExecutionRequestsRoot = errors.New("execution requests root does not match committed bid")
 	ErrTooManyWithdrawals             = errors.New("too many withdrawals in payload")
+	ErrTooManyTransactions            = errors.New("too many transactions in payload")
 )
 
 var _ ExecutionPayloadEnvelopeVerifier = &EnvelopeVerifier{}
@@ -216,6 +220,35 @@ func (v *EnvelopeVerifier) VerifyWithdrawalsLimit() (err error) {
 	limit := params.BeaconConfig().MaxWithdrawalsPerPayload
 	if uint64(len(withdrawals)) > limit {
 		return fmt.Errorf("%w: %d > %d", ErrTooManyWithdrawals, len(withdrawals), limit)
+	}
+	return nil
+}
+
+func (v *EnvelopeVerifier) VerifyTransactionsLimit(bid interfaces.ROExecutionPayloadBid, parentGasLimit func() (uint64, error)) (err error) {
+	defer v.record(RequireTransactionsLimitValid, &err)
+	env, err := v.e.Envelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to get envelope")
+	}
+	if env.IsBlinded() {
+		return nil
+	}
+	payload, err := env.Execution()
+	if err != nil {
+		return errors.Wrap(err, "failed to get execution payload")
+	}
+	p, ok := payload.Proto().(*enginev1.ExecutionPayloadGloas)
+	if !ok {
+		return errors.New("unexpected execution payload type")
+	}
+	count := uint64(p.Transactions.Len())
+	maxGasLimit := bid.GasLimit()
+	if parent, err := parentGasLimit(); err == nil {
+		maxGasLimit = parent + max(parent/1024, 1) - 1
+	}
+	limit := maxGasLimit / params.BeaconConfig().MinTransactionGas
+	if count > limit {
+		return fmt.Errorf("%w: %d > %d", ErrTooManyTransactions, count, limit)
 	}
 	return nil
 }

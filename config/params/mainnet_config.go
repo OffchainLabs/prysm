@@ -378,6 +378,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BuilderPaymentThresholdNumerator:     6,
 	BuilderPaymentThresholdDenominator:   10,
 	MaxRequestPayloads:                   128,
+	MinTransactionGas:                    4096,
 	ChurnLimitQuotientGloas:              32_768,
 	ConsolidationChurnLimitQuotient:      65_536,
 	MaxPerEpochActivationChurnLimitGloas: 256_000_000_000,
