@@ -110,6 +110,11 @@ func (c *beaconApiValidatorClient) getAttestationDataRootFromRequest(ctx context
 		return nil, errors.New("validator is not an aggregator")
 	}
 
+	// The head may have moved since the attestation was signed, so aggregate over the signed data.
+	if root, ok := c.attestationDataRoots.get(in.Slot, uint64(in.CommitteeIndex)); ok {
+		return root, nil
+	}
+
 	attestationData, err := c.attestationData(ctx, in.Slot, in.CommitteeIndex)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get attestation data for slot=%d and committee_index=%d", in.Slot, in.CommitteeIndex)
