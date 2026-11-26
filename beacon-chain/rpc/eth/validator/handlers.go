@@ -732,9 +732,9 @@ func (s *Server) SubmitBeaconCommitteeSubscription(w http.ResponseWriter, r *htt
 	for _, idx := range indices {
 		s.SubscribedValidatorsCache.Add(idx)
 	}
-	for _, sub := range subs {
+	for i, sub := range subs {
 		if sub.IsAggregator && slotIsPQ(sub.Slot) {
-			s.PQValidator.RegisterAggregationDutyPQ(sub.Slot, sub.CommitteeIndex)
+			s.PQValidator.RegisterAggregationDutyPQ(sub.Slot, sub.CommitteeIndex, indices[i])
 		}
 	}
 }
@@ -1035,16 +1035,22 @@ func (s *Server) GetAttesterDuties(w http.ResponseWriter, r *http.Request) {
 	duties := make([]*structs.AttesterDuty, 0, len(coreDuties))
 	for _, d := range coreDuties {
 		var isAggregator *bool
+		var aggregatorPosition string
 		if isPQEpoch(requestedEpoch) {
-			ok, err := pq.IsAggregator(st, d.Slot, d.CommitteeIndex, d.ValidatorIndex)
+			position, err := pq.AggregatorPosition(st, d.Slot, d.CommitteeIndex, d.ValidatorIndex)
 			if err != nil {
 				httputil.HandleError(w, "Could not get aggregation committee: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
+			ok := position >= 0
 			isAggregator = &ok
+			if ok {
+				aggregatorPosition = strconv.Itoa(position)
+			}
 		}
 		duties = append(duties, &structs.AttesterDuty{
 			IsAggregator:            isAggregator,
+			AggregatorPosition:      aggregatorPosition,
 			Pubkey:                  dutyPubkey(requestedEpoch, d.Pubkey[:]),
 			ValidatorIndex:          strconv.FormatUint(uint64(d.ValidatorIndex), 10),
 			CommitteeIndex:          strconv.FormatUint(uint64(d.CommitteeIndex), 10),

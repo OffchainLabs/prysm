@@ -248,7 +248,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 226, len(data))
+	assert.Equal(t, 246, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -550,6 +550,12 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "126", v)
 			case "AGGREGATE_DUE_BPS_GLOAS":
 				assert.Equal(t, "127", v)
+			case "AGGREGATION_CUTOFF_BPS":
+				assert.Equal(t, "4000", v)
+			case "AGGREGATE_DUE_BPS_PQ":
+				assert.Equal(t, "6000", v)
+			case "AGGREGATOR_DELAY_BPS":
+				assert.Equal(t, "500", v)
 			case "SYNC_MESSAGE_DUE_BPS_GLOAS":
 				assert.Equal(t, "128", v)
 			case "CONTRIBUTION_DUE_BPS_GLOAS":

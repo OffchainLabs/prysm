@@ -55,6 +55,8 @@ type AttesterDuty struct {
 	ValidatorCommitteeIndex string `json:"validator_committee_index"`
 	Slot                    string `json:"slot"`
 	IsAggregator            *bool  `json:"is_aggregator,omitempty"`
+	// Not in the beacon API yet, the position staggers the aggregators of a committee on PQ.
+	AggregatorPosition string `json:"aggregator_position,omitempty"`
 }
 
 type GetProposerDutiesResponse struct {

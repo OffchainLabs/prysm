@@ -18,7 +18,6 @@ import (
 )
 
 // Spec: AGGREGATION_CUTOFF_BPS at 4595f0fc9
-const collectionCutoffBPS = primitives.BP(4000)
 
 var scenarios = [3]string{"committee_only", "proposer_only", "combined"}
 
@@ -96,8 +95,8 @@ func (o *Observer) run() {
 		GenesisValidatorsRoot: clock.GenesisValidatorsRoot(),
 		Slot:                  cfg.SlotDuration(),
 		AttestationDue:        cfg.SlotComponentDuration(cfg.AttestationDueBPSAtSlot(pqStart)),
-		CommitteeCollection:   cfg.SlotComponentDuration(collectionCutoffBPS),
-		AggregateDue:          cfg.SlotComponentDuration(cfg.AggregateDueBPSGloas),
+		CommitteeCollection:   cfg.AggregationCutoffPQ(0),
+		AggregateDue:          cfg.AggregateDuePQ(0),
 		InitialMerge:          InitialMergeDelay,
 	})
 	if err != nil {
@@ -229,20 +228,20 @@ func (o *Observer) proveCommittee(e *experiment, slot primitives.Slot) {
 	if err != nil {
 		return
 	}
-	cutoff := start.Add(cfg.SlotComponentDuration(collectionCutoffBPS))
+	cutoff := start.Add(cfg.AggregationCutoffPQ(0))
 	if !o.waitUntil(cutoff) {
 		return
 	}
 	o.cutoff(e, slot, "committee", cutoff)
 	scoped := e.Experiment
-	scoped.Deadline = start.Add(cfg.SlotComponentDuration(cfg.AggregateDueBPSGloas))
+	scoped.Deadline = start.Add(cfg.AggregateDuePQ(0))
 	ctx := timing.WithExperiment(o.ctx, &scoped)
 	st, err := o.cfg.Head.HeadStateReadOnly(ctx)
 	if err != nil {
 		o.outcome(e, slot, "committee", "missing_context", err)
 		return
 	}
-	aggregate, err := BuildAggregate(ctx, st, o.cfg.Pool.All(), slot, e.committee)
+	aggregate, err := BuildAggregate(ctx, st, o.cfg.Pool.All(), slot, e.committee, nil)
 	if err != nil {
 		o.outcome(e, slot, "committee", "failed", err)
 		return

@@ -17,11 +17,17 @@ var ErrNotAggregator = errors.New("validator is not in the aggregation committee
 
 // Spec: is_aggregator
 func IsAggregator(st state.ReadOnlyBeaconState, slot primitives.Slot, index primitives.CommitteeIndex, validator primitives.ValidatorIndex) (bool, error) {
+	position, err := AggregatorPosition(st, slot, index, validator)
+	return position >= 0, err
+}
+
+// The position staggers the aggregators of a committee, it is negative for a validator that is not one.
+func AggregatorPosition(st state.ReadOnlyBeaconState, slot primitives.Slot, index primitives.CommitteeIndex, validator primitives.ValidatorIndex) (int, error) {
 	committee, err := st.AggregationCommittee(slot, index)
 	if err != nil {
-		return false, err
+		return -1, err
 	}
-	return slices.Contains(committee, validator), nil
+	return slices.Index(committee, validator), nil
 }
 
 // Spec: validate_beacon_aggregate_and_proof_gossip, the aggregator, signature and proof checks

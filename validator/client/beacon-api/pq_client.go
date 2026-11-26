@@ -61,6 +61,16 @@ func (c *beaconApiValidatorClient) IsAggregatorPQ(slot primitives.Slot, index pr
 	return c.pqAggregators.isAggregator(slot, index)
 }
 
+// AggregatorPositionPQ returns the position of the validator of index `index` in its aggregation committee at `slot`,
+// from its attester duties. It is 0 if the beacon node does not give it.
+func (c *beaconApiValidatorClient) AggregatorPositionPQ(slot primitives.Slot, index primitives.ValidatorIndex) uint64 {
+	if c.pqAggregators == nil {
+		return 0
+	}
+
+	return c.pqAggregators.position(slot, index)
+}
+
 // SubmitAttestationsPQ submits `attestations` to the attestation pool of the beacon node.
 func (c *beaconApiValidatorClient) SubmitAttestationsPQ(ctx context.Context, attestations []*ethpb.SingleAttestationPQ) error {
 	jsonAttestations := make([]*structs.SingleAttestation, 0, len(attestations))
