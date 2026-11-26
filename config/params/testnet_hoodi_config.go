@@ -46,6 +46,7 @@ func HoodiConfig() *BeaconChainConfig {
 	cfg.ElectraForkVersion = []byte{0x60, 0x00, 0x09, 0x10}
 	cfg.FuluForkEpoch = 50688 // 2025-10-28 18:53:12 UTC
 	cfg.FuluForkVersion = []byte{0x70, 0x00, 0x09, 0x10}
+	cfg.GloasForkEpoch = 143616 // 2026-12-15 19:12:24 UTC
 	cfg.GloasForkVersion = []byte{0x80, 0x00, 0x09, 0x10}
 	cfg.HezeForkVersion = []byte{0x90, 0x00, 0x09, 0x10}
 	cfg.TerminalTotalDifficulty = "0"
