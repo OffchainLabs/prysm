@@ -216,7 +216,7 @@ var appHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			flags.HistoricalSlasherNode,
 			flags.SlasherDirFlag,
-			flags.PQProverSocket,
+			flags.PQProverThreads,
 			flags.PQMeasurement,
 			flags.PQTimingOutput,
 			flags.SlasherFlag,

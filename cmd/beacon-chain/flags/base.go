@@ -362,9 +362,9 @@ var (
 			"WARNING: This flag should be used only if you have a clear understanding that community has decided to override the terminal block hash activation epoch. " +
 			"Incorrect usage will result in your node experience consensus failure.",
 	}
-	PQProverSocket = &cli.StringFlag{
-		Name:  "pq-prover-socket",
-		Usage: "Unix socket of the leanVM sidecar that builds and verifies attestation proofs on a PQ network. Without it the spec reference proofs are used, which only work if every client on the network does the same.",
+	PQProverThreads = &cli.IntFlag{
+		Name:  "pq-prover-threads",
+		Usage: "Threads of the leanVM prover that builds attestation proofs on a PQ network. Zero means one per physical core.",
 	}
 	PQMeasurement = &cli.BoolFlag{
 		Name:  "pq-measurement",

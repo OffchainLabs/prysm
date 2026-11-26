@@ -108,6 +108,8 @@ require (
 	k8s.io/client-go v0.30.4
 )
 
+require leanvm.org/go v0.19.0
+
 require (
 	filippo.io/bigmod v0.1.1-0.20260103110540-f8a47775ebe5 // indirect
 	filippo.io/keygen v1.0.0 // indirect

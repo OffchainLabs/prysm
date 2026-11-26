@@ -50,7 +50,7 @@ type Builder struct {
 	GenesisTime time.Time
 	Local       func(ctx context.Context, st state.ReadOnlyBeaconState, slot primitives.Slot) bool
 
-	// The sidecar proves one job at a time, queueing here keeps the order visible.
+	// leanVM proves one job at a time, queueing here keeps the order visible.
 	lane   sync.Mutex
 	mu     sync.Mutex
 	pieces map[primitives.Slot]*Piece
