@@ -31,6 +31,8 @@ func (c *beaconApiValidatorClient) submitSyncMessage(ctx context.Context, syncMe
 		return errors.Wrap(err, "failed to marshal sync committee message")
 	}
 
+	// The validator already signed this root, so the contribution must use it even if the broadcast fails.
+	c.syncMessageRoots.set(syncMessage.Slot, uint64(syncMessage.ValidatorIndex), syncMessage.BlockRoot)
 	return c.handler.Post(ctx, endpoint, nil, bytes.NewBuffer(marshalledJsonSyncCommitteeMessage), nil)
 }
 
@@ -70,12 +72,19 @@ func (c *beaconApiValidatorClient) syncCommitteeContribution(
 	ctx context.Context,
 	req *ethpb.SyncCommitteeContributionRequest,
 ) (*ethpb.SyncCommitteeContribution, error) {
-	blockRootResponse, err := c.syncMessageBlockRoot(ctx)
+	// The head may have moved since the aggregator signed its sync message, so aggregate over the signed root.
+	root, err := c.signedSyncMessageRoot(ctx, req.Slot, req.PublicKey)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get sync message block root")
+		return nil, err
 	}
-
-	blockRoot := hexutil.Encode(blockRootResponse.Root)
+	if root == nil {
+		blockRootResponse, err := c.syncMessageBlockRoot(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get sync message block root")
+		}
+		root = blockRootResponse.Root
+	}
+	blockRoot := hexutil.Encode(root)
 
 	params := url.Values{}
 	params.Add("slot", strconv.FormatUint(uint64(req.Slot), 10))
@@ -83,11 +92,44 @@ func (c *beaconApiValidatorClient) syncCommitteeContribution(
 	params.Add("beacon_block_root", blockRoot)
 
 	var resp structs.ProduceSyncCommitteeContributionResponse
-	if err = c.handler.Get(ctx, apiutil.BuildURL("/eth/v1/validator/sync_committee_contribution", params), &resp); err != nil {
+	if err := c.handler.Get(ctx, apiutil.BuildURL("/eth/v1/validator/sync_committee_contribution", params), &resp); err != nil {
 		return nil, err
 	}
 
 	return convertSyncContributionJsonToProto(resp.Data)
+}
+
+// signedSyncMessageRoot returns the block root of the sync message that the validator submitted at the slot, or nil.
+func (c *beaconApiValidatorClient) signedSyncMessageRoot(ctx context.Context, slot primitives.Slot, pubkey []byte) ([]byte, error) {
+	sharedRoot, found := c.syncMessageRoots.slotRoot(slot)
+	if !found {
+		return nil, nil
+	}
+	// The index POST is answered by any host, so its execution_optimistic flag cannot gate the contribution.
+	isOptimistic, err := c.isOptimistic(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// An optimistic validator MUST NOT sign across the DOMAIN_CONTRIBUTION_AND_PROOF domain.
+	if isOptimistic {
+		return nil, errors.New("the node is currently optimistic and cannot serve validators")
+	}
+	if sharedRoot != nil {
+		return sharedRoot, nil
+	}
+	resp, err := c.stateValidatorsProvider.StateValidators(ctx, []string{hexutil.Encode(pubkey)}, nil, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get state validator")
+	}
+	if len(resp.Data) == 0 || resp.Data[0] == nil {
+		return nil, nil
+	}
+	index, err := strconv.ParseUint(resp.Data[0].Index, 10, 64)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to parse validator index %s", resp.Data[0].Index)
+	}
+	root, _ := c.syncMessageRoots.get(slot, index)
+	return root, nil
 }
 
 func (c *beaconApiValidatorClient) syncSubcommitteeIndex(ctx context.Context, in *ethpb.SyncSubcommitteeIndexRequest) (*ethpb.SyncSubcommitteeIndexResponse, error) {

@@ -729,4 +729,20 @@ func TestSignedRoots(t *testing.T) {
 		_, ok = s.get(12, 0)
 		assert.Equal(t, true, ok)
 	})
+
+	t.Run("slotRoot returns a root only when all entries of the slot agree", func(t *testing.T) {
+		var s signedRoots
+		_, found := s.slotRoot(5)
+		assert.Equal(t, false, found)
+		s.set(5, 1, []byte{1})
+		s.set(5, 2, []byte{1})
+		s.set(6, 1, []byte{2})
+		root, found := s.slotRoot(5)
+		assert.Equal(t, true, found)
+		assert.DeepEqual(t, []byte{1}, root)
+		s.set(5, 3, []byte{3})
+		root, found = s.slotRoot(5)
+		assert.Equal(t, true, found)
+		assert.Equal(t, 0, len(root))
+	})
 }

@@ -1,6 +1,7 @@
 package beacon_api
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"sync"
@@ -30,6 +31,7 @@ type beaconApiValidatorClient struct {
 	stateless               bool
 	envelopeCache           *cache.ExecutionPayloadEnvelopeCache
 	attestationDataRoots    signedRoots
+	syncMessageRoots        signedRoots
 }
 
 type signedRootKey struct {
@@ -63,6 +65,22 @@ func (s *signedRoots) set(slot primitives.Slot, key uint64, root []byte) {
 		}
 	}
 	s.roots[signedRootKey{slot: slot, key: key}] = root
+}
+
+// slotRoot reports whether the slot has entries and returns their root only when all entries have the same root.
+func (s *signedRoots) slotRoot(slot primitives.Slot) (root []byte, found bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, r := range s.roots {
+		if k.slot != slot {
+			continue
+		}
+		if found && !bytes.Equal(root, r) {
+			return nil, true
+		}
+		root, found = r, true
+	}
+	return root, found
 }
 
 func (s *signedRoots) get(slot primitives.Slot, key uint64) ([]byte, bool) {
