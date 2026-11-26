@@ -1,6 +1,8 @@
 package pq
 
 import (
+	"encoding/binary"
+
 	"github.com/OffchainLabs/prysm/v7/beacon-chain/state"
 	"github.com/OffchainLabs/prysm/v7/config/params"
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
@@ -14,9 +16,11 @@ const (
 	vrfProofLength = 32 * (vrfTreeDepth + 1)
 )
 
+var vrfLeafDomain = []byte("VRF_LEAF")
+
 var ErrInvalidVRFProof = errors.New("invalid VRF proof")
 
-// Spec: is_valid_vrf_proof at 2f43bc0f9, Keccak tree with the leaf revealed, as the devnet genesis tool builds it
+// Spec: is_valid_vrf_proof
 func VerifyVRFProof(st state.ReadOnlyBeaconState, proposer primitives.ValidatorIndex, slot primitives.Slot, proof []byte) error {
 	if len(proof) != vrfProofLength {
 		return errors.Wrapf(ErrInvalidVRFProof, "length %d", len(proof))
@@ -25,8 +29,8 @@ func VerifyVRFProof(st state.ReadOnlyBeaconState, proposer primitives.ValidatorI
 	if err != nil {
 		return err
 	}
-	node := [32]byte(proof[:32])
 	index := uint64(slot)
+	node := computeVRFLeaf(proof[:32], index)
 	var buf [64]byte
 	for i := 1; i <= vrfTreeDepth; i++ {
 		sibling := proof[32*i : 32*(i+1)]
@@ -62,4 +66,12 @@ func MixInVRFProof(st state.BeaconState, proof []byte) error {
 	buf = append(buf, proof[:32]...)
 	buf = append(buf, domain[:]...)
 	return st.UpdateRandaoMixesAtIndex(index, hash.Hash(buf))
+}
+
+// Spec: compute_vrf_leaf
+func computeVRFLeaf(secret []byte, index uint64) [32]byte {
+	buf := make([]byte, 0, len(vrfLeafDomain)+40)
+	buf = append(buf, vrfLeafDomain...)
+	buf = append(buf, secret...)
+	return hash.Keccak256(binary.LittleEndian.AppendUint64(buf, index))
 }

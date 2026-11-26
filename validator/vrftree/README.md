@@ -6,20 +6,22 @@ This package builds the VRF tree of a leanXMSS validator, and opens its leaves.
 
 XMSS signatures are not unique. They cannot serve as a RANDAO reveal or a
 selection proof: a validator could grind them. Instead, each validator registers
-the root of a Merkle tree of secret values, one for each slot, as its VRF root.
+the root of a Merkle tree as its VRF root. The leaf of a slot commits to a secret
+value of the validator for this slot.
 
 | Item         | Spec                                                                   |
 | ------------ | ---------------------------------------------------------------------- |
 | Depth        | `VRF_TREE_DEPTH = 31`: 2^31 leaves, leaf `i` for slot `i`              |
 | Node         | 32 bytes, `keccak256(left \|\| right)`                                 |
 | Root         | the VRF root, last 32 bytes of the EIP-8483 `pq_data`, or of a deposit |
-| `VRFProof`   | `Vector[Bytes32, 32]`: the leaf of the slot, then its 31-node branch   |
+| `VRFProof`   | `Vector[Bytes32, 32]`: the secret of the slot, then its 31-node branch |
+| Leaf         | `compute_vrf_leaf`: `keccak256("VRF_LEAF" \|\| secret \|\| slot)`      |
 | Verification | `is_valid_vrf_proof`, a Merkle branch check with Keccak-256            |
 | Uses         | RANDAO reveal when proposing, selection proof when aggregating         |
 
-`is_aggregator` only reads `proof[0]`, the leaf.
+The RANDAO mix only reads `proof[0]`, the secret.
 
-The spec only says that the leaves are "secret random values". Everything else
+Everything else
 in this document follows the ethPandaOps genesis tool and Lighthouse
 (`beacon_node/genesis/src/pq.rs` of the `pq-devnet-0` branch).
 
@@ -29,18 +31,18 @@ The validator client derives the first 2^20 leaves from its BLS secret key:
 
 ```text
 sk       = the 32-byte BLS secret key of the validator, at m/12381/3600/<index>/0/0
-vrf_seed = sha256("vrf-seed" || sk)
-leaf(i)  = keccak256(vrf_seed || uint64_le(i))   for i < 2^20
+vrf_seed  = sha256("vrf-seed" || sk)
+secret(i) = keccak256("VRF_SECRET" || vrf_seed || uint64_le(i))    for i < 2^20
+leaf(i)   = keccak256("VRF_LEAF" || secret(i) || uint64_le(i))
 ```
 
-`Leaf(slot)` is a single Keccak-256 hash, and needs no tree.
+`Secret(slot)` is a single Keccak-256 hash, and needs no tree.
 
 The leaves from 2^20 on are not derived by the validator client. The tree is
 then one of:
 
-- **Padded** (`New`): every leaf from 2^20 on is zero. Its proof is public, and
-  the RANDAO reveal adds no entropy. This is the tree of Lighthouse's
-  `VrfTree::from_bls`.
+- **Padded** (`New`): every leaf from 2^20 on is zero. A zero leaf commits to no
+  secret, so these slots have no proof.
 - **Full** (`NewFull`): the leaves from 2^20 on are only known to the genesis
   tool. The VRF root the devnet registers is the root of this tree. The tool
   publishes the VRF state: for each validator, its VRF root and the branch of
