@@ -271,7 +271,7 @@ func TestXMSSLeavesToPrepare(t *testing.T) {
 
 	t.Run("same trees", func(t *testing.T) {
 		for _, epoch := range []primitives.Epoch{0, 1, firstTreeEpoch, firstTreeEpoch + epochsPerSlotTree - 2} {
-			leaves, err := xmssLeavesToPrepare(epoch)
+			leaves, err := xmssLeavesToPrepare(epoch, epoch+1)
 			require.NoError(t, err)
 			require.Equal(t, 0, len(leaves))
 		}
@@ -279,9 +279,9 @@ func TestXMSSLeavesToPrepare(t *testing.T) {
 
 	t.Run("next slot tree", func(t *testing.T) {
 		for _, epoch := range []primitives.Epoch{firstTreeEpoch - 1, firstTreeEpoch + epochsPerSlotTree - 1} {
-			leaves, err := xmssLeavesToPrepare(epoch)
+			leaves, err := xmssLeavesToPrepare(epoch, epoch+1)
 			require.NoError(t, err)
-			require.DeepEqual(t, slotLeaves(t, epoch+1), leaves)
+			require.DeepEqual(t, slotLeaves(t, epoch+1)[:1], leaves)
 		}
 	})
 
@@ -295,16 +295,16 @@ func TestXMSSLeavesToPrepare(t *testing.T) {
 
 		want := []uint32{attestation}
 		if (epoch+1-firstTreeEpoch)%epochsPerSlotTree == 0 {
-			want = append(want, slotLeaves(t, epoch+1)...)
+			want = append(want, slotLeaves(t, epoch+1)[0])
 		}
 
-		leaves, err := xmssLeavesToPrepare(epoch)
+		leaves, err := xmssLeavesToPrepare(epoch, epoch+1)
 		require.NoError(t, err)
 		require.DeepEqual(t, want, leaves)
 	})
 
 	t.Run("beyond the leaves", func(t *testing.T) {
-		_, err := xmssLeavesToPrepare(primitives.Epoch(xmsssigner.AttestationLeafCount - 1))
+		_, err := xmssLeavesToPrepare(primitives.Epoch(xmsssigner.AttestationLeafCount-1), primitives.Epoch(xmsssigner.AttestationLeafCount))
 		require.ErrorContains(t, "beyond", err)
 	})
 }
