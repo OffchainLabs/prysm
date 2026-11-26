@@ -115,6 +115,12 @@ func TestValidateExecutionPayloadEnvelope_ErrorPathsWithMock(t *testing.T) {
 			wantError: true,
 		},
 		{
+			name:      "transactions over limit",
+			verifier:  mockExecutionPayloadEnvelopeVerifier{errTransactionsLimit: errors.New("too many transactions")},
+			result:    pubsub.ValidationReject,
+			wantError: true,
+		},
+		{
 			name:      "signature invalid",
 			verifier:  mockExecutionPayloadEnvelopeVerifier{errSignature: errors.New("signature invalid")},
 			result:    pubsub.ValidationReject,
@@ -252,6 +258,7 @@ type mockExecutionPayloadEnvelopeVerifier struct {
 	errPayloadHash             error
 	errExecutionRequestsLimits error
 	errWithdrawalsLimit        error
+	errTransactionsLimit       error
 	errSignature               error
 }
 
@@ -291,6 +298,10 @@ func (m *mockExecutionPayloadEnvelopeVerifier) VerifyExecutionRequestsLimits() e
 
 func (m *mockExecutionPayloadEnvelopeVerifier) VerifyWithdrawalsLimit() error {
 	return m.errWithdrawalsLimit
+}
+
+func (m *mockExecutionPayloadEnvelopeVerifier) VerifyTransactionsLimit(_ interfaces.ROExecutionPayloadBid, _ func() (uint64, error)) error {
+	return m.errTransactionsLimit
 }
 
 func (m *mockExecutionPayloadEnvelopeVerifier) VerifySignature(_ context.Context, _ state.ReadOnlyBeaconState) error {
@@ -351,6 +362,11 @@ func (r *recordingEnvelopeVerifier) VerifyExecutionRequestsLimits() error {
 
 func (r *recordingEnvelopeVerifier) VerifyWithdrawalsLimit() error {
 	r.recorded[verification.RequireWithdrawalsLimitValid] = true
+	return nil
+}
+
+func (r *recordingEnvelopeVerifier) VerifyTransactionsLimit(_ interfaces.ROExecutionPayloadBid, _ func() (uint64, error)) error {
+	r.recorded[verification.RequireTransactionsLimitValid] = true
 	return nil
 }
 

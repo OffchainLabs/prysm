@@ -131,6 +131,12 @@ func (s *Service) validateExecutionPayloadEnvelope(ctx context.Context, pid peer
 	if err := v.VerifyWithdrawalsLimit(); err != nil {
 		return pubsub.ValidationReject, err
 	}
+	// [REJECT] The number of transactions is within the limit implied by the parent payload's gas limit.
+	if err := v.VerifyTransactionsLimit(bid, func() (uint64, error) {
+		return s.cfg.chain.GasLimit(block.Block().ParentRoot(), bid.ParentBlockHash())
+	}); err != nil {
+		return pubsub.ValidationReject, err
+	}
 
 	var pubkey [fieldparams.BLSPubkeyLength]byte
 	if env.BuilderIndex() == params.BeaconConfig().BuilderIndexSelfBuild {

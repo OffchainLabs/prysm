@@ -37,6 +37,7 @@ const (
 	RequireExecutionRequestsRootValid
 	RequireExecutionRequestsLimitsValid
 	RequireWithdrawalsLimitValid
+	RequireTransactionsLimitValid
 	RequireEnvelopeSlotAboveFinalized
 	RequireEnvelopeSlotMatchesBlock
 	RequireBuilderSignatureValid

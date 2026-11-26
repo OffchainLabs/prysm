@@ -248,7 +248,7 @@ func TestGetSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &resp))
 	data, ok := resp.Data.(map[string]any)
 	require.Equal(t, true, ok)
-	assert.Equal(t, 226, len(data))
+	assert.Equal(t, 227, len(data))
 	for k, v := range data {
 		t.Run(k, func(t *testing.T) {
 			switch k {
@@ -660,6 +660,8 @@ func TestGetSpec(t *testing.T) {
 				assert.Equal(t, "94", v)
 			case "MAX_REQUEST_PAYLOADS":
 				assert.Equal(t, fmt.Sprintf("%d", config.MaxRequestPayloads), v)
+			case "MIN_TRANSACTION_GAS":
+				assert.Equal(t, fmt.Sprintf("%d", config.MinTransactionGas), v)
 			case "MAX_BYTES_PER_TRANSACTION":
 				assert.Equal(t, "95", v)
 			case "MAX_EXTRA_DATA_BYTES":
