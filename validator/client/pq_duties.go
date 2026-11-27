@@ -142,20 +142,13 @@ func (v *validator) submitAttestationPQ(ctx context.Context, slot primitives.Slo
 		return fmt.Errorf("attestation signing root: %w", err)
 	}
 
-	// A signature already uses all the CPUs, so signing in parallel only delays the first attestations.
-	v.pqAttestationSigningLock.Lock()
-	if err := ctx.Err(); err != nil {
-		v.pqAttestationSigningLock.Unlock()
-		return fmt.Errorf("wait to sign attestation: %w", err)
-	}
-
 	signingStart := time.Now()
 	signature, err := v.pqSigner.SignAttestation(xmssKey, data.Source.Epoch, data.Target.Epoch, root)
-	signingTime := time.Since(signingStart)
-	v.pqAttestationSigningLock.Unlock()
 	if err != nil {
 		return fmt.Errorf("sign attestation: %w", err)
 	}
+
+	signingTime := time.Since(signingStart)
 
 	attestation := &ethpb.SingleAttestationPQ{
 		CommitteeId:   duty.CommitteeIndex,

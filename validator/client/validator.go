@@ -135,7 +135,6 @@ type validator struct {
 	pqKeys                       *pqkeys.Registry    // Set in the PQ fork only.
 	pqSigner                     *xmsssigner.Signer  // Set in the PQ fork only, once the keys are loaded.
 	pqSignerLock                 sync.Mutex          // Guards the creation of pqSigner.
-	pqAttestationSigningLock     sync.Mutex          // Serializes XMSS attestation signing.
 	pqSignedPreferences          pqSignedPreferences // Proposer preferences signed with XMSS keys, to submit them again.
 	graffiti                     []byte
 	genesisTime                  time.Time
