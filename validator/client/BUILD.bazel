@@ -19,6 +19,7 @@ go_library(
         "log.go",
         "log_helpers.go",
         "metrics.go",
+        "metrics_pq.go",
         "payload_attestation.go",
         "payload_availability.go",
         "pq_duties.go",

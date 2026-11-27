@@ -377,6 +377,7 @@ func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles [
 	if err != nil {
 		return nil, err
 	}
+	observeProof("committee", start, float64(len(c.signatures)))
 	log.WithFields(logrus.Fields{
 		"slot":           slot,
 		"committeeIndex": index,

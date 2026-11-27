@@ -66,13 +66,21 @@ func (l *leanVM) aggregate(children []*leanpq.Aggregate, signed []leanpq.XmssSig
 		return nil, errors.Wrap(err, "could not start the leanVM prover")
 	}
 	// leanVM proves one job at a time, the lock keeps waiting time out of the logged duration.
+	queued := time.Now()
 	l.proveLock.Lock()
 	defer l.proveLock.Unlock()
 	start := time.Now()
+	proverQueueWait.Observe(start.Sub(queued).Seconds())
 	proven, err := leanpq.AggregateSignatures(children, signed, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "leanVM could not prove")
 	}
+	op, inputs := "prove", len(signed)
+	if len(children) > 0 {
+		op, inputs = "merge", len(children)
+	}
+	proverDuration.WithLabelValues(op).Observe(time.Since(start).Seconds())
+	proverInputs.WithLabelValues(op).Observe(float64(inputs))
 	log.WithFields(logrus.Fields{
 		"children":   len(children),
 		"signatures": len(signed),

@@ -149,6 +149,7 @@ func (v *validator) submitAttestationPQ(ctx context.Context, slot primitives.Slo
 	}
 
 	signingTime := time.Since(signingStart)
+	pqAttestationSigningTime.Observe(signingTime.Seconds())
 
 	attestation := &ethpb.SingleAttestationPQ{
 		CommitteeId:   duty.CommitteeIndex,
@@ -163,6 +164,10 @@ func (v *validator) submitAttestationPQ(ctx context.Context, slot primitives.Slo
 		}
 
 		return fmt.Errorf("submit attestation: %w", err)
+	}
+
+	if slotStart, err := slots.StartTime(v.genesisTime, slot); err == nil {
+		pqAttestationPublishedOffset.Observe(time.Since(slotStart).Seconds())
 	}
 
 	// Logged once per slot for all keys, by LogSubmissions.
@@ -257,6 +262,8 @@ func (v *validator) submitAggregateAndProofPQ(ctx context.Context, slot primitiv
 	if err := client.SubmitAggregatesPQ(ctx, []*ethpb.SignedAggregateAttestationAndProofPQ{signed}); err != nil {
 		return fmt.Errorf("submit aggregate and proof: %w", err)
 	}
+
+	pqAggregatePublishedOffset.Observe(time.Since(start).Seconds())
 
 	log.WithFields(logrus.Fields{
 		"slot":            slot,

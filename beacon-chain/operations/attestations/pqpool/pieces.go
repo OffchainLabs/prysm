@@ -204,6 +204,7 @@ func (b *Builder) ensure(ctx context.Context, voteSlot primitives.Slot) {
 		return
 	}
 	piece.Proof = proof
+	observeProof("vote_slot", start, float64(validators))
 	b.mu.Lock()
 	if b.pieces == nil {
 		b.pieces = make(map[primitives.Slot]*Piece)
@@ -219,6 +220,9 @@ func (b *Builder) ensure(ctx context.Context, voteSlot primitives.Slot) {
 		"mergeTime":       time.Since(start),
 		"proofSizeBytes":  len(proof),
 		"sinceVoteSlot":   time.Since(slotStart),
+	}
+	if includable, err := slots.StartTime(b.GenesisTime, voteSlot+params.BeaconConfig().MinAttestationInclusionDelayPQ); err == nil && old == nil {
+		voteSlotProofLead.Observe(time.Until(includable).Seconds())
 	}
 	if old != nil {
 		fields["replacedValidators"] = old.Validators
@@ -371,6 +375,7 @@ func (b *Builder) join(ctx context.Context, slot primitives.Slot, picks []pick) 
 	}
 	prepared.Proof = proof
 	prepared.JoinTime = time.Since(start)
+	observeProof("join", start, float64(prepared.Validators))
 	return prepared
 }
 

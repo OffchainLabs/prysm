@@ -120,6 +120,14 @@ func (vs *Server) registerAggregationPositionPQ(slot primitives.Slot, index prim
 		if entry.err != nil {
 			log.WithError(entry.err).WithField("slot", slot).Error("Could not build PQ aggregate ahead of time")
 		}
+		if entry.aggregate != nil {
+			margin := time.Until(start.Add(params.BeaconConfig().AggregateDuePQ(position)))
+			pqAggregateReadyOffset.Observe(time.Since(start).Seconds())
+			pqAggregateDueMargin.Observe(margin.Seconds())
+			if margin < 0 {
+				pqAggregateLate.Inc()
+			}
+		}
 	}()
 }
 

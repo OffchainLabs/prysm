@@ -58,5 +58,5 @@ func VerifyAggregateAndProof(ctx context.Context, st state.ReadOnlyBeaconState, 
 	if err != nil {
 		return err
 	}
-	return Proofs.Verify(statements, message.Proof)
+	return verifyProof("aggregate", statements, message.Proof)
 }
