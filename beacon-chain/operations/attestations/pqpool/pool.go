@@ -4,6 +4,8 @@ package pqpool
 import (
 	"sync"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
 )
@@ -64,18 +66,24 @@ func (p *Pool) All() []*ethpb.SingleAttestationPQ {
 }
 
 func (p *Pool) HasAggregate(att *ethpb.AttestationPQ) (bool, error) {
+	a, err := p.Covering(att)
+	return a != nil, err
+}
+
+// Spec: should_broadcast_aggregate, a seen aggregate with every attester of att makes it redundant.
+func (p *Pool) Covering(att *ethpb.AttestationPQ) (*Aggregate, error) {
 	root, err := att.Data.HashTreeRoot()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	for _, a := range p.aggregates[att.Data.Target.Epoch][aggregateKey{root, att.GetCommitteeIndex()}] {
 		if contains(a.Att, att) {
-			return true, nil
+			return a, nil
 		}
 	}
-	return false, nil
+	return nil, nil
 }
 
 // A proof cannot be split or joined with another for the same committee, so only supersets replace.
@@ -105,6 +113,11 @@ func (p *Pool) SaveAggregate(att *ethpb.AttestationPQ, proof []byte) (bool, erro
 	byKey[key] = append(kept, &Aggregate{Att: att, Proof: proof})
 	p.forkchoice = append(p.forkchoice, att)
 	return true, nil
+}
+
+// Contains reports whether a has the data and committee of b and every attester of b.
+func Contains(a, b *ethpb.AttestationPQ) bool {
+	return a.GetCommitteeIndex() == b.GetCommitteeIndex() && proto.Equal(a.Data, b.Data) && contains(a, b)
 }
 
 func contains(a, b *ethpb.AttestationPQ) bool {

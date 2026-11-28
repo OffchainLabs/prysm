@@ -1,15 +1,16 @@
 // Package vrftree builds the VRF tree of a leanXMSS validator, and opens its leaves.
 //
 // The tree is a Merkle tree of depth `VRF_TREE_DEPTH` whose leaves are secret values, one for each slot.
-// Its root is the validator's VRF root. Its proof for a slot, a `VRFProof`, is the leaf at index `slot`
-// followed by the leaf's Merkle branch: the validator reveals it as its RANDAO reveal when it proposes,
+// Its root is the validator's VRF root. Its proof for a slot, a `VRFProof`, is the secret the leaf at index `slot`
+// commits to, followed by the leaf's Merkle branch: the validator reveals it as its RANDAO reveal when it proposes,
 // and as its selection proof when it aggregates.
 //
 // The spec does not say how the leaves are derived. Here, they are derived as the ethPandaOps genesis tool
 // (https://github.com/ethpandaops/eth-beacon-genesis/tree/pq) and Lighthouse derive them, from the validator's
 // BLS secret key `sk`:
 //   - `vrf_seed = sha256("vrf-seed" || sk)`,
-//   - the leaf at index `i < 2^PopulatedDepth` is `keccak256(vrf_seed || uint64_le(i))`,
+//   - the secret of index `i < 2^PopulatedDepth` is `keccak256("VRF_SECRET" || vrf_seed || uint64_le(i))`,
+//   - the leaf at index `i` commits to it: `keccak256("VRF_LEAF" || secret || uint64_le(i))`,
 //   - a node is `keccak256(left || right)`.
 //
 // The validator client derives the first 2^PopulatedDepth leaves only. Above them, the tree is either:
@@ -46,8 +47,10 @@ const (
 )
 
 var (
-	vrfSeedDomain = []byte("vrf-seed")  // Separates the VRF seed from the other secrets derived from the BLS secret key.
-	zeroHashes    = computeZeroHashes() // zeroHashes[level] is the root of a subtree of height `level` whose leaves are all zero.
+	vrfSeedDomain   = []byte("vrf-seed")   // Separates the VRF seed from the other secrets derived from the BLS secret key.
+	vrfSecretDomain = []byte("VRF_SECRET") // `VRF_SECRET_DOMAIN`.
+	vrfLeafDomain   = []byte("VRF_LEAF")   // `VRF_LEAF_DOMAIN`.
+	zeroHashes      = computeZeroHashes()  // zeroHashes[level] is the root of a subtree of height `level` whose leaves are all zero.
 )
 
 // Tree is the VRF tree of a validator.
@@ -218,9 +221,9 @@ func (t *Tree) Root() [32]byte {
 	return t.spine[len(t.spine)-1]
 }
 
-// Leaf returns the leaf of the tree at index `slot`, the first element of the proof of `slot`.
+// Secret returns the secret of `slot`, the first element of the proof of `slot`.
 // It is cheap: it does not open the leaf.
-func (t *Tree) Leaf(slot primitives.Slot) ([32]byte, error) {
+func (t *Tree) Secret(slot primitives.Slot) ([32]byte, error) {
 	if err := t.checkSlot(slot); err != nil {
 		return [32]byte{}, err
 	}
@@ -230,10 +233,11 @@ func (t *Tree) Leaf(slot primitives.Slot) ([32]byte, error) {
 		return [32]byte{}, nil
 	}
 
-	return hashLeaf(sha3.NewLegacyKeccak256(), t.seed, index), nil
+	return hashSecret(sha3.NewLegacyKeccak256(), t.seed, index), nil
 }
 
-// Proof returns the proof of `slot` (`VRFProof`): the leaf of the tree at index `slot`, followed by its Merkle branch.
+// Proof returns the proof of `slot` (`VRFProof`): the secret of `slot`, followed by the Merkle branch of its leaf.
+// A zero leaf of a padded tree commits to no secret, so it has no proof.
 func (t *Tree) Proof(slot primitives.Slot) ([][32]byte, error) {
 	if err := t.checkSlot(slot); err != nil {
 		return nil, err
@@ -252,7 +256,7 @@ func (t *Tree) Proof(slot primitives.Slot) ([][32]byte, error) {
 		levels := newSubtreeLevels(t.subtreeHeight)
 		t.hashSubtree(hasher, subtree<<t.subtreeHeight, levels)
 
-		proof = append(proof, levels[0][local])
+		proof = append(proof, hashSecret(hasher, t.seed, index))
 		for level := range t.subtreeHeight {
 			proof = append(proof, levels[level][(local>>level)^1])
 		}
@@ -281,7 +285,7 @@ func (t *Tree) Proof(slot primitives.Slot) ([][32]byte, error) {
 	}
 
 	// Never reveal an invalid proof, for instance if the cached upper levels are corrupted.
-	if !isValidMerkleBranch(hasher, proof[0], proof[1:], index, t.Root()) {
+	if !isValidMerkleBranch(hasher, hashLeaf(hasher, proof[0], index), proof[1:], index, t.Root()) {
 		return nil, fmt.Errorf("proof of slot %d does not match the root of the tree", slot)
 	}
 
@@ -311,7 +315,8 @@ func (t *Tree) checkSlot(slot primitives.Slot) error {
 // `levels` comes from `newSubtreeLevels`.
 func (t *Tree) hashSubtree(hasher hash.Hash, first uint64, levels [][][32]byte) {
 	for i := range levels[0] {
-		levels[0][i] = hashLeaf(hasher, t.seed, first+uint64(i))
+		index := first + uint64(i)
+		levels[0][i] = hashLeaf(hasher, hashSecret(hasher, t.seed, index), index)
 	}
 
 	for level := 1; level < len(levels); level++ {
@@ -374,12 +379,24 @@ func vrfSeed(secretKey []byte) [32]byte {
 	return sha256.Sum256(input)
 }
 
-// hashLeaf returns the derived leaf at `index`: `keccak256(seed || uint64_le(index))`. `hasher` is a Keccak-256 hasher.
-func hashLeaf(hasher hash.Hash, seed [32]byte, index uint64) [32]byte {
-	input := [40]byte{}
-	copy(input[:32], seed[:])
-	binary.LittleEndian.PutUint64(input[32:], index)
-	return keccak(hasher, input[:])
+// hashSecret returns the secret of `index` (`compute_vrf_secret`): `keccak256("VRF_SECRET" || seed || uint64_le(index))`.
+func hashSecret(hasher hash.Hash, seed [32]byte, index uint64) [32]byte {
+	return hashDomain(hasher, vrfSecretDomain, seed, index)
+}
+
+// hashLeaf returns the leaf at `index`, which commits to `secret` (`compute_vrf_leaf`):
+// `keccak256("VRF_LEAF" || secret || uint64_le(index))`.
+func hashLeaf(hasher hash.Hash, secret [32]byte, index uint64) [32]byte {
+	return hashDomain(hasher, vrfLeafDomain, secret, index)
+}
+
+// hashDomain returns `keccak256(domain || value || uint64_le(index))`. `hasher` is a Keccak-256 hasher.
+func hashDomain(hasher hash.Hash, domain []byte, value [32]byte, index uint64) [32]byte {
+	input := make([]byte, 0, len(domain)+40)
+	input = append(input, domain...)
+	input = append(input, value[:]...)
+	input = binary.LittleEndian.AppendUint64(input, index)
+	return keccak(hasher, input)
 }
 
 // hashNode returns the parent of `left` and `right`: `keccak256(left || right)`. `hasher` is a Keccak-256 hasher.

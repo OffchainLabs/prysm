@@ -1,0 +1,69 @@
+diff -urN a/BUILD.bazel b/BUILD.bazel
+--- a/BUILD.bazel	1969-12-31 18:00:00.000000000 -0600
++++ b/BUILD.bazel	2026-11-26 13:00:00.000000000 -0800
+@@ -0,0 +1,65 @@
++load("@prysm//tools/go:def.bzl", "go_library")
++load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
++
++cc_import(
++    name = "native_linux_amd64",
++    static_library = "internal/native/linux_amd64/liblean_pq_native.a",
++)
++
++cc_import(
++    name = "native_linux_arm64",
++    static_library = "internal/native/linux_arm64/liblean_pq_native.a",
++)
++
++cc_import(
++    name = "native_darwin",
++    static_library = "internal/native/darwin_universal/liblean_pq_native.a",
++)
++
++cc_import(
++    name = "native_windows_amd64",
++    static_library = "internal/native/windows_amd64/liblean_pq_native.a",
++)
++
++cc_library(
++    name = "lean_pq_native",
++    hdrs = ["internal/native/include/lean_pq_native.h"],
++    linkopts = select({
++        "@platforms//os:linux": [
++            "-ldl",
++            "-lpthread",
++            "-lm",
++        ],
++        "@platforms//os:windows": [
++            "-lkernel32",
++            "-lntdll",
++            "-luserenv",
++            "-lws2_32",
++            "-ldbghelp",
++            "-lsynchronization",
++        ],
++        "//conditions:default": ["-lm"],
++    }),
++    strip_include_prefix = "internal/native/include",
++    deps = select({
++        "@io_bazel_rules_go//go/platform:linux_amd64": [":native_linux_amd64"],
++        "@io_bazel_rules_go//go/platform:linux_arm64": [":native_linux_arm64"],
++        "@io_bazel_rules_go//go/platform:darwin": [":native_darwin"],
++        "@io_bazel_rules_go//go/platform:windows_amd64": [":native_windows_amd64"],
++    }),
++)
++
++go_library(
++    name = "go_default_library",
++    srcs = [
++        "native.go",
++        "native_darwin.go",
++        "native_linux_amd64.go",
++        "native_linux_arm64.go",
++        "native_windows_amd64.go",
++    ],
++    cdeps = [":lean_pq_native"],
++    cgo = True,
++    importpath = "leanvm.org/go",
++    visibility = ["//visibility:public"],
++)

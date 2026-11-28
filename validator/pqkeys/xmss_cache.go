@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	fieldparams "github.com/OffchainLabs/prysm/v7/config/fieldparams"
@@ -84,6 +85,9 @@ type (
 		dir     string          // Directory of the tree caches on disk. Empty to use none.
 		source  XMSSCacheSource // Published tree cache. Nil to use none.
 		pubkeys XMSSPubkeysFunc // Lists the XMSS public keys of the validator registry. Nil to use no published tree cache.
+
+		// Set once the published tree cache fails to answer, so the keys left are built without waiting on it.
+		sourceDown atomic.Bool
 
 		mu        sync.Mutex
 		published map[[xmssPublicParamSize]byte]*publishedKey // Records of the published tree cache by public parameter. Nil until listed.
@@ -345,9 +349,23 @@ func (l *XMSSLoader) loadPublished(ctx context.Context, pubkey blsPubkey, seed [
 		return nil
 	}
 
+	if l.sourceDown.Load() {
+		return nil
+	}
+
 	record, err := l.source.Record(ctx, key.index)
 	if err != nil {
-		logger.WithError(err).Warn("Could not read the published XMSS tree cache, building the key")
+		// A request that got no answer fails for every key, a bad record only for its own.
+		var unreachable *url.Error
+		if !errors.As(err, &unreachable) {
+			logger.WithError(err).Warn("Could not read the published XMSS tree cache, building the key")
+			return nil
+		}
+
+		if !l.sourceDown.Swap(true) {
+			logger.WithError(err).Warn("Could not reach the published XMSS tree cache, building the keys")
+		}
+
 		return nil
 	}
 

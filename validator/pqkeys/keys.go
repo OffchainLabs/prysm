@@ -159,6 +159,7 @@ func (l *XMSSLoader) DeriveAll(ctx context.Context, secretKeys []bls.SecretKey) 
 		}
 	}
 
+	l.sourceDown.Store(false)
 	if len(missing) > 0 && l.usesPublished() {
 		if published, err := l.publishedKeys(ctx); err != nil {
 			log.WithError(err).Warn("Could not use the published XMSS tree cache, building the keys")

@@ -60,7 +60,9 @@ func (vs *Server) packPQ(ctx context.Context, slot primitives.Slot, head state.R
 	builder := vs.pqBuilder.Load()
 	var prepared *pqpool.Prepared
 	if builder != nil {
+		packStart := time.Now()
 		prepared = builder.Pack(ctx, slot, head, pqpool.FallbackDeadline(start, slot))
+		pqProposalPackDuration.Observe(time.Since(packStart).Seconds())
 	}
 	if prepared == nil {
 		snapshot.Emit("proposal_snapshot", "no_candidate", nil)
@@ -72,6 +74,7 @@ func (vs *Server) packPQ(ctx context.Context, slot primitives.Slot, head state.R
 		log.WithFields(logrus.Fields{"slot": slot, "voteSlot": reference}).Warn("No PQ vote slot proof was ready, proposing without attestations")
 		return nil, nil, nil
 	}
+	pqProposalPackedOffset.Observe(time.Since(start).Seconds())
 	snapshot.Emit("proposal_snapshot", "candidate", map[string]any{
 		"proof_id": timing.ProofID(prepared.Proof), "records": len(prepared.Atts), "claims": prepared.Validators, "round": prepared.Round,
 	})

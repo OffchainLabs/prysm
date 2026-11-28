@@ -355,6 +355,9 @@ type BeaconChainConfig struct {
 	UnregisteredValidatorWithdrawabilityDelay     primitives.Epoch `yaml:"UNREGISTERED_VALIDATOR_WITHDRAWABILITY_DELAY" spec:"true"`
 	AttestationSubnetCountPQ                      uint64           `yaml:"ATTESTATION_SUBNET_COUNT_PQ" spec:"true"`
 	AggregatorsPerCommittee                       uint64           `yaml:"AGGREGATORS_PER_COMMITTEE" spec:"true"`
+	AggregationCutoffBPS                          primitives.BP    `yaml:"AGGREGATION_CUTOFF_BPS" spec:"true"`
+	AggregateDueBPSPQ                             primitives.BP    `yaml:"AGGREGATE_DUE_BPS_PQ" spec:"true"`
+	AggregatorDelayBPS                            primitives.BP    `yaml:"AGGREGATOR_DELAY_BPS" spec:"true"`
 	MaxSignedAggregateAndProofSizePQ              uint64           `yaml:"MAX_SIGNED_AGGREGATE_AND_PROOF_SIZE_PQ" spec:"true"`
 	MaxAttesterSlashingSizePQ                     uint64           `yaml:"MAX_ATTESTER_SLASHING_SIZE_PQ" spec:"true"`
 	MaxSignedExecutionPayloadBidSizePQ            uint64           `yaml:"MAX_SIGNED_EXECUTION_PAYLOAD_BID_SIZE_PQ" spec:"true"`
@@ -904,6 +907,16 @@ func (b *BeaconChainConfig) SlotDurationMillis() uint64 {
 func (b *BeaconChainConfig) SlotComponentDuration(bp primitives.BP) time.Duration {
 	ms := uint64(bp) * b.SlotDurationMillis() / uint64(BasisPoints)
 	return time.Duration(ms) * time.Millisecond
+}
+
+// Spec: get_aggregation_cutoff_ms
+func (b *BeaconChainConfig) AggregationCutoffPQ(position uint64) time.Duration {
+	return b.SlotComponentDuration(b.AggregationCutoffBPS) + time.Duration(position)*b.SlotComponentDuration(b.AggregatorDelayBPS)
+}
+
+// Spec: get_aggregate_due_ms
+func (b *BeaconChainConfig) AggregateDuePQ(position uint64) time.Duration {
+	return b.SlotComponentDuration(b.AggregateDueBPSPQ) + time.Duration(position)*b.SlotComponentDuration(b.AggregatorDelayBPS)
 }
 
 // AttestationDueBPSAtSlot returns the attestation due time in basis points of the slot.

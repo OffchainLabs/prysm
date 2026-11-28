@@ -29,6 +29,10 @@ import (
 // xmssBottomTreeHeight is the height of an XMSS bottom tree: it holds 2^xmssBottomTreeHeight consecutive leaves.
 const xmssBottomTreeHeight = 16
 
+// xmssPrepareLookahead is how many epochs ahead the XMSS bottom trees are built: building the tree of every key takes
+// far longer than a slot.
+const xmssPrepareLookahead = 4
+
 // errPQRequiresLocalKeys is returned in the PQ fork when the keymanager cannot hand out the BLS secret keys.
 var errPQRequiresLocalKeys = errors.New("the PQ fork requires a local or derived keymanager: the post-quantum keys are derived from the BLS secret keys")
 
@@ -53,10 +57,10 @@ func newPQKeys(ctx context.Context, vrfStateURL, xmssCacheURL, dataDir string, c
 	if xmssCacheURL != "" {
 		source, err := pqkeys.NewXMSSCacheSource(xmssCacheURL)
 		if err != nil {
-			return nil, fmt.Errorf("XMSS cache: %w", err)
+			log.WithError(err).Warn("Could not use the published XMSS tree cache, building the keys")
+		} else {
+			xmssSource = source
 		}
-
-		xmssSource = source
 	}
 
 	cacheDir := ""
@@ -231,6 +235,11 @@ func (v *validator) syncPQSigner(ctx context.Context) error {
 		}
 
 		v.preparePQKey(keys.XMSS)
+		// The trees of the next epochs are built again, for the new key.
+		v.pqPrepareLock.Lock()
+		v.pqKeyGeneration++
+		v.pqPreparedEpoch.Store(0)
+		v.pqPrepareLock.Unlock()
 		if err := keys.PersistXMSS(); err != nil {
 			log.WithError(err).WithField("pubkey", fmt.Sprintf("%#x", blsKey)).Warn("Could not keep the XMSS trees on disk: the next start builds them again")
 		}
@@ -264,28 +273,47 @@ func (v *validator) preparePQKey(key *leanxmss.PrivateKey) {
 	}
 }
 
-// prepareNextEpochPQKeys builds, at the start of an epoch, the XMSS bottom trees that the next epoch signs in for the
-// first time, for every XMSS key, then writes the trees to the tree caches on disk.
+// prepareNextEpochPQKeys builds the XMSS bottom trees that the next `xmssPrepareLookahead` epochs sign in for the first
+// time, for every XMSS key, then writes the trees to the tree caches on disk.
+// It looks at each epoch once, at any slot, so a restart or a failed duties update does not skip a tree.
 // It uses a single goroutine.
 func (v *validator) prepareNextEpochPQKeys(ctx context.Context, slot primitives.Slot) {
-	if v.pqKeys == nil || !slots.IsEpochStart(slot) {
+	if v.pqKeys == nil {
 		return
 	}
 
-	leaves, err := xmssLeavesToPrepare(slots.ToEpoch(slot))
+	epoch := slots.ToEpoch(slot)
+	target := epoch + xmssPrepareLookahead
+	from := max(epoch, primitives.Epoch(v.pqPreparedEpoch.Load()))
+	if from >= target || !v.pqPreparing.CompareAndSwap(false, true) {
+		return
+	}
+
+	leaves, err := xmssLeavesToPrepare(from, target)
 	if err != nil {
+		v.pqPreparing.Store(false)
 		log.WithError(err).Debug("Could not compute the XMSS leaves to prepare")
 		return
 	}
 
-	if len(leaves) == 0 || !v.pqPreparing.CompareAndSwap(false, true) {
+	if len(leaves) == 0 {
+		v.pqPreparedEpoch.Store(uint64(target))
+		v.pqPreparing.Store(false)
 		return
 	}
 
+	v.pqPrepareLock.Lock()
+	generation := v.pqKeyGeneration
+	v.pqPrepareLock.Unlock()
 	go func() {
 		defer v.pqPreparing.Store(false)
 
 		start := time.Now()
+		log.WithFields(logrus.Fields{
+			"keys":   len(v.pqKeys.Pubkeys()),
+			"leaves": leaves,
+		}).Info("Building the XMSS bottom trees of the next epochs")
+
 		prepared := 0
 		for _, blsKey := range v.pqKeys.Pubkeys() {
 			if ctx.Err() != nil {
@@ -311,31 +339,46 @@ func (v *validator) prepareNextEpochPQKeys(ctx context.Context, slot primitives.
 			prepared++
 		}
 
+		// A key added meanwhile may not be in this run.
+		v.pqPrepareLock.Lock()
+		if v.pqKeyGeneration == generation {
+			v.pqPreparedEpoch.Store(uint64(target))
+		}
+		v.pqPrepareLock.Unlock()
+
 		log.WithFields(logrus.Fields{
 			"keys":    prepared,
 			"leaves":  leaves,
 			"elapsed": time.Since(start),
-		}).Info("Prepared the XMSS bottom trees of the next epoch")
+		}).Info("Built the XMSS bottom trees of the next epochs")
 	}()
 }
 
-// xmssLeavesToPrepare returns the leaves of the messages of the epoch after `epoch` whose bottom tree is not the
-// bottom tree of the same messages in `epoch`: the trees the next epoch signs in for the first time.
-func xmssLeavesToPrepare(epoch primitives.Epoch) ([]uint32, error) {
-	current, err := xmssEpochLeaves(epoch)
+// xmssLeavesToPrepare returns one leaf of each bottom tree that the epochs after `from`, up to `to`, sign in and that
+// `from` does not: the trees these epochs sign in for the first time.
+func xmssLeavesToPrepare(from, to primitives.Epoch) ([]uint32, error) {
+	current, err := xmssEpochLeaves(from)
 	if err != nil {
-		return nil, fmt.Errorf("leaves of epoch %d: %w", epoch, err)
+		return nil, fmt.Errorf("leaves of epoch %d: %w", from, err)
 	}
 
-	next, err := xmssEpochLeaves(epoch + 1)
-	if err != nil {
-		return nil, fmt.Errorf("leaves of epoch %d: %w", epoch+1, err)
+	seen := make(map[uint32]bool, len(current))
+	for _, leaf := range current {
+		seen[xmssBottomTree(leaf)] = true
 	}
 
-	leaves := make([]uint32, 0, len(next))
-	for i := range next {
-		if xmssBottomTree(next[i]) != xmssBottomTree(current[i]) {
-			leaves = append(leaves, next[i])
+	var leaves []uint32
+	for epoch := from + 1; epoch <= to; epoch++ {
+		next, err := xmssEpochLeaves(epoch)
+		if err != nil {
+			return nil, fmt.Errorf("leaves of epoch %d: %w", epoch, err)
+		}
+
+		for _, leaf := range next {
+			if tree := xmssBottomTree(leaf); !seen[tree] {
+				seen[tree] = true
+				leaves = append(leaves, leaf)
+			}
 		}
 	}
 

@@ -16,6 +16,7 @@ import (
 	"github.com/OffchainLabs/prysm/v7/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v7/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1"
+	prysmTime "github.com/OffchainLabs/prysm/v7/time"
 	"github.com/OffchainLabs/prysm/v7/time/slots"
 	"github.com/OffchainLabs/prysm/v7/validator/client/iface"
 	"github.com/OffchainLabs/prysm/v7/validator/db/signingprotection"
@@ -148,6 +149,7 @@ func (v *validator) submitAttestationPQ(ctx context.Context, slot primitives.Slo
 	}
 
 	signingTime := time.Since(signingStart)
+	pqAttestationSigningTime.Observe(signingTime.Seconds())
 
 	attestation := &ethpb.SingleAttestationPQ{
 		CommitteeId:   duty.CommitteeIndex,
@@ -162,6 +164,10 @@ func (v *validator) submitAttestationPQ(ctx context.Context, slot primitives.Slo
 		}
 
 		return fmt.Errorf("submit attestation: %w", err)
+	}
+
+	if slotStart, err := slots.StartTime(v.genesisTime, slot); err == nil {
+		pqAttestationPublishedOffset.Observe(time.Since(slotStart).Seconds())
 	}
 
 	// Logged once per slot for all keys, by LogSubmissions.
@@ -195,7 +201,18 @@ func (v *validator) submitAggregateAndProofPQ(ctx context.Context, slot primitiv
 		return fmt.Errorf("duty: %w", err)
 	}
 
-	v.waitUntilAggregateDue(ctx, slot)
+	// The aggregators of a committee are staggered: each one broadcasts `AGGREGATOR_DELAY_BPS` after the previous one.
+	position := client.AggregatorPositionPQ(slot, duty.ValidatorIndex)
+	start, err := slots.StartTime(v.genesisTime, slot)
+	if err != nil {
+		return fmt.Errorf("slot start: %w", err)
+	}
+
+	select {
+	case <-time.After(prysmTime.Until(start.Add(params.BeaconConfig().AggregateDuePQ(position)))):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	// The attestation data of the slot is cached: it is the one the attesters of the slot signed.
 	data, err := v.getAttestationData(ctx, slot, duty.CommitteeIndex)
@@ -246,9 +263,12 @@ func (v *validator) submitAggregateAndProofPQ(ctx context.Context, slot primitiv
 		return fmt.Errorf("submit aggregate and proof: %w", err)
 	}
 
+	pqAggregatePublishedOffset.Observe(time.Since(start).Seconds())
+
 	log.WithFields(logrus.Fields{
 		"slot":            slot,
 		"aggregatorIndex": duty.ValidatorIndex,
+		"position":        position,
 		"committeeIndex":  duty.CommitteeIndex,
 		"attesterCount":   aggregate.AggregationBits.Count(),
 		"proofSize":       len(proof),

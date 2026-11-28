@@ -16,16 +16,15 @@ import (
 )
 
 func configurePQProver(cliCtx *cli.Context) error {
-	socket := cliCtx.String(flags.PQProverSocket.Name)
-	if socket == "" {
-		return nil
+	threads := cliCtx.Int(flags.PQProverThreads.Name)
+	if threads < 0 {
+		return errors.New("pq-prover-threads must not be negative")
 	}
-	backend, err := pq.NewSidecarBackend(socket)
+	backend, err := pq.NewLeanVMBackend(threads)
 	if err != nil {
-		return errors.Wrap(err, "could not start the PQ proof backend")
+		return errors.Wrap(err, "could not start the leanVM prover")
 	}
 	pq.Proofs = backend
-	log.WithField("socket", socket).Info("Using the leanVM sidecar for PQ attestation proofs")
 	return nil
 }
 
@@ -49,7 +48,7 @@ func (b *BeaconNode) registerPQTimingService() error {
 	peers := b.fetchP2P().Peers()
 	backend := "concatenation"
 	if pq.Proofs.Succinct() {
-		backend = "leanvm-sidecar"
+		backend = "leanvm"
 	}
 	return b.services.RegisterService(pqpool.NewObserver(b.ctx, &pqpool.ObserverConfig{
 		Pool:        b.pqAttestationPool,

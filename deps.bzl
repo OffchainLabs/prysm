@@ -4766,6 +4766,15 @@ def prysm_deps():
         version = "v0.17.0",
     )
     go_repository(
+        name = "org_leanvm_go",
+        build_file_generation = "off",
+        importpath = "leanvm.org/go",
+        patch_args = ["-p1"],
+        patches = ["//third_party:org_leanvm_go.patch"],
+        sum = "h1:/6NV2hSa2FdqNgpN4YytvXlYP3zWMLkzQWF0l/gySX0=",
+        version = "v0.19.0",
+    )
+    go_repository(
         name = "org_uber_go_atomic",
         importpath = "go.uber.org/atomic",
         sum = "h1:ADUqmZGgLDDfbSL9ZmPxKTybcoEYHgpYfELNoN+7hsw=",

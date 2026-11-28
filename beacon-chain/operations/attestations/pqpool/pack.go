@@ -316,8 +316,8 @@ func localCandidate(committee []primitives.ValidatorIndex, signatures map[primit
 	return c
 }
 
-// BuildAggregate proves the largest set of matching single attestations of one committee.
-func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.SingleAttestationPQ, slot primitives.Slot, index primitives.CommitteeIndex) (*Aggregate, error) {
+// BuildAggregate proves the largest set of matching single attestations of one committee, unless covering has an aggregate with all of them.
+func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles []*ethpb.SingleAttestationPQ, slot primitives.Slot, index primitives.CommitteeIndex, covering func(*ethpb.AttestationPQ) (*Aggregate, error)) (*Aggregate, error) {
 	type votes struct {
 		data       *ethpb.AttestationData
 		signatures map[primitives.ValidatorIndex][]byte
@@ -356,6 +356,15 @@ func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles [
 	committeeBits := ethpb.NewCommitteeBitsPQ()
 	committeeBits.SetBitAt(uint64(index), true)
 	att := &ethpb.AttestationPQ{AggregationBits: c.bits, Data: best.data, CommitteeBits: committeeBits}
+	if covering != nil {
+		covered, err := covering(att)
+		if err != nil {
+			return nil, err
+		}
+		if covered != nil {
+			return covered, nil
+		}
+	}
 	statements, err := pq.AttestationStatements(ctx, st, att)
 	if err != nil {
 		return nil, err
@@ -368,6 +377,7 @@ func BuildAggregate(ctx context.Context, st state.ReadOnlyBeaconState, singles [
 	if err != nil {
 		return nil, err
 	}
+	observeProof("committee", start, float64(len(c.signatures)))
 	log.WithFields(logrus.Fields{
 		"slot":           slot,
 		"committeeIndex": index,

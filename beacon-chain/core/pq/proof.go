@@ -149,7 +149,7 @@ func VerifyAttestationProof(ctx context.Context, st state.ReadOnlyBeaconState, a
 		}
 		statements = append(statements, s...)
 	}
-	return Proofs.Verify(statements, proof)
+	return verifyProof("block", statements, proof)
 }
 
 // Spec: is_valid_indexed_attestation, the proof check
@@ -163,7 +163,7 @@ func VerifyIndexedAttestationProof(st state.ReadOnlyBeaconState, att *ethpb.Inde
 		pubkey := st.PubkeyAtIndex(primitives.ValidatorIndex(index))
 		pubkeys[i] = pubkey[:]
 	}
-	return Proofs.Verify([]Statement{{Pubkeys: pubkeys, LeafIndex: leafIndex, Message: message}}, att.Proof)
+	return verifyProof("indexed", []Statement{{Pubkeys: pubkeys, LeafIndex: leafIndex, Message: message}}, att.Proof)
 }
 
 // Spec: the signature check of the beacon_attestation gossip rule

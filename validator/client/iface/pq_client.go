@@ -23,6 +23,10 @@ type (
 		// at `slot`, in its attester duties. In the PQ fork, there is no selection proof.
 		IsAggregatorPQ(slot primitives.Slot, index primitives.ValidatorIndex) bool
 
+		// AggregatorPositionPQ returns the position of the validator of index `index` in its aggregation committee
+		// at `slot`. The aggregators of a committee are staggered in this order.
+		AggregatorPositionPQ(slot primitives.Slot, index primitives.ValidatorIndex) uint64
+
 		// SubmitAttestationsPQ submits signed attestations.
 		SubmitAttestationsPQ(ctx context.Context, attestations []*ethpb.SingleAttestationPQ) error
 

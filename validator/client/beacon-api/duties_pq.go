@@ -35,6 +35,10 @@ type (
 	pqAggregators struct {
 		mu     sync.RWMutex
 		bySlot map[primitives.Slot]map[primitives.ValidatorIndex]bool
+
+		// positions holds the positions of the aggregators in their aggregation committees. A beacon node that does
+		// not give them leaves it empty: its aggregators are all at position 0.
+		positions map[primitives.Slot]map[primitives.ValidatorIndex]uint64
 	}
 )
 
@@ -134,7 +138,10 @@ func (p pqDutiesProvider) blsPubkey(xmssPubkey string) (string, error) {
 
 // newPQAggregators returns an empty set of aggregators.
 func newPQAggregators() *pqAggregators {
-	return &pqAggregators{bySlot: make(map[primitives.Slot]map[primitives.ValidatorIndex]bool)}
+	return &pqAggregators{
+		bySlot:    make(map[primitives.Slot]map[primitives.ValidatorIndex]bool),
+		positions: make(map[primitives.Slot]map[primitives.ValidatorIndex]uint64),
+	}
 }
 
 // set records whether the validator of the attester duty `duty` aggregates at the slot of the duty.
@@ -151,8 +158,21 @@ func (a *pqAggregators) set(duty *structs.AttesterDuty) error {
 
 	isAggregator := duty.IsAggregator != nil && *duty.IsAggregator
 
+	position := uint64(0)
+	if isAggregator && duty.AggregatorPosition != "" {
+		if position, err = strconv.ParseUint(duty.AggregatorPosition, 10, 64); err != nil {
+			return fmt.Errorf("parse aggregator position %s: %w", duty.AggregatorPosition, err)
+		}
+	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if a.positions[primitives.Slot(slot)] == nil {
+		a.positions[primitives.Slot(slot)] = make(map[primitives.ValidatorIndex]uint64)
+	}
+
+	a.positions[primitives.Slot(slot)][primitives.ValidatorIndex(index)] = position
 
 	validators, ok := a.bySlot[primitives.Slot(slot)]
 	if !ok {
@@ -165,6 +185,7 @@ func (a *pqAggregators) set(duty *structs.AttesterDuty) error {
 	// Forget the slots too old to be asked about.
 	for known := range a.bySlot {
 		if uint64(known)+pqAggregatorSlotsKept < slot {
+			delete(a.positions, known)
 			delete(a.bySlot, known)
 		}
 	}
@@ -178,4 +199,12 @@ func (a *pqAggregators) isAggregator(slot primitives.Slot, index primitives.Vali
 	defer a.mu.RUnlock()
 
 	return a.bySlot[slot][index]
+}
+
+// position returns the position of the validator of index `index` in its aggregation committee at `slot`.
+func (a *pqAggregators) position(slot primitives.Slot, index primitives.ValidatorIndex) uint64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.positions[slot][index]
 }
