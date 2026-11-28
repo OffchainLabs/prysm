@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	durationBuckets = []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12}
+	durationBuckets = []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12}
 
 	// Kinds are committee, vote_slot and join.
 	proofDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -24,7 +24,7 @@ var (
 	voteSlotProofLead = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "pq_vote_slot_proof_ready_before_proposal_seconds",
 		Help:    "Time between the first proof of a vote slot being ready and the start of the earliest slot that can include it, negative when late.",
-		Buckets: []float64{-6, -3, -1, 0, 1, 2, 3, 4, 6, 8, 10, 12, 15, 18, 21, 24},
+		Buckets: []float64{-6, -3, -1, 0, 1, 2, 3, 4, 6, 8, 10, 12, 13, 13.5, 14, 14.5, 15, 16, 18, 21, 24},
 	})
 )
 

@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	proofDurationBuckets = []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12}
-	proofClaimsBuckets   = []float64{1, 8, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192}
+	proofDurationBuckets = []float64{0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05, 0.075, 0.1, 0.25, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12}
+	proofClaimsBuckets   = []float64{1, 2, 3, 4, 6, 8, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192}
 
 	proverQueueWait = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "pq_prover_queue_wait_seconds",
